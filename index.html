@@ -32,6 +32,7 @@
   .dot.changed { background:#dc2626; }
   .tac-dot { display:inline-block; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-bottom:7px solid #9ca3af; margin-left:4px; vertical-align:middle; }
   .tac-dot.got { border-bottom-color:#16a34a; }
+  .tac-dot.pending { border-bottom-color:#d97706; }
   .tac-dot.not { border-bottom-color:#dc2626; }
   body.focus-mode { padding:10px; }
   body.focus-mode .sub, body.focus-mode .sub2, body.focus-mode .today-note,
@@ -128,7 +129,7 @@
   <span><span class="dot install"></span>วันเข้าติดตั้ง (Install)</span>
   <span><span class="dot completed"></span>ดำเนินการเสร็จสิ้นแล้ว</span>
   <span><span class="dot changed"></span>มีการเปลี่ยนแปลงจากรอบก่อน</span>
-  <span><span class="tac-dot got"></span> เอกสารขนานไฟได้แล้ว &nbsp;/&nbsp; <span class="tac-dot not"></span> ยังไม่ได้เลขขนานไฟ</span>
+  <span><span class="tac-dot got"></span> มีเลขขนานไฟแล้ว &nbsp;/&nbsp; <span class="tac-dot pending"></span> อยู่ระหว่างดำเนินการ (ยังไม่ได้เลข) &nbsp;/&nbsp; <span class="tac-dot not"></span> ยังไม่มีความคืบหน้า</span>
 </div>
 
 <div class="month-nav">
@@ -168,10 +169,6 @@
 <script>
 // ===== CONFIG =====
 var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrRKjebecOzXuJv4WfzoqDUhAvTyid9mM7-yNhuTmJRqn8ID/exec";
-// If the page URL has no ?k=... on it (e.g. someone opens the bare
-// bookmarked link), fall back to this admin key so the main/original
-// link keeps working exactly like before. Contractor links always pass
-// their own ?k=... which overrides this default.
 var DEFAULT_ACCESS_KEY = "POQDSQ3CuB6lMi0Q22HKBvnE9FZxZUq-";
 // ===================
 var urlParams = new URLSearchParams(window.location.search);
@@ -189,6 +186,15 @@ function jobByKey(key) {
 function jobIsChanged(e) {
   var j = jobByKey(e.job_key);
   return j ? !!j.is_changed : false;
+}
+
+// doc_tac sometimes holds a real reference number (e.g. "IPS-202638811")
+// and sometimes just a free-text status note from staff (e.g. "ลูกค้าให้
+// เอกสารมาแล้ว"). Only treat it as "got the number" (green) when it
+// actually looks like a reference number -- contains a run of >=4 digits.
+function tacLooksLikeNumber(v) {
+  if (!v) return false;
+  return /\d{4,}/.test(String(v));
 }
 
 function passesFilters(e) {
@@ -290,10 +296,12 @@ function renderCalendar() {
         : ('ติดตั้ง ' + abbr + dayTag + ': ' + (e.customer || ''));
       var tacHtml = '';
       if (e.type !== 'survey') {
-        var tacGot = !!(e.doc_tac && String(e.doc_tac).trim());
-        var tacTitleRaw = 'เอกสารขนานไฟ: ' + (tacGot ? e.doc_tac : 'ยังไม่ได้');
+        var tacRaw = e.doc_tac ? String(e.doc_tac).trim() : '';
+        var tacGot = tacLooksLikeNumber(tacRaw);
+        var tacCls = tacGot ? 'got' : (tacRaw ? 'pending' : 'not');
+        var tacTitleRaw = 'เอกสารขนานไฟ: ' + (tacGot ? tacRaw : (tacRaw || 'ยังไม่มีความคืบหน้า'));
         var tacTitle = String(tacTitleRaw).replace(/"/g, '&quot;');
-        tacHtml = '<span class="tac-dot ' + (tacGot ? 'got' : 'not') + '" title="' + tacTitle + '"></span>';
+        tacHtml = '<span class="tac-dot ' + tacCls + '" title="' + tacTitle + '"></span>';
       }
       return '<div class="evt ' + cls + '" data-idx="' + idx + '" title="คลิกดูรายละเอียด"><span class="dot ' + dotCls + '"></span>' + label + (changed ? ' 🔄' : '') + tacHtml + '</div>';
     }).join('');
@@ -337,10 +345,13 @@ function openModalForEvent(e) {
     if (tacRow) tacRow.style.display = 'none';
   } else {
     if (tacRow) tacRow.style.display = '';
-    if (e.doc_tac && String(e.doc_tac).trim()) {
-      tacEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">▲ ' + e.doc_tac + '</span>';
+    var mTacRaw = e.doc_tac ? String(e.doc_tac).trim() : '';
+    if (tacLooksLikeNumber(mTacRaw)) {
+      tacEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">▲ ' + mTacRaw + '</span>';
+    } else if (mTacRaw) {
+      tacEl.innerHTML = '<span style="color:#d97706;font-weight:600;">▲ ' + mTacRaw + ' (ยังไม่ได้เลขอ้างอิง)</span>';
     } else {
-      tacEl.innerHTML = '<span style="color:#dc2626;font-weight:600;">▲ ยังไม่ได้เลขขนานไฟ</span>';
+      tacEl.innerHTML = '<span style="color:#dc2626;font-weight:600;">▲ ยังไม่มีความคืบหน้า</span>';
     }
   }
   document.getElementById('modalOverlay').classList.add('open');

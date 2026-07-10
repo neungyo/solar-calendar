@@ -166,15 +166,16 @@
 </div>
 
 <script>
-// ===== CONFIG: paste your deployed Apps Script Web App URL here =====
+// ===== CONFIG =====
 var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrRKjebecOzXuJv4WfzoqDUhAvTyid9mM7-yNhuTmJRqn8ID/exec";
-// ACCESS_KEY is NOT hardcoded here -- each contractor/team gets their own
-// link (this exact same file, but with ?k=THEIR_KEY at the end of the URL).
-// The key is read from the page's own address bar below, so ONE html file
-// serves everyone -- only the link differs per person/team.
-// ======================================================================
+// If the page URL has no ?k=... on it (e.g. someone opens the bare
+// bookmarked link), fall back to this admin key so the main/original
+// link keeps working exactly like before. Contractor links always pass
+// their own ?k=... which overrides this default.
+var DEFAULT_ACCESS_KEY = "POQDSQ3CuB6lMi0Q22HKBvnE9FZxZUq-";
+// ===================
 var urlParams = new URLSearchParams(window.location.search);
-var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || "";
+var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || DEFAULT_ACCESS_KEY;
 
 var JOBS = [];
 var EVENTS = [];
@@ -403,13 +404,10 @@ function rebuildFilterOptions() {
   fillOptions(fC, contractors, fC.value);
   fillOptions(fJ, jobTypes, fJ.value);
   fillOptions(fS, statuses, fS.value);
-  // If this link only ever contains one contractor's jobs, the contractor
-  // filter is redundant -- hide that dropdown to keep the UI clean.
-  var fContractorWrap = document.getElementById('fContractor');
   if (contractors.length <= 1) {
-    fContractorWrap.style.display = 'none';
+    fC.style.display = 'none';
   } else {
-    fContractorWrap.style.display = '';
+    fC.style.display = '';
   }
 }
 

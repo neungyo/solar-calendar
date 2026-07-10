@@ -11,6 +11,9 @@
   h1 { font-size: 20px; margin: 0 0 4px; }
   .sub { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
   .sub2 { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .scope-badge { display:inline-block; font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; margin-bottom:10px; }
+  .scope-badge.admin { background:#eef2ff; color:#4338ca; }
+  .scope-badge.contractor { background:#ecfdf5; color:#047857; }
   .today-note { font-size:13px; font-weight:600; color:var(--accent); margin-bottom:10px; }
   .filter-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
   select, input[type=text] { border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:13px; background:#fff; color:var(--text); }
@@ -90,6 +93,7 @@
     .day { min-height:80px; }
   }
   #loadingOverlay { position:fixed; inset:0; background:#f7f8fa; display:flex; align-items:center; justify-content:center; z-index:2000; font-size:14px; color:var(--muted); }
+  .no-key-box { max-width:520px; margin:80px auto; background:#fff; border:1px solid var(--border); border-radius:10px; padding:24px; text-align:center; }
 </style>
 </head>
 <body>
@@ -97,6 +101,7 @@
 <div class="brand-badge">☀️ NeuNgyo!26</div>
 <h1>ปฏิทินงานติดตั้ง Solar Cell — Progress Modern Trade</h1>
 <div class="sub">ข้อมูลจาก Google Sheet: SVP_Solar Cell Order Residential (sheet: Progress Modern trade) — ผ่าน Apps Script API</div>
+<div id="scopeBadge"></div>
 <div class="sub2" id="subLine2">อัปเดตล่าสุด: - &middot; งานทั้งหมด - งาน &middot; การเปลี่ยนแปลงตั้งแต่รอบก่อน: - รายการ</div>
 <div class="today-note">วันนี้: <span id="todayLabel"></span></div>
 <div class="status-bar" id="statusBar"><span class="status-dot" id="statusDot"></span><span id="statusText">กำลังตรวจสอบ...</span></div>
@@ -161,10 +166,15 @@
 </div>
 
 <script>
-// ===== CONFIG: paste your deployed Apps Script Web App URL and access key here =====
+// ===== CONFIG: paste your deployed Apps Script Web App URL here =====
 var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrRKjebecOzXuJv4WfzoqDUhAvTyid9mM7-yNhuTmJRqn8ID/exec";
-var ACCESS_KEY = "POQDSQ3CuB6lMi0Q22HKBvnE9FZxZUq-";
-// ====================================================================================
+// ACCESS_KEY is NOT hardcoded here -- each contractor/team gets their own
+// link (this exact same file, but with ?k=THEIR_KEY at the end of the URL).
+// The key is read from the page's own address bar below, so ONE html file
+// serves everyone -- only the link differs per person/team.
+// ======================================================================
+var urlParams = new URLSearchParams(window.location.search);
+var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || "";
 
 var JOBS = [];
 var EVENTS = [];
@@ -393,6 +403,24 @@ function rebuildFilterOptions() {
   fillOptions(fC, contractors, fC.value);
   fillOptions(fJ, jobTypes, fJ.value);
   fillOptions(fS, statuses, fS.value);
+  // If this link only ever contains one contractor's jobs, the contractor
+  // filter is redundant -- hide that dropdown to keep the UI clean.
+  var fContractorWrap = document.getElementById('fContractor');
+  if (contractors.length <= 1) {
+    fContractorWrap.style.display = 'none';
+  } else {
+    fContractorWrap.style.display = '';
+  }
+}
+
+function renderScopeBadge(scope, contractor) {
+  var host = document.getElementById('scopeBadge');
+  if (!scope) { host.innerHTML = ''; return; }
+  if (scope === 'admin') {
+    host.innerHTML = '<span class="scope-badge admin">มุมมองผู้ดูแลระบบ — เห็นทุกงาน</span>';
+  } else {
+    host.innerHTML = '<span class="scope-badge contractor">มุมมองสำหรับ ผรม.: ' + (contractor || '-') + ' — เห็นเฉพาะงานของทีมนี้</span>';
+  }
 }
 
 function renderBanner(changedJobs, newJobs) {
@@ -426,7 +454,9 @@ function updateStatusText(errored) {
   var textEl = document.getElementById('statusText');
   if (!textEl) return;
   if (errored) {
-    textEl.textContent = 'โหลดข้อมูลไม่สำเร็จ — ตรวจสอบ WEBAPP_URL / ACCESS_KEY หรือลองใหม่อีกครั้ง';
+    textEl.textContent = errored === true
+      ? 'โหลดข้อมูลไม่สำเร็จ — ตรวจสอบลิงก์ (access key) หรือลองใหม่อีกครั้ง'
+      : errored;
     if (bar) { bar.classList.remove('stale'); bar.classList.add('error'); }
     return;
   }
@@ -447,6 +477,12 @@ function updateStatusText(errored) {
   if (bar) bar.classList.toggle('stale', diffMin > 180);
 }
 
+function showNoKeyMessage() {
+  document.getElementById('loadingOverlay').innerHTML =
+    '<div class="no-key-box"><h2 style="margin-top:0;font-size:16px;">ไม่พบรหัสเข้าถึง (access key)</h2>' +
+    '<p style="color:#6b7280;font-size:13px;line-height:1.6;">ลิงก์นี้ไม่มี access key ต่อท้าย URL กรุณาติดต่อผู้ดูแลระบบเพื่อขอลิงก์ที่ถูกต้องสำหรับทีมของคุณ</p></div>';
+}
+
 function fetchData(isManualClick) {
   var btn = document.getElementById('refreshBtn');
   var statusEl = document.getElementById('refreshStatus');
@@ -459,17 +495,24 @@ function fetchData(isManualClick) {
     document.getElementById('loadingOverlay').style.display = 'none';
     return;
   }
+  if (!ACCESS_KEY) {
+    showNoKeyMessage();
+    updateStatusText('ลิงก์นี้ไม่มี access key');
+    if (btn) btn.disabled = false;
+    return;
+  }
   var url = WEBAPP_URL + (WEBAPP_URL.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(ACCESS_KEY) + '&_t=' + Date.now();
   fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) throw new Error(data.error);
+      if (data.error) throw new Error(data.error === 'unauthorized' ? 'access key ไม่ถูกต้อง' : data.error);
       JOBS = data.jobs || [];
       EVENTS = data.events || [];
       LAST_UPDATED_ISO = data.last_updated;
       document.getElementById('subLine2').innerHTML =
         'อัปเดตล่าสุด: ' + new Date(LAST_UPDATED_ISO).toLocaleString('th-TH') +
         ' &middot; งานทั้งหมด ' + (data.total_jobs||0) + ' งาน &middot; การเปลี่ยนแปลงตั้งแต่รอบก่อน: ' + (data.changed_jobs||[]).length + ' รายการ';
+      renderScopeBadge(data.scope, data.contractor);
       rebuildFilterOptions();
       renderBanner(data.changed_jobs, data.new_jobs);
       renderCalendar();
@@ -478,7 +521,7 @@ function fetchData(isManualClick) {
       if (statusEl && isManualClick) setTimeout(function(){ statusEl.textContent=''; }, 5000);
     })
     .catch(function(err) {
-      updateStatusText(true);
+      updateStatusText(err.message || true);
       if (statusEl) statusEl.textContent = 'เกิดข้อผิดพลาด: ' + err.message;
     })
     .finally(function() {

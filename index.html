@@ -32,6 +32,8 @@
   .dot.changed { background:#dc2626; }
   .dot.survey-stalled { background:#f97316; }
   .dot.survey-scheduled { background:#a78bfa; }
+  .dot.survey-stalled { background:#f97316; }
+  .dot.survey-scheduled { background:#a78bfa; }
   .tac-dot { display:inline-block; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-bottom:7px solid #9ca3af; margin-left:4px; vertical-align:middle; }
   .tac-dot.got { border-bottom-color:#16a34a; }
   .tac-dot.pending { border-bottom-color:#d97706; }
@@ -63,6 +65,21 @@
   .evt.changed { background:#fef2f2; color:#991b1b; font-weight:600; }
   .evt.survey { background:#eff6ff; color:#1e3a8a; }
   .evt.install { background:#fffbeb; color:#92400e; }
+  .evt.survey-stalled { background:#fff7ed; color:#9a3412; font-weight:600; }
+  .evt.survey-scheduled { background:#f5f3ff; color:#6d28d9; }
+  .view-tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .view-tab-btn.active { background:var(--accent); color:#fff; }
+  .view-tab-btn:not(.active) { background:#fff; color:var(--text); border:1px solid var(--border); }
+  .doc-table-toolbar { margin-bottom:8px; font-size:12px; color:var(--muted); }
+  .doc-table { width:100%; border-collapse:collapse; font-size:13px; background:#fff; }
+  .doc-table th, .doc-table td { border:1px solid var(--border); padding:6px 8px; text-align:left; vertical-align:top; }
+  .doc-table th { background:#f3f4f6; font-weight:600; }
+  .doc-table tr:nth-child(even) { background:#fafafa; }
+  .doc-tac-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .doc-tac-badge.got { background:#dcfce7; color:#166534; }
+  .doc-tac-badge.pending { background:#fef3c7; color:#92400e; }
+  .doc-tac-badge.not { background:#fee2e2; color:#991b1b; }
+  @media print { .view-tabs { display:none !important; } }
   .evt.survey-stalled { background:#fff7ed; color:#9a3412; font-weight:600; }
   .evt.survey-scheduled { background:#f5f3ff; color:#6d28d9; }
   .evt-more { font-size:11px; color:var(--muted); margin-top:2px; cursor:pointer; text-decoration:underline; }
@@ -135,10 +152,17 @@
   <span><span class="dot changed"></span>มีการเปลี่ยนแปลงจากรอบก่อน</span>
   <span><span class="dot survey-stalled"></span>สำรวจแล้ว ยังไม่มีกำหนดติดตั้ง</span>
   <span><span class="dot survey-scheduled"></span>สำรวจแล้ว มีกำหนดติดตั้งแล้ว</span>
+  <span><span class="dot survey-stalled"></span>สำรวจแล้ว ยังไม่มีกำหนดติดตั้ง</span>
+  <span><span class="dot survey-scheduled"></span>สำรวจแล้ว มีกำหนดติดตั้งแล้ว</span>
   <span><span class="tac-dot got"></span> มีเลขขนานไฟแล้ว &nbsp;/&nbsp; <span class="tac-dot pending"></span> อยู่ระหว่างดำเนินการ (ยังไม่ได้เลข) &nbsp;/&nbsp; <span class="tac-dot not"></span> ยังไม่มีความคืบหน้า</span>
 </div>
 
-<div class="month-nav">
+<div class="view-tabs">
+  <button class="secondary view-tab-btn active" id="tabCalendarBtn">📅 ปฏิทิน</button>
+  <button class="secondary view-tab-btn" id="tabDocBtn">📋 ตารางเอกสารขนานไฟ</button>
+</div>
+
+<div class="month-nav" id="monthNavRow">
   <button class="secondary" id="prevMonth">‹ เดือนก่อน</button>
   <strong id="monthLabel"></strong>
   <button class="secondary" id="nextMonth">เดือนถัดไป ›</button>
@@ -152,6 +176,18 @@
 <div id="calendarWrap">
 <div class="calendar-grid" id="dowRow"></div>
 <div class="calendar-grid" id="calGrid"></div>
+</div>
+
+<div id="docTableWrap" style="display:none;">
+  <div class="doc-table-toolbar" id="docTableCount"></div>
+  <table class="doc-table" id="docTable">
+    <thead>
+      <tr>
+        <th>#</th><th>TS App</th><th>ลูกค้า</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่นัดติดตั้ง</th><th>เลขขนานไฟ</th>
+      </tr>
+    </thead>
+    <tbody id="docTableBody"></tbody>
+  </table>
 </div>
 
 <div id="bannerHost"></div>
@@ -367,6 +403,80 @@ function openModalForEvent(e) {
   document.getElementById('modalOverlay').classList.add('open');
 }
 
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function currentFilteredJobs() {
+  var contractor = document.getElementById('fContractor').value;
+  var search = document.getElementById('fSearch').value.trim().toLowerCase();
+  return JOBS.filter(function(j) {
+    if (contractor && j.contractor !== contractor) return false;
+    if (search) {
+      var hay = ((j.customer || '') + ' ' + (j.address || '') + ' ' + (j.job_code || '') + ' ' + (j.ts_app || '')).toLowerCase();
+      if (hay.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function renderDocTable() {
+  var jobs = currentFilteredJobs().slice();
+  jobs.sort(function(a, b) {
+    var ca = a.contractor || '', cb = b.contractor || '';
+    if (ca !== cb) return ca < cb ? -1 : 1;
+    var da = a.install_appointment || '9999-99-99';
+    var db = b.install_appointment || '9999-99-99';
+    return da < db ? -1 : (da > db ? 1 : 0);
+  });
+  var body = document.getElementById('docTableBody');
+  var countEl = document.getElementById('docTableCount');
+  if (countEl) countEl.textContent = 'ทั้งหมด ' + jobs.length + ' งาน';
+  if (!body) return;
+  body.innerHTML = jobs.map(function(j, i) {
+    var tsAppNum = j.ts_app || j.job_code || j._key || '-';
+    var tacRaw = j.doc_tac ? String(j.doc_tac).trim() : '';
+    var tacGot = tacLooksLikeNumber(tacRaw);
+    var tacCls = tacGot ? 'got' : (tacRaw ? 'pending' : 'not');
+    var tacLabel = tacGot ? tacRaw : (tacRaw ? (tacRaw + ' (ยังไม่ได้เลข)') : 'ยังไม่มีความคืบหน้า');
+    var installLabel = j.install_appointment || 'ยังไม่มีกำหนด';
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escHtml(tsAppNum) + '</td>' +
+      '<td>' + escHtml(j.customer || '-') + '</td>' +
+      '<td>' + escHtml(j.address || '-') + '</td>' +
+      '<td>' + escHtml(j.contractor || '-') + '</td>' +
+      '<td>' + escHtml(installLabel) + '</td>' +
+      '<td><span class="doc-tac-badge ' + tacCls + '">' + escHtml(tacLabel) + '</span></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function onFiltersChanged() {
+  renderCalendar();
+  if (document.getElementById('tabDocBtn').classList.contains('active')) {
+    renderDocTable();
+  }
+}
+
+document.getElementById('tabCalendarBtn').onclick = function() {
+  document.getElementById('tabCalendarBtn').classList.add('active');
+  document.getElementById('tabDocBtn').classList.remove('active');
+  document.getElementById('calendarWrap').style.display = '';
+  document.getElementById('monthNavRow').style.display = '';
+  document.getElementById('zoomControls').style.display = '';
+  document.getElementById('docTableWrap').style.display = 'none';
+};
+document.getElementById('tabDocBtn').onclick = function() {
+  document.getElementById('tabDocBtn').classList.add('active');
+  document.getElementById('tabCalendarBtn').classList.remove('active');
+  document.getElementById('calendarWrap').style.display = 'none';
+  document.getElementById('monthNavRow').style.display = 'none';
+  document.getElementById('zoomControls').style.display = 'none';
+  document.getElementById('docTableWrap').style.display = '';
+  renderDocTable();
+};
+
 calGrid.addEventListener('click', function(ev) {
   var moreTarget = ev.target.closest('.evt-more');
   if (moreTarget) {
@@ -395,8 +505,8 @@ document.getElementById('modalOverlay').addEventListener('click', function(ev) {
 document.getElementById('prevMonth').onclick = function() { cur.setMonth(cur.getMonth()-1); renderCalendar(); };
 document.getElementById('nextMonth').onclick = function() { cur.setMonth(cur.getMonth()+1); renderCalendar(); };
 ['fContractor','fJobType','fStatus','fChangedOnly','fFirstDayOnly','fSearch'].forEach(function(id) {
-  document.getElementById(id).addEventListener('input', renderCalendar);
-  document.getElementById(id).addEventListener('change', renderCalendar);
+  document.getElementById(id).addEventListener('input', onFiltersChanged);
+  document.getElementById(id).addEventListener('change', onFiltersChanged);
 });
 document.getElementById('clearFilters').onclick = function() {
   document.getElementById('fContractor').value = '';
@@ -405,7 +515,7 @@ document.getElementById('clearFilters').onclick = function() {
   document.getElementById('fChangedOnly').checked = false;
   document.getElementById('fFirstDayOnly').checked = false;
   document.getElementById('fSearch').value = '';
-  renderCalendar();
+  onFiltersChanged();
 };
 
 function fillOptions(selectEl, values, current) {

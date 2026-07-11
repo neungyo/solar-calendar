@@ -183,7 +183,7 @@
   <table class="doc-table" id="docTable">
     <thead>
       <tr>
-        <th>#</th><th>TS App</th><th>ลูกค้า</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่นัดติดตั้ง</th><th>เลขขนานไฟ</th>
+        <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่นัดติดตั้ง</th><th>เลขขนานไฟ</th>
       </tr>
     </thead>
     <tbody id="docTableBody"></tbody>
@@ -444,6 +444,7 @@ function renderDocTable() {
       '<td>' + (i + 1) + '</td>' +
       '<td>' + escHtml(tsAppNum) + '</td>' +
       '<td>' + escHtml(j.customer || '-') + '</td>' +
+      '<td>' + escHtml(j.phone || '-') + '</td>' +
       '<td>' + escHtml(j.address || '-') + '</td>' +
       '<td>' + escHtml(j.contractor || '-') + '</td>' +
       '<td>' + escHtml(installLabel) + '</td>' +

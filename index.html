@@ -160,6 +160,7 @@
     <div class="modal-row"><div class="k">ที่อยู่:</div><div class="v" id="mAddress"></div></div>
     <div class="modal-row"><div class="k">Location:</div><div class="v" id="mLocation"></div></div>
     <div class="modal-row"><div class="k">เบอร์ติดต่อ:</div><div class="v" id="mPhone"></div></div>
+    <div class="modal-row"><div class="k">อีเมล:</div><div class="v" id="mEmail"></div></div>
     <div class="modal-row"><div class="k">สถานะ:</div><div class="v" id="mStatus"></div></div>
     <div class="modal-row" id="mTacRow"><div class="k">เลขขนานไฟ:</div><div class="v" id="mTac"></div></div>
     <button class="secondary modal-close" id="mClose">ปิด</button>
@@ -167,10 +168,8 @@
 </div>
 
 <script>
-// ===== CONFIG =====
 var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrRKjebecOzXuJv4WfzoqDUhAvTyid9mM7-yNhuTmJRqn8ID/exec";
 var DEFAULT_ACCESS_KEY = "POQDSQ3CuB6lMi0Q22HKBvnE9FZxZUq-";
-// ===================
 var urlParams = new URLSearchParams(window.location.search);
 var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || DEFAULT_ACCESS_KEY;
 
@@ -188,10 +187,6 @@ function jobIsChanged(e) {
   return j ? !!j.is_changed : false;
 }
 
-// doc_tac sometimes holds a real reference number (e.g. "IPS-202638811")
-// and sometimes just a free-text status note from staff (e.g. "ลูกค้าให้
-// เอกสารมาแล้ว"). Only treat it as "got the number" (green) when it
-// actually looks like a reference number -- contains a run of >=4 digits.
 function tacLooksLikeNumber(v) {
   if (!v) return false;
   return /\d{4,}/.test(String(v));
@@ -327,7 +322,9 @@ function openModalForEvent(e) {
     typeLabel = 'วันนัดติดตั้ง — ' + e.date;
   }
   document.getElementById('mType').textContent = typeLabel;
-  document.getElementById('mJobCode').textContent = e.job_code || e.job_key || '-';
+  var mJob = jobByKey(e.job_key);
+  var tsAppNum = mJob && mJob.ts_app ? mJob.ts_app : '';
+  document.getElementById('mJobCode').textContent = tsAppNum || e.job_code || e.job_key || '-';
   document.getElementById('mContractor').textContent = e.contractor || '-';
   document.getElementById('mEquipment').textContent = e.equipment || '-';
   document.getElementById('mAddress').textContent = e.address || '-';
@@ -338,6 +335,7 @@ function openModalForEvent(e) {
     locEl.textContent = '-';
   }
   document.getElementById('mPhone').textContent = e.phone || '-';
+  document.getElementById('mEmail').textContent = (mJob && mJob.email) || '-';
   document.getElementById('mStatus').textContent = e.status || '-';
   var tacRow = document.getElementById('mTacRow');
   var tacEl = document.getElementById('mTac');

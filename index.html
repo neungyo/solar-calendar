@@ -79,6 +79,33 @@
   .doc-tac-badge.got { background:#dcfce7; color:#166534; }
   .doc-tac-badge.pending { background:#fef3c7; color:#92400e; }
   .doc-tac-badge.not { background:#fee2e2; color:#991b1b; }
+  .ov-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .ov-badge.stalled { background:#ffedd5; color:#9a3412; }
+  .ov-badge.scheduled { background:#ede9fe; color:#5b21b6; }
+  .ov-badge.completed { background:#dcfce7; color:#166534; }
+  .chart-section { margin-top:28px; }
+  .chart-legend { display:flex; flex-wrap:wrap; gap:10px 16px; margin:10px 0 14px; font-size:12px; color:var(--muted); }
+  .chart-legend-item { display:flex; align-items:center; gap:6px; }
+  .chart-swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  .chart-empty { font-size:13px; color:var(--muted); padding:20px; text-align:center; }
+  .overview-section-title { font-size:14px; font-weight:600; margin:0 0 12px; color:var(--text); }
+  .card-box { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+  .stats-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+  .stat-card { flex:1; min-width:130px; background:#fff; border:1px solid var(--border); border-top:4px solid #2563eb; border-radius:10px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+  .stat-card.c-total { border-top-color:#2563eb; }
+  .stat-card.c-awaiting { border-top-color:#94a3b8; }
+  .stat-card.c-stalled { border-top-color:#f97316; }
+  .stat-card.c-scheduled { border-top-color:#a78bfa; }
+  .stat-card.c-completed { border-top-color:#16a34a; }
+  .stat-value { font-size:28px; font-weight:700; color:var(--text); line-height:1.2; }
+  .stat-label { font-size:12px; color:var(--muted); margin-top:4px; }
+  .donut-row { display:flex; gap:28px; flex-wrap:wrap; align-items:center; }
+  .donut-legend { display:flex; flex-direction:column; gap:10px; font-size:13px; min-width:220px; }
+  .donut-legend-item { display:flex; align-items:center; gap:8px; }
+  .donut-legend-item b { margin-left:auto; padding-left:14px; }
+  .donut-swatch { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
+  .chart-card svg rect { transition:opacity 0.15s ease; cursor:pointer; }
+  .chart-card svg rect:hover { opacity:0.82; }
   @media print { .view-tabs { display:none !important; } }
   .evt.survey-stalled { background:#fff7ed; color:#9a3412; font-weight:600; }
   .evt.survey-scheduled { background:#f5f3ff; color:#6d28d9; }
@@ -160,6 +187,7 @@
 <div class="view-tabs">
   <button class="secondary view-tab-btn active" id="tabCalendarBtn">📅 ปฏิทิน</button>
   <button class="secondary view-tab-btn" id="tabDocBtn">📋 ตารางเอกสารขนานไฟ</button>
+  <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง</button>
 </div>
 
 <div class="month-nav" id="monthNavRow">
@@ -190,6 +218,37 @@
   </table>
 </div>
 
+<div id="overviewWrap" style="display:none;">
+  <div class="stats-row" id="overviewStatsRow"></div>
+
+  <div class="card-box">
+    <div class="overview-section-title">สัดส่วนสถานะงานโดยรวม</div>
+    <div class="donut-row">
+      <div id="donutChartHost"></div>
+      <div class="donut-legend" id="donutLegend"></div>
+    </div>
+  </div>
+
+  <div class="card-box">
+    <div class="overview-section-title">รายละเอียดงาน</div>
+    <div class="doc-table-toolbar" id="overviewTableCount"></div>
+    <table class="doc-table" id="overviewTable">
+      <thead>
+        <tr>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th>
+        </tr>
+      </thead>
+      <tbody id="overviewTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box chart-card">
+    <div class="overview-section-title">จำนวนงานติดตั้งเสร็จสิ้นต่อเดือน (แยกสีตาม ผรม.)</div>
+    <div class="chart-legend" id="chartLegend"></div>
+    <div id="chartHost"></div>
+  </div>
+</div>
+
 <div id="bannerHost"></div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -217,6 +276,20 @@ var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || DEFAULT_ACCESS_KE
 
 var JOBS = [];
 var EVENTS = [];
+var ALL_CONTRACTORS = [];
+var CHART_PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#c026d3','#65a30d','#ea580c','#0d9488','#9333ea','#facc15','#f43f5e','#0ea5e9'];
+var CONTRACTOR_COLOR_MAP = {};
+function rebuildContractorColorMap() {
+  ALL_CONTRACTORS = [];
+  CONTRACTOR_COLOR_MAP = {};
+  var seen = {};
+  JOBS.forEach(function(j) {
+    var c = j.contractor || 'ไม่ระบุ';
+    if (!seen[c]) { seen[c] = true; ALL_CONTRACTORS.push(c); }
+  });
+  ALL_CONTRACTORS.sort();
+  ALL_CONTRACTORS.forEach(function(c, i) { CONTRACTOR_COLOR_MAP[c] = CHART_PALETTE[i % CHART_PALETTE.length]; });
+}
 var MAX_PER_DAY = 4;
 var LAST_UPDATED_ISO = null;
 
@@ -409,9 +482,15 @@ function escHtml(s) {
 
 function currentFilteredJobs() {
   var contractor = document.getElementById('fContractor').value;
+  var jobType = document.getElementById('fJobType').value;
+  var status = document.getElementById('fStatus').value;
+  var changedOnly = document.getElementById('fChangedOnly').checked;
   var search = document.getElementById('fSearch').value.trim().toLowerCase();
   return JOBS.filter(function(j) {
     if (contractor && j.contractor !== contractor) return false;
+    if (jobType && j.job_type !== jobType) return false;
+    if (status && j.status !== status) return false;
+    if (changedOnly && !j.is_changed) return false;
     if (search) {
       var hay = ((j.customer || '') + ' ' + (j.address || '') + ' ' + (j.job_code || '') + ' ' + (j.ts_app || '')).toLowerCase();
       if (hay.indexOf(search) === -1) return false;
@@ -453,30 +532,225 @@ function renderDocTable() {
   }).join('');
 }
 
-function onFiltersChanged() {
-  renderCalendar();
-  if (document.getElementById('tabDocBtn').classList.contains('active')) {
-    renderDocTable();
+function jobFullCategory(job) {
+  if (job.status === 'ดำเนินการเสร็จสิ้น') return 'completed';
+  if (job.survey_date) {
+    var hasInstallPlan = job.install_appointment || (job.actual_install_dates && job.actual_install_dates.length);
+    return hasInstallPlan ? 'scheduled' : 'stalled';
+  }
+  return 'awaiting_survey';
+}
+
+function jobCategory(job) {
+  var c = jobFullCategory(job);
+  return c === 'awaiting_survey' ? null : c;
+}
+
+function renderOverviewStats() {
+  var jobs = currentFilteredJobs();
+  var counts = { awaiting_survey: 0, stalled: 0, scheduled: 0, completed: 0 };
+  jobs.forEach(function(j) {
+    var c = jobFullCategory(j);
+    if (counts.hasOwnProperty(c)) counts[c]++;
+  });
+  var total = jobs.length;
+  var statsHost = document.getElementById('overviewStatsRow');
+  if (statsHost) {
+    statsHost.innerHTML =
+      '<div class="stat-card c-total"><div class="stat-value">' + total + '</div><div class="stat-label">งานทั้งหมด</div></div>' +
+      '<div class="stat-card c-awaiting"><div class="stat-value">' + counts.awaiting_survey + '</div><div class="stat-label">รอสำรวจ</div></div>' +
+      '<div class="stat-card c-stalled"><div class="stat-value">' + counts.stalled + '</div><div class="stat-label">สำรวจแล้ว รอกำหนดติดตั้ง</div></div>' +
+      '<div class="stat-card c-scheduled"><div class="stat-value">' + counts.scheduled + '</div><div class="stat-label">มีกำหนดติดตั้งแล้ว</div></div>' +
+      '<div class="stat-card c-completed"><div class="stat-value">' + counts.completed + '</div><div class="stat-label">ติดตั้งเสร็จสิ้นแล้ว</div></div>';
+  }
+  renderOverviewDonut(counts, total);
+}
+
+function renderOverviewDonut(counts, total) {
+  var order = ['awaiting_survey', 'stalled', 'scheduled', 'completed'];
+  var colors = { awaiting_survey: '#94a3b8', stalled: '#f97316', scheduled: '#a78bfa', completed: '#16a34a' };
+  var labels = { awaiting_survey: 'รอสำรวจ', stalled: 'สำรวจแล้ว รอกำหนดติดตั้ง', scheduled: 'มีกำหนดติดตั้งแล้ว', completed: 'ติดตั้งเสร็จสิ้นแล้ว' };
+  var donutHost = document.getElementById('donutChartHost');
+  var legendHost = document.getElementById('donutLegend');
+  if (!donutHost) return;
+  if (total === 0) {
+    donutHost.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูล</div>';
+    if (legendHost) legendHost.innerHTML = '';
+    return;
+  }
+  var r = 62, sw = 26, cx = 80, cy = 80;
+  var circumference = 2 * Math.PI * r;
+  var offset = 0;
+  var segs = [];
+  order.forEach(function(k) {
+    var n = counts[k] || 0;
+    if (n <= 0) return;
+    var frac = n / total;
+    var len = frac * circumference;
+    segs.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + colors[k] + '" stroke-width="' + sw + '" stroke-dasharray="' + len + ' ' + (circumference - len) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"><title>' + labels[k] + ': ' + n + ' (' + Math.round(frac * 100) + '%)</title></circle>');
+    offset += len;
+  });
+  donutHost.innerHTML = '<svg viewBox="0 0 160 160" width="160" height="160">' + segs.join('') +
+    '<circle cx="' + cx + '" cy="' + cy + '" r="' + (r - sw / 2 - 4) + '" fill="#fff"></circle>' +
+    '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" font-size="24" font-weight="700" fill="#1f2430">' + total + '</text>' +
+    '<text x="' + cx + '" y="' + (cy + 18) + '" text-anchor="middle" font-size="11" fill="#6b7280">งานทั้งหมด</text>' +
+    '</svg>';
+  if (legendHost) {
+    legendHost.innerHTML = order.map(function(k) {
+      var n = counts[k] || 0;
+      var pct = total > 0 ? Math.round((n / total) * 100) : 0;
+      return '<span class="donut-legend-item"><span class="donut-swatch" style="background:' + colors[k] + ';"></span>' + labels[k] + '<b>' + n + ' (' + pct + '%)</b></span>';
+    }).join('');
   }
 }
 
-document.getElementById('tabCalendarBtn').onclick = function() {
-  document.getElementById('tabCalendarBtn').classList.add('active');
-  document.getElementById('tabDocBtn').classList.remove('active');
-  document.getElementById('calendarWrap').style.display = '';
-  document.getElementById('monthNavRow').style.display = '';
-  document.getElementById('zoomControls').style.display = '';
-  document.getElementById('docTableWrap').style.display = 'none';
-};
-document.getElementById('tabDocBtn').onclick = function() {
-  document.getElementById('tabDocBtn').classList.add('active');
-  document.getElementById('tabCalendarBtn').classList.remove('active');
-  document.getElementById('calendarWrap').style.display = 'none';
-  document.getElementById('monthNavRow').style.display = 'none';
-  document.getElementById('zoomControls').style.display = 'none';
-  document.getElementById('docTableWrap').style.display = '';
-  renderDocTable();
-};
+function renderOverviewTable() {
+  var jobs = currentFilteredJobs().filter(function(j) { return jobCategory(j) !== null; });
+  var order = { stalled: 0, scheduled: 1, completed: 2 };
+  jobs.sort(function(a, b) {
+    var oa = order[jobCategory(a)], ob = order[jobCategory(b)];
+    if (oa !== ob) return oa - ob;
+    var da = a.install_appointment || a.survey_date || '9999-99-99';
+    var db = b.install_appointment || b.survey_date || '9999-99-99';
+    return da < db ? -1 : (da > db ? 1 : 0);
+  });
+  var body = document.getElementById('overviewTableBody');
+  var countEl = document.getElementById('overviewTableCount');
+  if (countEl) countEl.textContent = 'ทั้งหมด ' + jobs.length + ' งาน';
+  if (!body) return;
+  var labels = { stalled: 'สำรวจแล้ว รอกำหนดติดตั้ง', scheduled: 'สำรวจแล้ว มีกำหนดติดตั้งแล้ว', completed: 'ติดตั้งเสร็จสิ้นแล้ว' };
+  body.innerHTML = jobs.map(function(j, i) {
+    var tsAppNum = j.ts_app || j.job_code || j._key || '-';
+    var cat = jobCategory(j);
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escHtml(tsAppNum) + '</td>' +
+      '<td>' + escHtml(j.customer || '-') + '</td>' +
+      '<td>' + escHtml(j.phone || '-') + '</td>' +
+      '<td>' + escHtml(j.address || '-') + '</td>' +
+      '<td>' + escHtml(j.contractor || '-') + '</td>' +
+      '<td>' + escHtml(j.survey_date || '-') + '</td>' +
+      '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
+      '<td><span class="ov-badge ' + cat + '">' + escHtml(labels[cat]) + '</span></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function deriveCompletedMonth(job) {
+  var d = job.install_appointment || (job.actual_install_dates && job.actual_install_dates[0]) || null;
+  if (!d) return null;
+  return d.slice(0, 7);
+}
+
+function monthLabelFromKey(mk) {
+  var parts = mk.split('-');
+  var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+  var THAI_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return THAI_MONTHS_SHORT[m - 1] + ' ' + y;
+}
+
+function renderMonthlyChart() {
+  var jobs = currentFilteredJobs().filter(function(j) { return jobCategory(j) === 'completed'; });
+  var counts = {};
+  jobs.forEach(function(j) {
+    var mk = deriveCompletedMonth(j);
+    if (!mk) return;
+    var c = j.contractor || 'ไม่ระบุ';
+    if (!counts[mk]) counts[mk] = {};
+    counts[mk][c] = (counts[mk][c] || 0) + 1;
+  });
+  var months = Object.keys(counts).sort();
+  var legendHost = document.getElementById('chartLegend');
+  var chartHost = document.getElementById('chartHost');
+  if (!chartHost) return;
+  if (months.length === 0) {
+    chartHost.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูลงานติดตั้งเสร็จสิ้น</div>';
+    if (legendHost) legendHost.innerHTML = '';
+    return;
+  }
+  var presentContractors = [];
+  var seenC = {};
+  months.forEach(function(mk) {
+    Object.keys(counts[mk]).forEach(function(c) {
+      if (!seenC[c]) { seenC[c] = true; presentContractors.push(c); }
+    });
+  });
+  presentContractors.sort();
+
+  if (legendHost) {
+    legendHost.innerHTML = presentContractors.map(function(c) {
+      var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
+      return '<span class="chart-legend-item"><span class="chart-swatch" style="background:' + color + ';"></span>' + escHtml(c) + '</span>';
+    }).join('');
+  }
+
+  var maxTotal = 0;
+  months.forEach(function(mk) {
+    var total = 0;
+    Object.keys(counts[mk]).forEach(function(c) { total += counts[mk][c]; });
+    if (total > maxTotal) maxTotal = total;
+  });
+  if (maxTotal === 0) maxTotal = 1;
+
+  var barWidth = 40, gap = 24, chartHeight = 220, leftPad = 36, topPad = 16, bottomPad = 40;
+  var width = leftPad + months.length * (barWidth + gap);
+  var height = topPad + chartHeight + bottomPad;
+
+  var svgParts = [];
+  svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  var divisions = 4;
+  for (var g = 0; g <= divisions; g++) {
+    var gy = topPad + chartHeight - (chartHeight * g / divisions);
+    var gv = Math.round(maxTotal * g / divisions);
+    svgParts.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    svgParts.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + gv + '</text>');
+  }
+
+  months.forEach(function(mk, i) {
+    var x = leftPad + i * (barWidth + gap) + gap / 2;
+    var yCursor = topPad + chartHeight;
+    presentContractors.forEach(function(c) {
+      var n = counts[mk][c] || 0;
+      if (n === 0) return;
+      var segH = (n / maxTotal) * chartHeight;
+      var y = yCursor - segH;
+      var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="4" fill="' + color + '"><title>' + escHtml(c) + ': ' + n + '</title></rect>');
+      yCursor = y;
+    });
+    var total = 0;
+    presentContractors.forEach(function(c) { total += (counts[mk][c] || 0); });
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + total + '</text>');
+    var mLabel = monthLabelFromKey(mk);
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="11" fill="#374151" text-anchor="middle">' + escHtml(mLabel) + '</text>');
+  });
+
+  svgParts.push('</svg>');
+  chartHost.innerHTML = svgParts.join('');
+}
+
+function switchView(view) {
+  document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
+  document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
+  document.getElementById('tabOverviewBtn').classList.toggle('active', view === 'overview');
+  document.getElementById('calendarWrap').style.display = (view === 'calendar') ? '' : 'none';
+  document.getElementById('monthNavRow').style.display = (view === 'calendar') ? '' : 'none';
+  document.getElementById('zoomControls').style.display = (view === 'calendar') ? '' : 'none';
+  document.getElementById('docTableWrap').style.display = (view === 'doc') ? '' : 'none';
+  document.getElementById('overviewWrap').style.display = (view === 'overview') ? '' : 'none';
+  if (view === 'doc') renderDocTable();
+  if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderMonthlyChart(); }
+}
+
+function onFiltersChanged() {
+  renderCalendar();
+  if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
+  if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderMonthlyChart(); }
+}
+
+document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
+document.getElementById('tabDocBtn').onclick = function() { switchView('doc'); };
+document.getElementById('tabOverviewBtn').onclick = function() { switchView('overview'); };
 
 calGrid.addEventListener('click', function(ev) {
   var moreTarget = ev.target.closest('.evt-more');
@@ -638,6 +912,7 @@ function fetchData(isManualClick) {
       if (data.error) throw new Error(data.error === 'unauthorized' ? 'access key ไม่ถูกต้อง' : data.error);
       JOBS = data.jobs || [];
       EVENTS = data.events || [];
+      rebuildContractorColorMap();
       LAST_UPDATED_ISO = data.last_updated;
       document.getElementById('subLine2').innerHTML =
         'อัปเดตล่าสุด: ' + new Date(LAST_UPDATED_ISO).toLocaleString('th-TH') +
@@ -646,6 +921,8 @@ function fetchData(isManualClick) {
       rebuildFilterOptions();
       renderBanner(data.changed_jobs, data.new_jobs);
       renderCalendar();
+      if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
+      if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderMonthlyChart(); }
       updateStatusText(false);
       if (statusEl) statusEl.textContent = isManualClick ? '✓ อัปเดตข้อมูลล่าสุดเรียบร้อย' : '';
       if (statusEl && isManualClick) setTimeout(function(){ statusEl.textContent=''; }, 5000);

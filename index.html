@@ -996,9 +996,13 @@ function renderSlaMonthlyChart() {
   var items = jobsWithSla();
   var counts = {};
   items.forEach(function(x) {
-    var dates = (x.job.actual_install_dates || []).slice().sort();
-    if (!dates.length) return;
-    var mk = dates[dates.length - 1].slice(0, 7);
+    // Bucket by the same month field as the Overview tab's monthly chart
+    // (install_appointment / first actual date) so the two charts agree --
+    // using the finish date here instead caused jobs that span a month
+    // boundary to land in a different month than in the Overview tab,
+    // producing confusing mismatched totals for the same contractor.
+    var mk = deriveCompletedMonth(x.job);
+    if (!mk) return;
     var c = x.job.contractor || 'ไม่ระบุ';
     if (!counts[mk]) counts[mk] = {};
     counts[mk][c] = (counts[mk][c] || 0) + 1;

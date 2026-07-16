@@ -261,6 +261,31 @@
 <div id="slaWrap" style="display:none;">
   <div class="stats-row" id="slaStatsRow"></div>
 
+  <div class="card-box chart-card">
+    <div class="overview-section-title">คะแนนคุณภาพ SLA รายผู้รับเหมา (ใช้พิจารณาการมอบหมายงานครั้งถัดไป)</div>
+    <div class="chart-legend">
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#eab308;"></span>ดีมาก</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>ตรงตาม SLA</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#dc2626;"></span>เกิน SLA</span>
+    </div>
+    <div id="slaContractorChartHost"></div>
+    <div class="doc-table-toolbar" style="margin-top:14px;">คะแนนคุณภาพ = (ดีมาก×100 + ตรงตาม SLA×80 + เกิน SLA×40) ÷ จำนวนงานทั้งหมด (เต็ม 100 คะแนน) — เรียงคะแนนสูงไปต่ำ</div>
+    <table class="doc-table" id="slaContractorTable">
+      <thead>
+        <tr>
+          <th>อันดับ</th><th>ผรม.</th><th>งานทั้งหมด (สะสม)</th><th>เริ่มติดตั้งครั้งแรก</th><th>🌟 ดีมาก</th><th>⭕ ตรงตาม SLA</th><th>⛔ เกิน SLA</th><th>% ตรงตามเกณฑ์</th><th>คะแนนคุณภาพ</th>
+        </tr>
+      </thead>
+      <tbody id="slaContractorTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box chart-card">
+    <div class="overview-section-title">ปริมาณงานติดตั้งเสร็จสิ้นต่อเดือน แยกตาม ผรม. (สำหรับวิเคราะห์ SLA)</div>
+    <div class="chart-legend" id="slaMonthlyChartLegend"></div>
+    <div id="slaMonthlyChartHost"></div>
+  </div>
+
   <div class="card-box">
     <div class="overview-section-title">รายละเอียดงานตรวจสอบ SLA การติดตั้ง</div>
     <div class="doc-table-toolbar" id="slaTableCount"></div>
@@ -875,6 +900,179 @@ function renderSlaTable() {
   }).join('');
 }
 
+function contractorSlaSummary() {
+  var items = jobsWithSla();
+  var map = {};
+  items.forEach(function(x) {
+    var c = x.job.contractor || 'ไม่ระบุ';
+    if (!map[c]) map[c] = { contractor: c, total: 0, excellent: 0, met: 0, exceeded: 0, dates: [] };
+    map[c].total++;
+    map[c][x.sla.tier]++;
+    var starts = (x.job.actual_install_dates || []).slice().sort();
+    if (starts.length) map[c].dates.push(starts[0]);
+  });
+  var list = Object.keys(map).map(function(c) {
+    var m = map[c];
+    m.compliance = m.total ? Math.round(((m.excellent + m.met) / m.total) * 100) : 0;
+    m.score = m.total ? Math.round(((m.excellent * 100) + (m.met * 80) + (m.exceeded * 40)) / m.total) : 0;
+    m.firstDate = m.dates.length ? m.dates.slice().sort()[0] : '';
+    delete m.dates;
+    return m;
+  });
+  list.sort(function(a, b) { return b.score - a.score; });
+  return list;
+}
+
+function renderSlaContractorChart() {
+  var list = contractorSlaSummary();
+  var host = document.getElementById('slaContractorChartHost');
+  if (!host) return;
+  if (list.length === 0) {
+    host.innerHTML = '<div class="chart-empty">ยังไม่มีงานที่ตรวจสอบ SLA ได้</div>';
+    return;
+  }
+  var tierOrder = ['exceeded', 'met', 'excellent'];
+  var tierColors = { exceeded: '#dc2626', met: '#16a34a', excellent: '#eab308' };
+  var tierLabels = { exceeded: 'เกิน SLA', met: 'ตรงตาม SLA', excellent: 'ดีมาก' };
+
+  var maxTotal = 0;
+  list.forEach(function(c) { if (c.total > maxTotal) maxTotal = c.total; });
+  if (maxTotal === 0) maxTotal = 1;
+
+  var barWidth = 46, gap = 26, chartHeight = 200, leftPad = 36, topPad = 16, bottomPad = 56;
+  var width = leftPad + list.length * (barWidth + gap);
+  var height = topPad + chartHeight + bottomPad;
+
+  var svgParts = [];
+  svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  var divisions = 4;
+  for (var g = 0; g <= divisions; g++) {
+    var gy = topPad + chartHeight - (chartHeight * g / divisions);
+    var gv = Math.round(maxTotal * g / divisions);
+    svgParts.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    svgParts.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + gv + '</text>');
+  }
+
+  list.forEach(function(c, i) {
+    var x = leftPad + i * (barWidth + gap) + gap / 2;
+    var yCursor = topPad + chartHeight;
+    tierOrder.forEach(function(t) {
+      var n = c[t] || 0;
+      if (n === 0) return;
+      var segH = (n / maxTotal) * chartHeight;
+      var y = yCursor - segH;
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + tierColors[t] + '"><title>' + escHtml(c.contractor) + ' - ' + tierLabels[t] + ': ' + n + '</title></rect>');
+      yCursor = y;
+    });
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (c.total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + c.total + '</text>');
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(contractorAbbr(c.contractor)) + '</text>');
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 32) + '" font-size="10" fill="#6b7280" text-anchor="middle">คะแนน ' + c.score + '</text>');
+  });
+
+  svgParts.push('</svg>');
+  host.innerHTML = svgParts.join('');
+}
+
+function renderSlaContractorTable() {
+  var list = contractorSlaSummary();
+  var body = document.getElementById('slaContractorTableBody');
+  if (!body) return;
+  body.innerHTML = list.map(function(c, i) {
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escHtml(c.contractor) + '</td>' +
+      '<td>' + c.total + '</td>' +
+      '<td>' + escHtml(c.firstDate || '-') + '</td>' +
+      '<td>' + c.excellent + '</td>' +
+      '<td>' + c.met + '</td>' +
+      '<td>' + c.exceeded + '</td>' +
+      '<td>' + c.compliance + '%</td>' +
+      '<td><b>' + c.score + '</b></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderSlaMonthlyChart() {
+  var items = jobsWithSla();
+  var counts = {};
+  items.forEach(function(x) {
+    var dates = (x.job.actual_install_dates || []).slice().sort();
+    if (!dates.length) return;
+    var mk = dates[dates.length - 1].slice(0, 7);
+    var c = x.job.contractor || 'ไม่ระบุ';
+    if (!counts[mk]) counts[mk] = {};
+    counts[mk][c] = (counts[mk][c] || 0) + 1;
+  });
+  var months = Object.keys(counts).sort();
+  var legendHost = document.getElementById('slaMonthlyChartLegend');
+  var chartHost = document.getElementById('slaMonthlyChartHost');
+  if (!chartHost) return;
+  if (months.length === 0) {
+    chartHost.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูลงานติดตั้งเสร็จสิ้น</div>';
+    if (legendHost) legendHost.innerHTML = '';
+    return;
+  }
+  var presentContractors = [];
+  var seenC = {};
+  months.forEach(function(mk) {
+    Object.keys(counts[mk]).forEach(function(c) {
+      if (!seenC[c]) { seenC[c] = true; presentContractors.push(c); }
+    });
+  });
+  presentContractors.sort();
+
+  if (legendHost) {
+    legendHost.innerHTML = presentContractors.map(function(c) {
+      var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
+      return '<span class="chart-legend-item"><span class="chart-swatch" style="background:' + color + ';"></span>' + escHtml(c) + '</span>';
+    }).join('');
+  }
+
+  var maxTotal = 0;
+  months.forEach(function(mk) {
+    var total = 0;
+    Object.keys(counts[mk]).forEach(function(c) { total += counts[mk][c]; });
+    if (total > maxTotal) maxTotal = total;
+  });
+  if (maxTotal === 0) maxTotal = 1;
+
+  var barWidth = 40, gap = 24, chartHeight = 220, leftPad = 36, topPad = 16, bottomPad = 40;
+  var width = leftPad + months.length * (barWidth + gap);
+  var height = topPad + chartHeight + bottomPad;
+
+  var svgParts = [];
+  svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  var divisions = 4;
+  for (var g = 0; g <= divisions; g++) {
+    var gy = topPad + chartHeight - (chartHeight * g / divisions);
+    var gv = Math.round(maxTotal * g / divisions);
+    svgParts.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    svgParts.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + gv + '</text>');
+  }
+
+  months.forEach(function(mk, i) {
+    var x = leftPad + i * (barWidth + gap) + gap / 2;
+    var yCursor = topPad + chartHeight;
+    presentContractors.forEach(function(c) {
+      var n = counts[mk][c] || 0;
+      if (n === 0) return;
+      var segH = (n / maxTotal) * chartHeight;
+      var y = yCursor - segH;
+      var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="4" fill="' + color + '"><title>' + escHtml(c) + ': ' + n + '</title></rect>');
+      yCursor = y;
+    });
+    var total = 0;
+    presentContractors.forEach(function(c) { total += (counts[mk][c] || 0); });
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + total + '</text>');
+    var mLabel = monthLabelFromKey(mk);
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="11" fill="#374151" text-anchor="middle">' + escHtml(mLabel) + '</text>');
+  });
+
+  svgParts.push('</svg>');
+  chartHost.innerHTML = svgParts.join('');
+}
+
 function switchView(view) {
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
@@ -888,14 +1086,14 @@ function switchView(view) {
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   if (view === 'doc') renderDocTable();
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderMonthlyChart(); }
-  if (view === 'sla') { renderSlaStats(); renderSlaTable(); }
+  if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); }
 }
 
 function onFiltersChanged() {
   renderCalendar();
   if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderMonthlyChart(); }
-  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaTable(); }
+  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); }
 }
 
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };

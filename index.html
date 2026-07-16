@@ -38,6 +38,7 @@
   .tac-dot.got { border-bottom-color:#16a34a; }
   .tac-dot.pending { border-bottom-color:#d97706; }
   .tac-dot.not { border-bottom-color:#dc2626; }
+  .sla-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#16a34a; margin-left:3px; vertical-align:middle; }
   body.focus-mode { padding:10px; }
   body.focus-mode .sub, body.focus-mode .sub2, body.focus-mode .today-note,
   body.focus-mode .filter-row, body.focus-mode .refresh-row, body.focus-mode .status-bar { display:none; }
@@ -97,6 +98,13 @@
   .stat-card.c-stalled { border-top-color:#f97316; }
   .stat-card.c-scheduled { border-top-color:#a78bfa; }
   .stat-card.c-completed { border-top-color:#16a34a; }
+  .stat-card.c-excellent { border-top-color:#eab308; }
+  .stat-card.c-met { border-top-color:#16a34a; }
+  .stat-card.c-exceeded { border-top-color:#dc2626; }
+  .sla-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .sla-badge.excellent { background:#fef9c3; color:#854d0e; }
+  .sla-badge.met { background:#dcfce7; color:#166534; }
+  .sla-badge.exceeded { background:#fee2e2; color:#991b1b; }
   .stat-value { font-size:28px; font-weight:700; color:var(--text); line-height:1.2; }
   .stat-label { font-size:12px; color:var(--muted); margin-top:4px; }
   .donut-row { display:flex; gap:28px; flex-wrap:wrap; align-items:center; }
@@ -188,6 +196,7 @@
   <button class="secondary view-tab-btn active" id="tabCalendarBtn">📅 ปฏิทิน</button>
   <button class="secondary view-tab-btn" id="tabDocBtn">📋 ตารางเอกสารขนานไฟ</button>
   <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง</button>
+  <button class="secondary view-tab-btn" id="tabSlaBtn">🎯 SLA ติดตั้ง</button>
 </div>
 
 <div class="month-nav" id="monthNavRow">
@@ -249,6 +258,23 @@
   </div>
 </div>
 
+<div id="slaWrap" style="display:none;">
+  <div class="stats-row" id="slaStatsRow"></div>
+
+  <div class="card-box">
+    <div class="overview-section-title">รายละเอียดงานตรวจสอบ SLA การติดตั้ง</div>
+    <div class="doc-table-toolbar" id="slaTableCount"></div>
+    <table class="doc-table" id="slaTable">
+      <thead>
+        <tr>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>ผรม.</th><th>อุปกรณ์</th><th>Smart Guard</th><th>เริ่มติดตั้ง</th><th>เสร็จติดตั้ง</th><th>จำนวนวัน</th><th>เกณฑ์ SLA</th><th>ผลลัพธ์</th><th>เหตุผล (ถ้าเกิน SLA)</th>
+        </tr>
+      </thead>
+      <tbody id="slaTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <div id="bannerHost"></div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -264,6 +290,7 @@
     <div class="modal-row"><div class="k">อีเมล:</div><div class="v" id="mEmail"></div></div>
     <div class="modal-row"><div class="k">สถานะ:</div><div class="v" id="mStatus"></div></div>
     <div class="modal-row" id="mTacRow"><div class="k">เลขขนานไฟ:</div><div class="v" id="mTac"></div></div>
+    <div class="modal-row" id="mSlaRow" style="display:none;"><div class="k">SLA ติดตั้ง:</div><div class="v" id="mSla"></div></div>
     <button class="secondary modal-close" id="mClose">ปิด</button>
   </div>
 </div>
@@ -364,6 +391,37 @@ function contractorAbbr(c) {
   return c.split(/\s+/)[0];
 }
 
+// Install SLA check (installation phase only, per Sure 2026-07-16):
+// - only applies to jobs whose status is "ดำเนินการเสร็จสิ้น" (completed) and that have at least one
+//   actual install date recorded
+// - measured from the FIRST actual install date to the LAST actual install date,
+//   counted inclusively (start day counts as day 1)
+// - for typical residential 3/5/10kW jobs: range is 3-5 days if no "Smart Guard"
+//   in equipment, 5-7 days if it has Smart Guard
+// - tier: 'excellent' if finished before the range minimum, 'met' if within the
+//   range (inclusive), 'exceeded' if over the range maximum
+// - reason: for 'exceeded' jobs, sourced from the sheet's site_issues field
+function jobSlaInfo(job) {
+  if (!job || job.status !== 'ดำเนินการเสร็จสิ้น') return null;
+  var dates = job.actual_install_dates || [];
+  if (!dates.length) return null;
+  var sorted = dates.slice().sort();
+  var start = new Date(sorted[0] + 'T00:00:00');
+  var finish = new Date(sorted[sorted.length - 1] + 'T00:00:00');
+  var days = Math.round((finish - start) / 86400000) + 1;
+  var hasSmartGuard = /smart\s*guard/i.test(job.equipment || '');
+  var min = hasSmartGuard ? 5 : 3;
+  var max = hasSmartGuard ? 7 : 5;
+  var tier;
+  if (days < min) tier = 'excellent';
+  else if (days <= max) tier = 'met';
+  else tier = 'exceeded';
+  return {
+    tier: tier, met: tier !== 'exceeded', days: days, min: min, max: max,
+    hasSmartGuard: hasSmartGuard, reason: job.site_issues || ''
+  };
+}
+
 function renderCalendar() {
   dowRow.innerHTML = DOW.map(function(d) { return '<div class="dow">' + d + '</div>'; }).join('');
   var y = cur.getFullYear(), m = cur.getMonth();
@@ -419,7 +477,17 @@ function renderCalendar() {
         var tacTitle = String(tacTitleRaw).replace(/"/g, '&quot;');
         tacHtml = '<span class="tac-dot ' + tacCls + '" title="' + tacTitle + '"></span>';
       }
-      return '<div class="evt ' + cls + '" data-idx="' + idx + '" title="คลิกดูรายละเอียด"><span class="dot ' + dotCls + '"></span>' + label + (changed ? ' 🔄' : '') + tacHtml + '</div>';
+      var slaHtml = '';
+      if (e.type !== 'survey') {
+        var slaInfo = jobSlaInfo(jobByKey(e.job_key));
+        if (slaInfo && slaInfo.met) {
+          var slaTierTh = slaInfo.tier === 'excellent' ? 'ดีมาก' : 'ตรงตาม SLA';
+          var slaTitle = 'ติดตั้งเสร็จใน ' + slaInfo.days + ' วัน (เกณฑ์ ' + slaInfo.min + '-' + slaInfo.max + ' วัน' +
+            (slaInfo.hasSmartGuard ? ', มี Smart Guard' : '') + ') — ' + slaTierTh;
+          slaHtml = '<span class="sla-dot" title="' + slaTitle + '"></span>';
+        }
+      }
+      return '<div class="evt ' + cls + '" data-idx="' + idx + '" title="คลิกดูรายละเอียด"><span class="dot ' + dotCls + '"></span>' + label + (changed ? ' 🔄' : '') + tacHtml + slaHtml + '</div>';
     }).join('');
     var moreHtml = '';
     if (extra > 0) {
@@ -471,6 +539,24 @@ function openModalForEvent(e) {
       tacEl.innerHTML = '<span style="color:#d97706;font-weight:600;">▲ ' + mTacRaw + ' (ยังไม่ได้เลขอ้างอิง)</span>';
     } else {
       tacEl.innerHTML = '<span style="color:#dc2626;font-weight:600;">▲ ยังไม่มีความคืบหน้า</span>';
+    }
+    var mSlaRow = document.getElementById('mSlaRow');
+    var mSlaEl = document.getElementById('mSla');
+    var mSlaInfo = jobSlaInfo(mJob);
+    if (mSlaInfo && mSlaRow && mSlaEl) {
+      mSlaRow.style.display = '';
+      var rangeTxt = mSlaInfo.min + '-' + mSlaInfo.max + ' วัน' + (mSlaInfo.hasSmartGuard ? ' (มี Smart Guard)' : '');
+      if (mSlaInfo.tier === 'excellent') {
+        mSlaEl.innerHTML = '<span style="color:#a16207;font-weight:700;">🌟 ดีมาก — ' + mSlaInfo.days + ' วัน (เกณฑ์ ' + rangeTxt + ')</span>';
+      } else if (mSlaInfo.tier === 'met') {
+        mSlaEl.innerHTML = '<span style="color:#16a34a;font-weight:700;">⭕ ตรงตาม SLA — ' + mSlaInfo.days + ' วัน (เกณฑ์ ' + rangeTxt + ')</span>';
+      } else {
+        var reasonTxt = mSlaInfo.reason ? escHtml(mSlaInfo.reason) : 'ไม่ระบุเหตุผล';
+        mSlaEl.innerHTML = '<span style="color:#dc2626;font-weight:700;">⛔ เกิน SLA — ' + mSlaInfo.days + ' วัน (เกณฑ์ ' + rangeTxt + ')</span>' +
+          '<div style="margin-top:4px;font-size:12px;color:#6b7280;">เหตุผล: ' + reasonTxt + '</div>';
+      }
+    } else if (mSlaRow) {
+      mSlaRow.style.display = 'none';
     }
   }
   document.getElementById('modalOverlay').classList.add('open');
@@ -533,12 +619,16 @@ function renderDocTable() {
 }
 
 function jobFullCategory(job) {
-  if (job.status === 'ดำเนินการเสร็จสิ้น') return 'completed';
-  if (job.survey_date) {
-    var hasInstallPlan = job.install_appointment || (job.actual_install_dates && job.actual_install_dates.length);
-    return hasInstallPlan ? 'scheduled' : 'stalled';
-  }
-  return 'awaiting_survey';
+  var status = job.status || '';
+  if (status === 'ดำเนินการเสร็จสิ้น') return 'completed';
+  // Some jobs get a tentative survey_date filled in as soon as a slot is
+  // picked, even before the survey visit actually happens -- so survey_date
+  // presence alone is not a reliable "has been surveyed" signal. The status
+  // text is authoritative: only "รอนัดหมายเข้าสำรวจ" means the survey hasn't
+  // happened/been booked in a meaningful way yet.
+  if (status.indexOf('รอนัดหมายเข้าสำรวจ') !== -1) return 'awaiting_survey';
+  var hasInstallPlan = job.install_appointment || (job.actual_install_dates && job.actual_install_dates.length);
+  return hasInstallPlan ? 'scheduled' : 'stalled';
 }
 
 function jobCategory(job) {
@@ -729,28 +819,89 @@ function renderMonthlyChart() {
   chartHost.innerHTML = svgParts.join('');
 }
 
+function jobsWithSla() {
+  return currentFilteredJobs()
+    .map(function(j) { return { job: j, sla: jobSlaInfo(j) }; })
+    .filter(function(x) { return x.sla !== null; });
+}
+
+function renderSlaStats() {
+  var items = jobsWithSla();
+  var counts = { excellent: 0, met: 0, exceeded: 0 };
+  items.forEach(function(x) { counts[x.sla.tier]++; });
+  var total = items.length;
+  var host = document.getElementById('slaStatsRow');
+  if (!host) return;
+  host.innerHTML =
+    '<div class="stat-card c-total"><div class="stat-value">' + total + '</div><div class="stat-label">งานที่ตรวจสอบ SLA ได้</div></div>' +
+    '<div class="stat-card c-excellent"><div class="stat-value">' + counts.excellent + '</div><div class="stat-label">🌟 ดีมาก (เร็วกว่าเกณฑ์)</div></div>' +
+    '<div class="stat-card c-met"><div class="stat-value">' + counts.met + '</div><div class="stat-label">⭕ ตรงตาม SLA</div></div>' +
+    '<div class="stat-card c-exceeded"><div class="stat-value">' + counts.exceeded + '</div><div class="stat-label">⛔ เกิน SLA</div></div>';
+}
+
+function renderSlaTable() {
+  var items = jobsWithSla();
+  var order = { exceeded: 0, met: 1, excellent: 2 };
+  items.sort(function(a, b) {
+    var oa = order[a.sla.tier], ob = order[b.sla.tier];
+    if (oa !== ob) return oa - ob;
+    return b.sla.days - a.sla.days;
+  });
+  var body = document.getElementById('slaTableBody');
+  var countEl = document.getElementById('slaTableCount');
+  if (countEl) countEl.textContent = 'ทั้งหมด ' + items.length + ' งาน (เรียงงานที่เกิน SLA ขึ้นก่อน)';
+  if (!body) return;
+  var tierLabels = { excellent: 'ดีมาก', met: 'ตรงตาม SLA', exceeded: 'เกิน SLA' };
+  body.innerHTML = items.map(function(x, i) {
+    var j = x.job, s = x.sla;
+    var tsAppNum = j.ts_app || j.job_code || j._key || '-';
+    var start = (j.actual_install_dates || []).slice().sort()[0] || '-';
+    var finish = (j.actual_install_dates || []).slice().sort().slice(-1)[0] || '-';
+    var reasonCell = s.tier === 'exceeded' ? escHtml(s.reason || 'ไม่ระบุเหตุผล') : '-';
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escHtml(tsAppNum) + '</td>' +
+      '<td>' + escHtml(j.customer || '-') + '</td>' +
+      '<td>' + escHtml(j.contractor || '-') + '</td>' +
+      '<td>' + escHtml(j.equipment || '-') + '</td>' +
+      '<td>' + (s.hasSmartGuard ? 'มี' : 'ไม่มี') + '</td>' +
+      '<td>' + escHtml(start) + '</td>' +
+      '<td>' + escHtml(finish) + '</td>' +
+      '<td>' + s.days + ' วัน</td>' +
+      '<td>' + s.min + '-' + s.max + ' วัน</td>' +
+      '<td><span class="sla-badge ' + s.tier + '">' + tierLabels[s.tier] + '</span></td>' +
+      '<td>' + reasonCell + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
 function switchView(view) {
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
   document.getElementById('tabOverviewBtn').classList.toggle('active', view === 'overview');
+  document.getElementById('tabSlaBtn').classList.toggle('active', view === 'sla');
   document.getElementById('calendarWrap').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('monthNavRow').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('zoomControls').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('docTableWrap').style.display = (view === 'doc') ? '' : 'none';
   document.getElementById('overviewWrap').style.display = (view === 'overview') ? '' : 'none';
+  document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   if (view === 'doc') renderDocTable();
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderMonthlyChart(); }
+  if (view === 'sla') { renderSlaStats(); renderSlaTable(); }
 }
 
 function onFiltersChanged() {
   renderCalendar();
   if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderMonthlyChart(); }
+  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaTable(); }
 }
 
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
 document.getElementById('tabDocBtn').onclick = function() { switchView('doc'); };
 document.getElementById('tabOverviewBtn').onclick = function() { switchView('overview'); };
+document.getElementById('tabSlaBtn').onclick = function() { switchView('sla'); };
 
 calGrid.addEventListener('click', function(ev) {
   var moreTarget = ev.target.closest('.evt-more');

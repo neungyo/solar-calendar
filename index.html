@@ -249,6 +249,25 @@
     <div id="contractorStatusChartHost"></div>
   </div>
 
+  <div class="card-box chart-card">
+    <div class="overview-section-title">รายละเอียดรายเดือน แยกตาม ผรม. (เลือกเดือนได้)</div>
+    <div style="margin-bottom:14px;">
+      <select id="monthPicker"></select>
+    </div>
+    <div class="chart-legend">
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#2563eb;"></span>งานสำรวจ</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>ติดตั้งเสร็จสิ้นแล้ว (ณ วันนี้)</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#a78bfa;"></span>รอดำเนินการติดตั้ง</span>
+    </div>
+    <div id="monthPickerChartHost"></div>
+    <table class="doc-table" id="monthPickerTable" style="margin-top:14px;">
+      <thead>
+        <tr><th>ผรม.</th><th>งานสำรวจ</th><th>ติดตั้งเสร็จสิ้นแล้ว</th><th>รอดำเนินการติดตั้ง</th><th>รวม</th></tr>
+      </thead>
+      <tbody id="monthPickerTableBody"></tbody>
+    </table>
+  </div>
+
   <div class="card-box">
     <div class="overview-section-title">รายละเอียดงาน</div>
     <div class="doc-table-toolbar" id="overviewTableCount"></div>
@@ -937,6 +956,121 @@ function renderSurveyMonthlyChart() {
   chartHost.innerHTML = svgParts.join('');
 }
 
+// Union of months that have either a survey or an install (scheduled or
+// completed) date, used to populate the interactive month picker below.
+function allOverviewMonthKeys() {
+  var jobs = currentFilteredJobs();
+  var set = {};
+  jobs.forEach(function(j) {
+    var sm = deriveSurveyMonth(j);
+    if (sm) set[sm] = true;
+    var cm = deriveCompletedMonth(j);
+    if (cm) set[cm] = true;
+  });
+  return Object.keys(set).sort();
+}
+
+function populateMonthPicker() {
+  var picker = document.getElementById('monthPicker');
+  if (!picker) return;
+  var months = allOverviewMonthKeys();
+  var prevValue = picker.value;
+  picker.innerHTML = months.slice().reverse().map(function(mk) {
+    return '<option value="' + mk + '">' + monthLabelFromKey(mk) + '</option>';
+  }).join('');
+  if (months.length === 0) return;
+  var curMonthKey = TODAY_ISO.slice(0, 7);
+  var toSelect = (prevValue && months.indexOf(prevValue) !== -1) ? prevValue
+    : (months.indexOf(curMonthKey) !== -1 ? curMonthKey : months[months.length - 1]);
+  picker.value = toSelect;
+}
+
+// Per-contractor breakdown for a single selected month: how many surveys
+// happened that month, how many installs are completed as-of-today that
+// were scheduled/started in that month, and how many are still pending --
+// lets a manager pick any month and see workload split by ผรม. at a glance.
+function renderMonthPickerBreakdown() {
+  var picker = document.getElementById('monthPicker');
+  var host = document.getElementById('monthPickerChartHost');
+  var tblBody = document.getElementById('monthPickerTableBody');
+  if (!picker || !host || !tblBody) return;
+  var mk = picker.value;
+  var jobs = currentFilteredJobs();
+  var map = {};
+  function ensure(c) {
+    if (!map[c]) map[c] = { contractor: c, survey: 0, completed: 0, scheduled: 0 };
+    return map[c];
+  }
+  jobs.forEach(function(j) {
+    var c = j.contractor || 'ไม่ระบุ';
+    if (deriveSurveyMonth(j) === mk) ensure(c).survey++;
+    var cat = jobCategory(j);
+    if (cat === 'completed' && deriveCompletedMonth(j) === mk) ensure(c).completed++;
+    if (cat === 'scheduled' && deriveCompletedMonth(j) === mk) ensure(c).scheduled++;
+  });
+  var list = Object.keys(map).map(function(c) {
+    var m = map[c];
+    m.total = m.survey + m.completed + m.scheduled;
+    return m;
+  });
+  list.sort(function(a, b) { return b.total - a.total; });
+
+  if (!mk || list.length === 0) {
+    host.innerHTML = '<div class="chart-empty">ไม่มีข้อมูลในเดือนที่เลือก</div>';
+    tblBody.innerHTML = '';
+    return;
+  }
+
+  var series = ['survey', 'completed', 'scheduled'];
+  var seriesColors = { survey: '#2563eb', completed: '#16a34a', scheduled: '#a78bfa' };
+  var seriesLabels = { survey: 'งานสำรวจ', completed: 'ติดตั้งเสร็จสิ้นแล้ว', scheduled: 'รอดำเนินการติดตั้ง' };
+  var maxVal = 0;
+  list.forEach(function(c) { series.forEach(function(s) { if (c[s] > maxVal) maxVal = c[s]; }); });
+  if (maxVal === 0) maxVal = 1;
+
+  var subBarWidth = 14, subGap = 4, groupGap = 22, chartHeight = 180, leftPad = 36, topPad = 16, bottomPad = 40;
+  var groupWidth = series.length * subBarWidth + (series.length - 1) * subGap;
+  var width = leftPad + list.length * (groupWidth + groupGap);
+  var height = topPad + chartHeight + bottomPad;
+
+  var svgParts = [];
+  svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  var divisions = 4;
+  for (var g = 0; g <= divisions; g++) {
+    var gy = topPad + chartHeight - (chartHeight * g / divisions);
+    var gv = Math.round(maxVal * g / divisions);
+    svgParts.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    svgParts.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + gv + '</text>');
+  }
+
+  list.forEach(function(c, i) {
+    var groupX = leftPad + i * (groupWidth + groupGap) + groupGap / 2;
+    series.forEach(function(s, si) {
+      var n = c[s] || 0;
+      var x = groupX + si * (subBarWidth + subGap);
+      if (n === 0) return;
+      var segH = (n / maxVal) * chartHeight;
+      var y = topPad + chartHeight - segH;
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + subBarWidth + '" height="' + segH + '" rx="2" fill="' + seriesColors[s] + '"><title>' + escHtml(c.contractor) + ' - ' + seriesLabels[s] + ': ' + n + '</title></rect>');
+      svgParts.push('<text x="' + (x + subBarWidth / 2) + '" y="' + (y - 4) + '" font-size="9" fill="#1f2430" text-anchor="middle">' + n + '</text>');
+    });
+    svgParts.push('<text x="' + (groupX + groupWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(contractorAbbr(c.contractor)) + '</text>');
+  });
+
+  svgParts.push('</svg>');
+  host.innerHTML = svgParts.join('');
+
+  tblBody.innerHTML = list.map(function(c) {
+    return '<tr>' +
+      '<td>' + escHtml(c.contractor) + '</td>' +
+      '<td>' + c.survey + '</td>' +
+      '<td>' + c.completed + '</td>' +
+      '<td>' + c.scheduled + '</td>' +
+      '<td><b>' + c.total + '</b></td>' +
+      '</tr>';
+  }).join('');
+}
+
 // Install volume per month -- now includes BOTH completed installs and
 // jobs that have an install date/appointment scheduled but not yet
 // completed ("รอดำเนินการติดตั้ง"), stacked by status (not contractor,
@@ -1253,14 +1387,14 @@ function switchView(view) {
   document.getElementById('overviewWrap').style.display = (view === 'overview') ? '' : 'none';
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   if (view === 'doc') renderDocTable();
-  if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); }
+  if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); }
 }
 
 function onFiltersChanged() {
   renderCalendar();
   if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
-  if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); }
+  if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); }
 }
 
@@ -1300,6 +1434,8 @@ document.getElementById('nextMonth').onclick = function() { cur.setMonth(cur.get
   document.getElementById(id).addEventListener('input', onFiltersChanged);
   document.getElementById(id).addEventListener('change', onFiltersChanged);
 });
+var monthPickerEl = document.getElementById('monthPicker');
+if (monthPickerEl) monthPickerEl.addEventListener('change', renderMonthPickerBreakdown);
 document.getElementById('clearFilters').onclick = function() {
   document.getElementById('fContractor').value = '';
   document.getElementById('fJobType').value = '';
@@ -1439,7 +1575,7 @@ function fetchData(isManualClick) {
       renderBanner(data.changed_jobs, data.new_jobs);
       renderCalendar();
       if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
-      if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); }
+      if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
       updateStatusText(false);
       if (statusEl) statusEl.textContent = isManualClick ? '✓ อัปเดตข้อมูลล่าสุดเรียบร้อย' : '';
       if (statusEl && isManualClick) setTimeout(function(){ statusEl.textContent=''; }, 5000);

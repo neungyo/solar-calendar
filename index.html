@@ -203,7 +203,7 @@
 <div class="view-tabs">
   <button class="secondary view-tab-btn active" id="tabCalendarBtn">📅 ปฏิทิน</button>
   <button class="secondary view-tab-btn" id="tabDocBtn">📋 ตารางเอกสารขนานไฟ</button>
-  <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง</button>
+  <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง/ประเมิน</button>
   <button class="secondary view-tab-btn" id="tabSlaBtn">🎯 SLA ติดตั้ง</button>
 </div>
 
@@ -299,15 +299,41 @@
   </div>
 
   <div class="card-box">
-    <div class="overview-section-title">รายละเอียดงาน</div>
-    <div class="doc-table-toolbar" id="overviewTableCount"></div>
-    <table class="doc-table" id="overviewTable">
+    <div class="overview-section-title">รายละเอียดงาน — สำรวจแล้ว รอกำหนดติดตั้ง</div>
+    <div class="doc-table-toolbar" id="overviewTableStalledCount"></div>
+    <table class="doc-table" id="overviewTableStalled">
       <thead>
         <tr>
           <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th>
         </tr>
       </thead>
-      <tbody id="overviewTableBody"></tbody>
+      <tbody id="overviewTableStalledBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box">
+    <div class="overview-section-title">รายละเอียดงาน — สำรวจแล้ว มีกำหนดติดตั้งแล้ว</div>
+    <div class="doc-table-toolbar" id="overviewTableScheduledCount"></div>
+    <table class="doc-table" id="overviewTableScheduled">
+      <thead>
+        <tr>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th>
+        </tr>
+      </thead>
+      <tbody id="overviewTableScheduledBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box">
+    <div class="overview-section-title">รายละเอียดงาน — ติดตั้งเสร็จสิ้นแล้ว</div>
+    <div class="doc-table-toolbar" id="overviewTableCompletedCount"></div>
+    <table class="doc-table" id="overviewTableCompleted">
+      <thead>
+        <tr>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th>
+        </tr>
+      </thead>
+      <tbody id="overviewTableCompletedBody"></tbody>
     </table>
   </div>
 </div>
@@ -346,7 +372,7 @@
     <table class="doc-table" id="manualRatingTable">
       <thead>
         <tr>
-          <th>ผรม.</th><th>จำนวนครั้งที่ประเมิน</th><th>คะแนนเฉลี่ยรวม</th><th>ความปลอดภัย</th><th>ตามแบบมาตรฐาน</th><th>เก็บงานเรียบร้อย</th><th>ทดสอบระบบ</th><th>เอกสารส่งมอบ</th>
+          <th>ผรม.</th><th>จำนวนครั้งที่ประเมิน</th><th>คะแนนเฉลี่ยรวม</th><th>% คะแนนเฉลี่ยรวม</th><th>ความปลอดภัย</th><th>ตามแบบมาตรฐาน</th><th>เก็บงานเรียบร้อย</th><th>ทดสอบระบบ</th><th>เอกสารส่งมอบ</th>
         </tr>
       </thead>
       <tbody id="manualRatingTableBody"></tbody>
@@ -481,6 +507,10 @@ function fetchRatingsSummary() {
 function openRatingModal(jobKey) {
   var job = jobByKey(jobKey);
   if (!job) return;
+  if (jobCategory(job) !== 'completed') {
+    alert('ให้คะแนนได้เมื่อสถานะงานเป็น "ติดตั้งเสร็จสิ้นแล้ว" เท่านั้น');
+    return;
+  }
   currentRatingJob = job;
   currentRatingScores = {};
   document.getElementById('ratingModalSub').textContent =
@@ -880,43 +910,85 @@ function renderOverviewDonut(counts, total) {
   }
 }
 
-function renderOverviewTable() {
-  var jobs = currentFilteredJobs().filter(function(j) { return jobCategory(j) !== null; });
-  var order = { stalled: 0, scheduled: 1, completed: 2 };
-  jobs.sort(function(a, b) {
-    var oa = order[jobCategory(a)], ob = order[jobCategory(b)];
-    if (oa !== ob) return oa - ob;
-    var da = a.install_appointment || a.survey_date || '9999-99-99';
-    var db = b.install_appointment || b.survey_date || '9999-99-99';
-    return da < db ? -1 : (da > db ? 1 : 0);
-  });
-  var body = document.getElementById('overviewTableBody');
-  var countEl = document.getElementById('overviewTableCount');
+var OVERVIEW_STATUS_LABELS = { stalled: 'สำรวจแล้ว รอกำหนดติดตั้ง', scheduled: 'สำรวจแล้ว มีกำหนดติดตั้งแล้ว', completed: 'ติดตั้งเสร็จสิ้นแล้ว' };
+
+// Latest-relevant-date per category, used only as the tie-break sort key
+// within each status table (see renderOverviewTable below) -- e.g. for a
+// completed job the most meaningful "last thing that happened" is the
+// finish date of the actual install, not the original appointment date.
+function overviewSortDate(job, cat) {
+  if (cat === 'stalled') return job.survey_date || '';
+  if (cat === 'scheduled') return job.install_appointment || (job.actual_install_dates && job.actual_install_dates[0]) || '';
+  var dates = (job.actual_install_dates || []).slice().sort();
+  return dates.length ? dates[dates.length - 1] : (job.install_appointment || '');
+}
+
+function renderOverviewRatingCell(j, cat) {
+  var ratingKey = j.ts_app || j.job_code || j._key || '';
+  var ratingInfo = RATINGS_SUMMARY.byJob && RATINGS_SUMMARY.byJob[ratingKey];
+  if (cat !== 'completed') {
+    // Rating only makes sense once the install is actually done -- Sure's
+    // explicit instruction (2026-07-19): no "ให้คะแนน" button until status
+    // is ดำเนินการเสร็จสิ้น, so stalled/scheduled rows just show a dash.
+    return '<span class="rating-badge none" title="ให้คะแนนได้เมื่อติดตั้งเสร็จสิ้นแล้ว">รอติดตั้งเสร็จ</span>';
+  }
+  var html = ratingInfo
+    ? '<span class="rating-badge">' + ratingInfo.avg + '/5 (' + ratingInfo.count + ' ครั้ง)</span>'
+    : '<span class="rating-badge none">ยังไม่มีคะแนน</span>';
+  html += '<button type="button" class="secondary rate-btn" data-rate-key="' + escHtml(j._key) + '">ให้คะแนน</button>';
+  return html;
+}
+
+function renderOverviewRow(j, i, cat) {
+  var tsAppNum = j.ts_app || j.job_code || j._key || '-';
+  return '<tr>' +
+    '<td>' + (i + 1) + '</td>' +
+    '<td>' + escHtml(tsAppNum) + '</td>' +
+    '<td>' + escHtml(j.customer || '-') + '</td>' +
+    '<td>' + escHtml(j.phone || '-') + '</td>' +
+    '<td>' + escHtml(j.address || '-') + '</td>' +
+    '<td>' + escHtml(j.contractor || '-') + '</td>' +
+    '<td>' + escHtml(j.survey_date || '-') + '</td>' +
+    '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
+    '<td><span class="ov-badge ' + cat + '">' + escHtml(OVERVIEW_STATUS_LABELS[cat]) + '</span></td>' +
+    '<td>' + renderOverviewRatingCell(j, cat) + '</td>' +
+    '</tr>';
+}
+
+function renderOverviewSubTable(bodyId, countId, jobs, cat) {
+  var body = document.getElementById(bodyId);
+  var countEl = document.getElementById(countId);
   if (countEl) countEl.textContent = 'ทั้งหมด ' + jobs.length + ' งาน';
   if (!body) return;
-  var labels = { stalled: 'สำรวจแล้ว รอกำหนดติดตั้ง', scheduled: 'สำรวจแล้ว มีกำหนดติดตั้งแล้ว', completed: 'ติดตั้งเสร็จสิ้นแล้ว' };
-  body.innerHTML = jobs.map(function(j, i) {
-    var tsAppNum = j.ts_app || j.job_code || j._key || '-';
+  body.innerHTML = jobs.map(function(j, i) { return renderOverviewRow(j, i, cat); }).join('');
+}
+
+// Split into 3 separate tables by status (Sure's request, 2026-07-19), each
+// sorted so that jobs whose data just changed in the latest refresh float to
+// the very top (is_changed first), then by the most recent relevant date as
+// a tie-breaker -- so the newest/most-recently-updated status is always at
+// the top of its own table instead of buried in one long combined list.
+function renderOverviewTable() {
+  var allJobs = currentFilteredJobs().filter(function(j) { return jobCategory(j) !== null; });
+  var groups = { stalled: [], scheduled: [], completed: [] };
+  allJobs.forEach(function(j) {
     var cat = jobCategory(j);
-    var ratingKey = j.ts_app || j.job_code || j._key || '';
-    var ratingInfo = RATINGS_SUMMARY.byJob && RATINGS_SUMMARY.byJob[ratingKey];
-    var ratingCellHtml = ratingInfo
-      ? '<span class="rating-badge">' + ratingInfo.avg + '/5 (' + ratingInfo.count + ' ครั้ง)</span>'
-      : '<span class="rating-badge none">ยังไม่มีคะแนน</span>';
-    ratingCellHtml += '<button type="button" class="secondary rate-btn" data-rate-key="' + escHtml(j._key) + '">ให้คะแนน</button>';
-    return '<tr>' +
-      '<td>' + (i + 1) + '</td>' +
-      '<td>' + escHtml(tsAppNum) + '</td>' +
-      '<td>' + escHtml(j.customer || '-') + '</td>' +
-      '<td>' + escHtml(j.phone || '-') + '</td>' +
-      '<td>' + escHtml(j.address || '-') + '</td>' +
-      '<td>' + escHtml(j.contractor || '-') + '</td>' +
-      '<td>' + escHtml(j.survey_date || '-') + '</td>' +
-      '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
-      '<td><span class="ov-badge ' + cat + '">' + escHtml(labels[cat]) + '</span></td>' +
-      '<td>' + ratingCellHtml + '</td>' +
-      '</tr>';
-  }).join('');
+    if (groups[cat]) groups[cat].push(j);
+  });
+
+  ['stalled', 'scheduled', 'completed'].forEach(function(cat) {
+    groups[cat].sort(function(a, b) {
+      var ca = a.is_changed ? 0 : 1, cb = b.is_changed ? 0 : 1;
+      if (ca !== cb) return ca - cb;
+      var da = overviewSortDate(a, cat) || '0000-00-00';
+      var db = overviewSortDate(b, cat) || '0000-00-00';
+      return da < db ? 1 : (da > db ? -1 : 0);
+    });
+  });
+
+  renderOverviewSubTable('overviewTableStalledBody', 'overviewTableStalledCount', groups.stalled, 'stalled');
+  renderOverviewSubTable('overviewTableScheduledBody', 'overviewTableScheduledCount', groups.scheduled, 'scheduled');
+  renderOverviewSubTable('overviewTableCompletedBody', 'overviewTableCompletedCount', groups.completed, 'completed');
 }
 
 // Per-contractor workload/pipeline breakdown -- how many jobs each
@@ -1556,16 +1628,18 @@ function renderManualRatingTable() {
   var byContractor = RATINGS_SUMMARY.byContractor || {};
   var contractors = Object.keys(byContractor);
   if (contractors.length === 0) {
-    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);">ยังไม่มีการให้คะแนน หรือยังไม่ได้ตั้งค่า RATINGS_WEBAPP_URL</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);">ยังไม่มีการให้คะแนน หรือยังไม่ได้ตั้งค่า RATINGS_WEBAPP_URL</td></tr>';
     return;
   }
   contractors.sort(function(a, b) { return (byContractor[b].avg || 0) - (byContractor[a].avg || 0); });
   body.innerHTML = contractors.map(function(c) {
     var r = byContractor[c];
+    var pct = Math.round((r.avg / 5) * 100);
     return '<tr>' +
       '<td>' + escHtml(c) + '</td>' +
       '<td>' + r.count + '</td>' +
       '<td><b>' + r.avg + '/5</b></td>' +
+      '<td>' + pct + '%</td>' +
       '<td>' + r.safety + '</td>' +
       '<td>' + r.design + '</td>' +
       '<td>' + r.workmanship + '</td>' +
@@ -1677,6 +1751,7 @@ document.getElementById('ratingModalSubmit').onclick = function() {
     ts_app: (currentRatingJob.ts_app || currentRatingJob.job_code || currentRatingJob._key || ''),
     customer: currentRatingJob.customer || '',
     contractor: currentRatingJob.contractor || '',
+    status: currentRatingJob.status || '',
     rater: rater,
     note: document.getElementById('ratingNote').value.trim(),
     scores: currentRatingScores

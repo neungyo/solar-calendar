@@ -250,6 +250,28 @@
   </div>
 
   <div class="card-box chart-card">
+    <div class="overview-section-title">จำนวนงานเข้าสำรวจต่อเดือน (แยกสีตาม ผรม.)</div>
+    <div class="chart-legend" id="surveyChartLegend"></div>
+    <div id="surveyChartHost"></div>
+    <div id="surveyMonthlyTableWrap" style="margin-top:14px; overflow-x:auto;"></div>
+  </div>
+
+  <div class="card-box chart-card">
+    <div class="overview-section-title">จำนวนงานติดตั้งต่อเดือน (เสร็จสิ้น + รอดำเนินการ)</div>
+    <div class="chart-legend">
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>ติดตั้งเสร็จสิ้นแล้ว</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#a78bfa;"></span>รอดำเนินการติดตั้ง</span>
+    </div>
+    <div id="chartHost"></div>
+    <table class="doc-table" id="installMonthlyTable" style="margin-top:14px;">
+      <thead>
+        <tr><th>เดือน</th><th>ติดตั้งเสร็จสิ้นแล้ว</th><th>รอดำเนินการติดตั้ง</th><th>รวม</th></tr>
+      </thead>
+      <tbody id="installMonthlyTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box chart-card">
     <div class="overview-section-title">รายละเอียดรายเดือน แยกตาม ผรม. (เลือกเดือนได้)</div>
     <div style="margin-bottom:14px;">
       <select id="monthPicker"></select>
@@ -279,21 +301,6 @@
       </thead>
       <tbody id="overviewTableBody"></tbody>
     </table>
-  </div>
-
-  <div class="card-box chart-card">
-    <div class="overview-section-title">จำนวนงานเข้าสำรวจต่อเดือน (แยกสีตาม ผรม.)</div>
-    <div class="chart-legend" id="surveyChartLegend"></div>
-    <div id="surveyChartHost"></div>
-  </div>
-
-  <div class="card-box chart-card">
-    <div class="overview-section-title">จำนวนงานติดตั้งต่อเดือน (เสร็จสิ้น + รอดำเนินการ)</div>
-    <div class="chart-legend">
-      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>ติดตั้งเสร็จสิ้นแล้ว</span>
-      <span class="chart-legend-item"><span class="chart-swatch" style="background:#a78bfa;"></span>รอดำเนินการติดตั้ง</span>
-    </div>
-    <div id="chartHost"></div>
   </div>
 </div>
 
@@ -889,10 +896,12 @@ function renderSurveyMonthlyChart() {
   var months = Object.keys(counts).sort();
   var legendHost = document.getElementById('surveyChartLegend');
   var chartHost = document.getElementById('surveyChartHost');
+  var tableWrap = document.getElementById('surveyMonthlyTableWrap');
   if (!chartHost) return;
   if (months.length === 0) {
     chartHost.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูลงานสำรวจ</div>';
     if (legendHost) legendHost.innerHTML = '';
+    if (tableWrap) tableWrap.innerHTML = '';
     return;
   }
   var presentContractors = [];
@@ -919,9 +928,15 @@ function renderSurveyMonthlyChart() {
   });
   if (maxTotal === 0) maxTotal = 1;
 
-  var barWidth = 40, gap = 24, chartHeight = 220, leftPad = 36, topPad = 16, bottomPad = 40;
+  // Wider bars + taller chart than the old version so each contractor's
+  // segment has more room -- combined with the in-segment value labels
+  // below (only drawn when a segment is tall enough to hold text legibly)
+  // and the pivot table underneath, exact numbers are always readable even
+  // when a chart segment itself is too thin to fit a label.
+  var barWidth = 56, gap = 40, chartHeight = 260, leftPad = 40, topPad = 20, bottomPad = 40;
   var width = leftPad + months.length * (barWidth + gap);
   var height = topPad + chartHeight + bottomPad;
+  var MIN_LABEL_SEG_H = 16;
 
   var svgParts = [];
   svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
@@ -942,18 +957,40 @@ function renderSurveyMonthlyChart() {
       var segH = (n / maxTotal) * chartHeight;
       var y = yCursor - segH;
       var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
-      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="4" fill="' + color + '"><title>' + escHtml(c) + ': ' + n + '</title></rect>');
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + color + '"><title>' + escHtml(c) + ': ' + n + '</title></rect>');
+      if (segH >= MIN_LABEL_SEG_H) {
+        svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (y + segH / 2 + 4) + '" font-size="11" fill="#fff" font-weight="700" text-anchor="middle">' + n + '</text>');
+      }
       yCursor = y;
     });
     var total = 0;
     presentContractors.forEach(function(c) { total += (counts[mk][c] || 0); });
-    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + total + '</text>');
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (total / maxTotal) * chartHeight - 8) + '" font-size="13" fill="#1f2430" text-anchor="middle" font-weight="700">' + total + '</text>');
     var mLabel = monthLabelFromKey(mk);
-    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="11" fill="#374151" text-anchor="middle">' + escHtml(mLabel) + '</text>');
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 20) + '" font-size="12" fill="#374151" text-anchor="middle">' + escHtml(mLabel) + '</text>');
   });
 
   svgParts.push('</svg>');
   chartHost.innerHTML = svgParts.join('');
+
+  // Companion pivot table (month rows x contractor columns) so the exact
+  // count for every contractor in every month is always readable, even
+  // for segments too thin to label inside the chart.
+  if (tableWrap) {
+    var theadHtml = '<thead><tr><th>เดือน</th>' + presentContractors.map(function(c) {
+      return '<th>' + escHtml(contractorAbbr(c)) + '</th>';
+    }).join('') + '<th>รวม</th></tr></thead>';
+    var tbodyHtml = '<tbody>' + months.map(function(mk) {
+      var rowTotal = 0;
+      var cells = presentContractors.map(function(c) {
+        var n = counts[mk][c] || 0;
+        rowTotal += n;
+        return '<td>' + (n || '-') + '</td>';
+      }).join('');
+      return '<tr><td>' + escHtml(monthLabelFromKey(mk)) + '</td>' + cells + '<td><b>' + rowTotal + '</b></td></tr>';
+    }).join('') + '</tbody>';
+    tableWrap.innerHTML = '<table class="doc-table">' + theadHtml + tbodyHtml + '</table>';
+  }
 }
 
 // Union of months that have either a survey or an install (scheduled or
@@ -1091,9 +1128,11 @@ function renderMonthlyChart() {
   });
   var months = Object.keys(counts).sort();
   var chartHost = document.getElementById('chartHost');
+  var tblBody = document.getElementById('installMonthlyTableBody');
   if (!chartHost) return;
   if (months.length === 0) {
     chartHost.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูลงานติดตั้ง</div>';
+    if (tblBody) tblBody.innerHTML = '';
     return;
   }
   var statusOrder = ['completed', 'scheduled'];
@@ -1107,9 +1146,13 @@ function renderMonthlyChart() {
   });
   if (maxTotal === 0) maxTotal = 1;
 
-  var barWidth = 40, gap = 24, chartHeight = 220, leftPad = 36, topPad = 16, bottomPad = 40;
+  // Wider/taller than before so each status segment has room for an
+  // in-segment value label; the table below always shows the exact split
+  // regardless of how thin a segment renders.
+  var barWidth = 56, gap = 40, chartHeight = 260, leftPad = 40, topPad = 20, bottomPad = 40;
   var width = leftPad + months.length * (barWidth + gap);
   var height = topPad + chartHeight + bottomPad;
+  var MIN_LABEL_SEG_H = 16;
 
   var svgParts = [];
   svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
@@ -1130,16 +1173,26 @@ function renderMonthlyChart() {
       var segH = (n / maxTotal) * chartHeight;
       var y = yCursor - segH;
       svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="4" fill="' + statusColors[k] + '"><title>' + statusLabels[k] + ': ' + n + '</title></rect>');
+      if (segH >= MIN_LABEL_SEG_H) {
+        svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (y + segH / 2 + 4) + '" font-size="12" fill="#fff" font-weight="700" text-anchor="middle">' + n + '</text>');
+      }
       yCursor = y;
     });
     var total = (counts[mk].completed || 0) + (counts[mk].scheduled || 0);
-    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + total + '</text>');
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (total / maxTotal) * chartHeight - 8) + '" font-size="13" fill="#1f2430" text-anchor="middle" font-weight="700">' + total + '</text>');
     var mLabel = monthLabelFromKey(mk);
-    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="11" fill="#374151" text-anchor="middle">' + escHtml(mLabel) + '</text>');
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 20) + '" font-size="12" fill="#374151" text-anchor="middle">' + escHtml(mLabel) + '</text>');
   });
 
   svgParts.push('</svg>');
   chartHost.innerHTML = svgParts.join('');
+
+  if (tblBody) {
+    tblBody.innerHTML = months.map(function(mk) {
+      var c = counts[mk].completed || 0, s = counts[mk].scheduled || 0;
+      return '<tr><td>' + escHtml(monthLabelFromKey(mk)) + '</td><td>' + c + '</td><td>' + s + '</td><td><b>' + (c + s) + '</b></td></tr>';
+    }).join('');
+  }
 }
 
 function jobsWithSla() {

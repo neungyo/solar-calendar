@@ -105,6 +105,14 @@
   .sla-badge.excellent { background:#fef9c3; color:#854d0e; }
   .sla-badge.met { background:#dcfce7; color:#166534; }
   .sla-badge.exceeded { background:#fee2e2; color:#991b1b; }
+  .rating-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; background:#eef2ff; color:#4338ca; white-space:nowrap; }
+  .rating-badge.none { background:#f3f4f6; color:#6b7280; }
+  .rate-btn { padding:4px 10px; font-size:12px; margin-left:6px; }
+  .score-btn-row { display:flex; gap:6px; margin:4px 0 12px; }
+  .score-btn { flex:1; padding:6px 0; border:1px solid var(--border); border-radius:6px; background:#fff; cursor:pointer; font-size:13px; text-align:center; }
+  .score-btn.selected { background:#dcfce7; border-color:#16a34a; color:#166534; font-weight:700; }
+  .rating-crit-label { font-size:14px; font-weight:600; }
+  .rating-crit-hint { font-size:12px; color:var(--muted); margin:2px 0 6px; }
   .stat-value { font-size:28px; font-weight:700; color:var(--text); line-height:1.2; }
   .stat-label { font-size:12px; color:var(--muted); margin-top:4px; }
   .donut-row { display:flex; gap:28px; flex-wrap:wrap; align-items:center; }
@@ -296,7 +304,7 @@
     <table class="doc-table" id="overviewTable">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th>
         </tr>
       </thead>
       <tbody id="overviewTableBody"></tbody>
@@ -333,6 +341,19 @@
   </div>
 
   <div class="card-box">
+    <div class="overview-section-title">คะแนนประเมินคุณภาพจากทีมงาน (แยกจากคะแนน SLA อัตโนมัติด้านบน)</div>
+    <div class="doc-table-toolbar">คะแนนนี้มาจากการที่ทีมงานให้คะแนนแต่ละงานด้วยตนเอง (1-5 คะแนนต่อหัวข้อ) ผ่านปุ่ม "ให้คะแนน" ในตารางรายละเอียดงาน แท็บภาพรวม ไม่ได้คำนวณจากระยะเวลาติดตั้งเหมือนคะแนน SLA ด้านบน</div>
+    <table class="doc-table" id="manualRatingTable">
+      <thead>
+        <tr>
+          <th>ผรม.</th><th>จำนวนครั้งที่ประเมิน</th><th>คะแนนเฉลี่ยรวม</th><th>ความปลอดภัย</th><th>ตามแบบมาตรฐาน</th><th>เก็บงานเรียบร้อย</th><th>ทดสอบระบบ</th><th>เอกสารส่งมอบ</th>
+        </tr>
+      </thead>
+      <tbody id="manualRatingTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box">
     <div class="overview-section-title">รายละเอียดงานตรวจสอบ SLA การติดตั้ง</div>
     <div class="doc-table-toolbar" id="slaTableCount"></div>
     <table class="doc-table" id="slaTable">
@@ -366,6 +387,27 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="ratingModalOverlay">
+  <div class="modal-box" style="width:480px;">
+    <h2 id="ratingModalTitle">ให้คะแนนงานติดตั้ง</h2>
+    <div id="ratingModalSub" style="font-size:13px;color:var(--muted);margin:-8px 0 14px;"></div>
+    <div id="ratingCriteriaHost"></div>
+    <div style="margin-top:4px;">
+      <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">ชื่อผู้ประเมิน *</label>
+      <input type="text" id="raterName" placeholder="ชื่อผู้ประเมิน" style="width:100%;">
+    </div>
+    <div style="margin-top:10px;">
+      <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">หมายเหตุ (ถ้ามี)</label>
+      <input type="text" id="ratingNote" placeholder="หมายเหตุเพิ่มเติม" style="width:100%;">
+    </div>
+    <div id="ratingModalError" style="color:var(--red);font-size:12px;margin-top:8px;display:none;"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
+      <button class="secondary" id="ratingModalClose">ยกเลิก</button>
+      <button id="ratingModalSubmit">บันทึกคะแนน</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrRKjebecOzXuJv4WfzoqDUhAvTyid9mM7-yNhuTmJRqn8ID/exec";
 var DEFAULT_ACCESS_KEY = "POQDSQ3CuB6lMi0Q22HKBvnE9FZxZUq-";
@@ -390,6 +432,79 @@ function rebuildContractorColorMap() {
 }
 var MAX_PER_DAY = 4;
 var LAST_UPDATED_ISO = null;
+var CHART_PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#c026d3','#65a30d','#ea580c','#0d9488','#9333ea','#facc15','#f43f5e','#0ea5e9'];
+var CONTRACTOR_COLOR_MAP = {};
+ALL_CONTRACTORS.forEach(function(c, i) { CONTRACTOR_COLOR_MAP[c] = CHART_PALETTE[i % CHART_PALETTE.length]; });
+
+// Contractor quality scorecard (Sure's request, 2026-07-18): a human-entered
+// 1-5 rating across 5 checklist criteria, submitted per job via the "ให้
+// คะแนน" button in the Overview detail table. This is DELIBERATELY kept
+// separate from the automatic install-duration SLA score above -- Sure
+// asked for it to show as its own, additional score rather than being
+// blended in. Backed by a standalone Apps Script Web App (see
+// contractor_ratings_appsscript.gs) that reads/writes a "Contractor
+// Ratings" tab in the same Google Sheet. Fill in the two constants below
+// once that Web App is deployed.
+var RATINGS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxl4TZXAd1JQNLJTtyXdDxeRG_oAPaMoh8evxQk0SDLAVyhYqPJy8fR-R60zmUMZYZQHA/exec";
+var RATINGS_ACCESS_KEY = "a468e23ef22c423f92b8bfe602fdcb1d";
+var RATINGS_CRITERIA = [
+  { key: 'safety', label: 'ความปลอดภัยต้องมาก่อน (Safety First)', hint: 'สวม PPE ครบถ้วน ใช้อุปกรณ์กันตก และตัดไฟก่อนปฏิบัติงาน' },
+  { key: 'design', label: 'ติดตั้งตามแบบและมาตรฐาน (Follow Approved Design)', hint: 'ห้ามดัดแปลงแบบหรือเปลี่ยนอุปกรณ์โดยไม่ได้รับอนุมัติ' },
+  { key: 'workmanship', label: 'เก็บงานให้เรียบร้อย (Quality Workmanship)', hint: 'เดินสายเป็นระเบียบ ยึดอุปกรณ์แน่น ซีลกันน้ำ และรักษาความสะอาดหน้างาน' },
+  { key: 'testing', label: 'ทดสอบระบบก่อนส่งมอบ (Testing & Commissioning)', hint: 'ตรวจสอบแรงดัน ขั้วสาย การสื่อสาร Monitoring และทดสอบการทำงานครบทุกฟังก์ชัน' },
+  { key: 'handover', label: 'ส่งมอบพร้อมเอกสาร (Documentation & Handover)', hint: 'ถ่ายรูป Before/After, ส่งรายงานติดตั้ง และอธิบายการใช้งานให้ลูกค้า' }
+];
+var RATINGS_SUMMARY = { byJob: {}, byContractor: {} };
+var currentRatingJob = null;
+var currentRatingScores = {};
+
+function ratingsConfigured() {
+  return RATINGS_WEBAPP_URL && RATINGS_WEBAPP_URL.indexOf('REPLACE_WITH') !== 0;
+}
+
+function fetchRatingsSummary() {
+  if (!ratingsConfigured()) return;
+  var url = RATINGS_WEBAPP_URL + (RATINGS_WEBAPP_URL.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(RATINGS_ACCESS_KEY) + '&_t=' + Date.now();
+  fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+    if (data && !data.error) {
+      RATINGS_SUMMARY = data;
+      if (document.getElementById('tabOverviewBtn').classList.contains('active')) renderOverviewTable();
+      if (document.getElementById('tabSlaBtn').classList.contains('active')) renderManualRatingTable();
+    }
+  }).catch(function() {
+    // Ratings are supplementary -- if the endpoint isn't configured/reachable
+    // yet (e.g. placeholder URL, or offline), the rest of the page must keep
+    // working normally, so this failure is silent.
+  });
+}
+
+function openRatingModal(jobKey) {
+  var job = jobByKey(jobKey);
+  if (!job) return;
+  currentRatingJob = job;
+  currentRatingScores = {};
+  document.getElementById('ratingModalSub').textContent =
+    (job.ts_app || job.job_code || '-') + ' · ' + (job.customer || '') + ' · ' + (job.contractor || '-');
+  var host = document.getElementById('ratingCriteriaHost');
+  host.innerHTML = RATINGS_CRITERIA.map(function(cr) {
+    return '<div style="margin-bottom:10px;">' +
+      '<div class="rating-crit-label">' + escHtml(cr.label) + '</div>' +
+      '<div class="rating-crit-hint">' + escHtml(cr.hint) + '</div>' +
+      '<div class="score-btn-row" data-crit="' + cr.key + '">' +
+        [1, 2, 3, 4, 5].map(function(n) { return '<button type="button" class="score-btn" data-val="' + n + '">' + n + '</button>'; }).join('') +
+      '</div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('raterName').value = '';
+  document.getElementById('ratingNote').value = '';
+  var errEl = document.getElementById('ratingModalError');
+  errEl.style.display = 'none';
+  if (!ratingsConfigured()) {
+    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึกคะแนน (RATINGS_WEBAPP_URL) -- ให้คะแนนได้แต่จะบันทึกไม่สำเร็จจนกว่าจะตั้งค่าเสร็จ';
+    errEl.style.display = '';
+  }
+  document.getElementById('ratingModalOverlay').classList.add('open');
+}
 
 function jobByKey(key) {
   return JOBS.find(function(j) { return j._key === key; });
@@ -783,6 +898,12 @@ function renderOverviewTable() {
   body.innerHTML = jobs.map(function(j, i) {
     var tsAppNum = j.ts_app || j.job_code || j._key || '-';
     var cat = jobCategory(j);
+    var ratingKey = j.ts_app || j.job_code || j._key || '';
+    var ratingInfo = RATINGS_SUMMARY.byJob && RATINGS_SUMMARY.byJob[ratingKey];
+    var ratingCellHtml = ratingInfo
+      ? '<span class="rating-badge">' + ratingInfo.avg + '/5 (' + ratingInfo.count + ' ครั้ง)</span>'
+      : '<span class="rating-badge none">ยังไม่มีคะแนน</span>';
+    ratingCellHtml += '<button type="button" class="secondary rate-btn" data-rate-key="' + escHtml(j._key) + '">ให้คะแนน</button>';
     return '<tr>' +
       '<td>' + (i + 1) + '</td>' +
       '<td>' + escHtml(tsAppNum) + '</td>' +
@@ -793,6 +914,7 @@ function renderOverviewTable() {
       '<td>' + escHtml(j.survey_date || '-') + '</td>' +
       '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
       '<td><span class="ov-badge ' + cat + '">' + escHtml(labels[cat]) + '</span></td>' +
+      '<td>' + ratingCellHtml + '</td>' +
       '</tr>';
   }).join('');
 }
@@ -1428,6 +1550,31 @@ function renderSlaMonthlyChart() {
   chartHost.innerHTML = svgParts.join('');
 }
 
+function renderManualRatingTable() {
+  var body = document.getElementById('manualRatingTableBody');
+  if (!body) return;
+  var byContractor = RATINGS_SUMMARY.byContractor || {};
+  var contractors = Object.keys(byContractor);
+  if (contractors.length === 0) {
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);">ยังไม่มีการให้คะแนน หรือยังไม่ได้ตั้งค่า RATINGS_WEBAPP_URL</td></tr>';
+    return;
+  }
+  contractors.sort(function(a, b) { return (byContractor[b].avg || 0) - (byContractor[a].avg || 0); });
+  body.innerHTML = contractors.map(function(c) {
+    var r = byContractor[c];
+    return '<tr>' +
+      '<td>' + escHtml(c) + '</td>' +
+      '<td>' + r.count + '</td>' +
+      '<td><b>' + r.avg + '/5</b></td>' +
+      '<td>' + r.safety + '</td>' +
+      '<td>' + r.design + '</td>' +
+      '<td>' + r.workmanship + '</td>' +
+      '<td>' + r.testing + '</td>' +
+      '<td>' + r.handover + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
 function switchView(view) {
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
@@ -1441,14 +1588,14 @@ function switchView(view) {
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   if (view === 'doc') renderDocTable();
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); }
+  if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingTable(); }
 }
 
 function onFiltersChanged() {
   renderCalendar();
   if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); }
+  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingTable(); }
 }
 
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
@@ -1480,6 +1627,84 @@ document.getElementById('modalOverlay').addEventListener('click', function(ev) {
     document.getElementById('modalOverlay').classList.remove('open');
   }
 });
+
+document.addEventListener('click', function(ev) {
+  var rateBtn = ev.target.closest('.rate-btn');
+  if (rateBtn) {
+    openRatingModal(rateBtn.getAttribute('data-rate-key'));
+    return;
+  }
+  var scoreBtn = ev.target.closest('.score-btn');
+  if (scoreBtn) {
+    var row = scoreBtn.closest('.score-btn-row');
+    var crit = row.getAttribute('data-crit');
+    currentRatingScores[crit] = parseInt(scoreBtn.getAttribute('data-val'), 10);
+    Array.prototype.forEach.call(row.querySelectorAll('.score-btn'), function(b) {
+      b.classList.toggle('selected', b === scoreBtn);
+    });
+  }
+});
+document.getElementById('ratingModalClose').onclick = function() {
+  document.getElementById('ratingModalOverlay').classList.remove('open');
+};
+document.getElementById('ratingModalOverlay').addEventListener('click', function(ev) {
+  if (ev.target === document.getElementById('ratingModalOverlay')) {
+    document.getElementById('ratingModalOverlay').classList.remove('open');
+  }
+});
+document.getElementById('ratingModalSubmit').onclick = function() {
+  var errEl = document.getElementById('ratingModalError');
+  var rater = document.getElementById('raterName').value.trim();
+  if (!rater) {
+    errEl.textContent = 'กรุณาใส่ชื่อผู้ประเมิน';
+    errEl.style.display = '';
+    return;
+  }
+  var missing = RATINGS_CRITERIA.filter(function(cr) { return !currentRatingScores[cr.key]; });
+  if (missing.length) {
+    errEl.textContent = 'กรุณาให้คะแนนครบทุกหัวข้อ';
+    errEl.style.display = '';
+    return;
+  }
+  if (!ratingsConfigured()) {
+    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึกคะแนน (RATINGS_WEBAPP_URL)';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  var payload = {
+    key: RATINGS_ACCESS_KEY,
+    ts_app: (currentRatingJob.ts_app || currentRatingJob.job_code || currentRatingJob._key || ''),
+    customer: currentRatingJob.customer || '',
+    contractor: currentRatingJob.contractor || '',
+    rater: rater,
+    note: document.getElementById('ratingNote').value.trim(),
+    scores: currentRatingScores
+  };
+  var submitBtn = document.getElementById('ratingModalSubmit');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'กำลังบันทึก...';
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'บันทึกคะแนน';
+    if (res && res.success) {
+      document.getElementById('ratingModalOverlay').classList.remove('open');
+      fetchRatingsSummary();
+    } else {
+      errEl.textContent = 'บันทึกไม่สำเร็จ: ' + ((res && res.error) || 'unknown error');
+      errEl.style.display = '';
+    }
+  }).catch(function(err) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'บันทึกคะแนน';
+    errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+    errEl.style.display = '';
+  });
+};
 
 document.getElementById('prevMonth').onclick = function() { cur.setMonth(cur.getMonth()-1); renderCalendar(); };
 document.getElementById('nextMonth').onclick = function() { cur.setMonth(cur.getMonth()+1); renderCalendar(); };
@@ -1705,6 +1930,7 @@ setInterval(function(){ if (LAST_UPDATED_ISO) updateStatusText(false); }, 30000)
 applyZoom();
 renderCalendar();
 fetchData(false);
+fetchRatingsSummary();
 </script>
 </body>
 </html>

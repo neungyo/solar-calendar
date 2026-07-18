@@ -250,6 +250,25 @@
   </div>
 
   <div class="card-box chart-card">
+    <div class="overview-section-title">รายละเอียดรายเดือน แยกตาม ผรม. (เลือกเดือนได้)</div>
+    <div style="margin-bottom:14px;">
+      <select id="monthPicker"></select>
+    </div>
+    <div class="chart-legend">
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#2563eb;"></span>งานสำรวจ</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>ติดตั้งเสร็จสิ้นแล้ว (ณ วันนี้)</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#a78bfa;"></span>รอดำเนินการติดตั้ง</span>
+    </div>
+    <div id="monthPickerChartHost"></div>
+    <table class="doc-table" id="monthPickerTable" style="margin-top:14px;">
+      <thead>
+        <tr><th>ผรม.</th><th>งานสำรวจ</th><th>ติดตั้งเสร็จสิ้นแล้ว</th><th>รอดำเนินการติดตั้ง</th><th>รวม</th></tr>
+      </thead>
+      <tbody id="monthPickerTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box chart-card">
     <div class="overview-section-title">จำนวนงานเข้าสำรวจต่อเดือน (แยกสีตาม ผรม.)</div>
     <div class="chart-legend" id="surveyChartLegend"></div>
     <div id="surveyChartHost"></div>
@@ -268,25 +287,6 @@
         <tr><th>เดือน</th><th>ติดตั้งเสร็จสิ้นแล้ว</th><th>รอดำเนินการติดตั้ง</th><th>รวม</th></tr>
       </thead>
       <tbody id="installMonthlyTableBody"></tbody>
-    </table>
-  </div>
-
-  <div class="card-box chart-card">
-    <div class="overview-section-title">รายละเอียดรายเดือน แยกตาม ผรม. (เลือกเดือนได้)</div>
-    <div style="margin-bottom:14px;">
-      <select id="monthPicker"></select>
-    </div>
-    <div class="chart-legend">
-      <span class="chart-legend-item"><span class="chart-swatch" style="background:#2563eb;"></span>งานสำรวจ</span>
-      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>ติดตั้งเสร็จสิ้นแล้ว (ณ วันนี้)</span>
-      <span class="chart-legend-item"><span class="chart-swatch" style="background:#a78bfa;"></span>รอดำเนินการติดตั้ง</span>
-    </div>
-    <div id="monthPickerChartHost"></div>
-    <table class="doc-table" id="monthPickerTable" style="margin-top:14px;">
-      <thead>
-        <tr><th>ผรม.</th><th>งานสำรวจ</th><th>ติดตั้งเสร็จสิ้นแล้ว</th><th>รอดำเนินการติดตั้ง</th><th>รวม</th></tr>
-      </thead>
-      <tbody id="monthPickerTableBody"></tbody>
     </table>
   </div>
 

@@ -101,6 +101,12 @@
   .stat-card.c-excellent { border-top-color:#eab308; }
   .stat-card.c-met { border-top-color:#16a34a; }
   .stat-card.c-exceeded { border-top-color:#dc2626; }
+  .stat-card.c-tac-not { border-top-color:#94a3b8; }
+  .stat-card.c-tac-filing { border-top-color:#eab308; }
+  .stat-card.c-tac-review { border-top-color:#3b82f6; }
+  .stat-card.c-tac-got { border-top-color:#16a34a; }
+  .stat-card.c-intent { border-top-color:#0d9488; }
+  .stat-card .stat-sub { font-size:11px; color:var(--muted); margin-top:2px; }
   .sla-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
   .sla-badge.excellent { background:#fef9c3; color:#854d0e; }
   .sla-badge.met { background:#dcfce7; color:#166534; }
@@ -224,6 +230,18 @@
 </div>
 
 <div id="docTableWrap" style="display:none;">
+  <div class="stats-row" id="tacPipelineStatsRow"></div>
+
+  <div class="card-box chart-card">
+    <div class="overview-section-title">ความคืบหน้าเอกสารขนานไฟฟ้า (ทุกงาน)</div>
+    <div id="tacPipelineChartHost"></div>
+  </div>
+
+  <div class="card-box">
+    <div class="overview-section-title">ความประสงค์เพิ่มเติมของลูกค้า</div>
+    <div class="stats-row" id="tacIntentStatsRow" style="margin-bottom:0;"></div>
+  </div>
+
   <div class="doc-table-toolbar" id="docTableCount"></div>
   <table class="doc-table" id="docTable">
     <thead>
@@ -556,6 +574,92 @@ function jobIsChanged(e) {
 function tacLooksLikeNumber(v) {
   if (!v) return false;
   return /\d{4,}/.test(String(v));
+}
+
+function tacPipelineStage(job) {
+  var tacRaw = job.doc_tac ? String(job.doc_tac).trim() : '';
+  if (tacLooksLikeNumber(tacRaw)) return 'got';
+  var st = (job.tac_status || '').trim();
+  if (st === 'ตรวจเอกสาร/ออกเลขคำขอ') return 'review';
+  if (st === 'ดำเนินการยื่นเอกสาร') return 'filing';
+  return 'not';
+}
+
+var TAC_STAGE_ORDER = ['not', 'filing', 'review', 'got'];
+var TAC_STAGE_META = {
+  not: { label: 'ยังไม่เริ่มยื่นเรื่อง', color: '#94a3b8', cardClass: 'c-tac-not' },
+  filing: { label: 'ดำเนินการยื่นเอกสาร', color: '#eab308', cardClass: 'c-tac-filing' },
+  review: { label: 'ตรวจเอกสาร/ออกเลขคำขอ', color: '#3b82f6', cardClass: 'c-tac-review' },
+  got: { label: 'ได้เลขขนานไฟแล้ว', color: '#16a34a', cardClass: 'c-tac-got' }
+};
+
+function tacPipelineCounts() {
+  var jobs = currentFilteredJobs();
+  var counts = { not: 0, filing: 0, review: 0, got: 0 };
+  jobs.forEach(function(j) { counts[tacPipelineStage(j)]++; });
+  return counts;
+}
+
+function renderTacPipelineStats() {
+  var host = document.getElementById('tacPipelineStatsRow');
+  if (!host) return;
+  var counts = tacPipelineCounts();
+  var total = currentFilteredJobs().length;
+  var html = '<div class="stat-card c-total"><div class="stat-value">' + total + '</div><div class="stat-label">งานทั้งหมด</div></div>';
+  TAC_STAGE_ORDER.forEach(function(k) {
+    var m = TAC_STAGE_META[k];
+    html += '<div class="stat-card ' + m.cardClass + '"><div class="stat-value">' + counts[k] + '</div><div class="stat-label">' + escHtml(m.label) + '</div></div>';
+  });
+  host.innerHTML = html;
+}
+
+function renderTacPipelineChart() {
+  var host = document.getElementById('tacPipelineChartHost');
+  if (!host) return;
+  var counts = tacPipelineCounts();
+  var total = TAC_STAGE_ORDER.reduce(function(s, k) { return s + counts[k]; }, 0);
+  if (total === 0) { host.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูล</div>'; return; }
+  var maxVal = 0;
+  TAC_STAGE_ORDER.forEach(function(k) { if (counts[k] > maxVal) maxVal = counts[k]; });
+  if (maxVal === 0) maxVal = 1;
+
+  var barHeight = 26, gap = 14, leftPad = 180, rightPad = 50, topPad = 10, chartWidth = 340;
+  var height = topPad * 2 + TAC_STAGE_ORDER.length * (barHeight + gap) - gap;
+  var width = leftPad + chartWidth + rightPad;
+
+  var svgParts = [];
+  svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  TAC_STAGE_ORDER.forEach(function(k, i) {
+    var m = TAC_STAGE_META[k];
+    var val = counts[k];
+    var y = topPad + i * (barHeight + gap);
+    var w = (val / maxVal) * chartWidth;
+    svgParts.push('<text x="' + (leftPad - 10) + '" y="' + (y + barHeight / 2 + 4) + '" font-size="12" fill="#374151" text-anchor="end">' + escHtml(m.label) + '</text>');
+    svgParts.push('<rect x="' + leftPad + '" y="' + y + '" width="' + Math.max(w, 2) + '" height="' + barHeight + '" rx="4" fill="' + m.color + '"><title>' + escHtml(m.label) + ': ' + val + ' งาน</title></rect>');
+    svgParts.push('<text x="' + (leftPad + w + 8) + '" y="' + (y + barHeight / 2 + 4) + '" font-size="12" fill="#1f2430">' + val + '</text>');
+  });
+  svgParts.push('</svg>');
+  host.innerHTML = svgParts.join('');
+}
+
+function renderTacIntentStats() {
+  var host = document.getElementById('tacIntentStatsRow');
+  if (!host) return;
+  var jobs = currentFilteredJobs();
+  var sldReady = 0, sldWaiting = 0, wantTou = 0, wantTax = 0, wantSell = 0;
+  jobs.forEach(function(j) {
+    var sld = (j.sld_status || '').trim();
+    if (sld === 'เอกสารเรียบร้อย') sldReady++;
+    else if (sld === 'รอเอกสาร') sldWaiting++;
+    if ((j.want_tou || '').trim()) wantTou++;
+    if ((j.want_tax_deduction || '').trim()) wantTax++;
+    if ((j.want_sell_electricity || '').trim()) wantSell++;
+  });
+  host.innerHTML =
+    '<div class="stat-card c-intent"><div class="stat-value">' + sldReady + '</div><div class="stat-label">SLD เอกสารเรียบร้อย</div><div class="stat-sub">รอเอกสารอยู่ ' + sldWaiting + ' งาน</div></div>' +
+    '<div class="stat-card c-intent"><div class="stat-value">' + wantTou + '</div><div class="stat-label">ต้องการเปลี่ยนมิเตอร์ TOU</div></div>' +
+    '<div class="stat-card c-intent"><div class="stat-value">' + wantTax + '</div><div class="stat-label">ต้องการใช้สิทธิ์ลดหย่อนภาษี</div></div>' +
+    '<div class="stat-card c-intent"><div class="stat-value">' + wantSell + '</div><div class="stat-label">ต้องการขายไฟฟ้า</div></div>';
 }
 
 function passesFilters(e) {
@@ -1721,14 +1825,14 @@ function switchView(view) {
   document.getElementById('docTableWrap').style.display = (view === 'doc') ? '' : 'none';
   document.getElementById('overviewWrap').style.display = (view === 'overview') ? '' : 'none';
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
-  if (view === 'doc') renderDocTable();
+  if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
 }
 
 function onFiltersChanged() {
   renderCalendar();
-  if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
+  if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacIntentStats(); }
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
 }
@@ -1988,7 +2092,7 @@ function fetchData(isManualClick) {
       rebuildFilterOptions();
       renderBanner(data.changed_jobs, data.new_jobs);
       renderCalendar();
-      if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
+      if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacIntentStats(); }
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
       updateStatusText(false);
       if (statusEl) statusEl.textContent = isManualClick ? '✓ อัปเดตข้อมูลล่าสุดเรียบร้อย' : '';

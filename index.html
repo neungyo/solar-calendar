@@ -366,10 +366,18 @@
     <div id="slaMonthlyChartHost"></div>
   </div>
 
-  <div class="card-box">
+  <div class="card-box chart-card">
     <div class="overview-section-title">คะแนนประเมินคุณภาพจากทีมงาน (แยกจากคะแนน SLA อัตโนมัติด้านบน)</div>
     <div class="doc-table-toolbar">คะแนนนี้มาจากการที่ทีมงานให้คะแนนแต่ละงานด้วยตนเอง (1-5 คะแนนต่อหัวข้อ) ผ่านปุ่ม "ให้คะแนน" ในตารางรายละเอียดงาน แท็บภาพรวม ไม่ได้คำนวณจากระยะเวลาติดตั้งเหมือนคะแนน SLA ด้านบน</div>
-    <table class="doc-table" id="manualRatingTable">
+    <div class="chart-legend">
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#2563eb;"></span>ความปลอดภัย</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#7c3aed;"></span>ตามแบบมาตรฐาน</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#0d9488;"></span>เก็บงานเรียบร้อย</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#d97706;"></span>ทดสอบระบบ</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>เอกสารส่งมอบ</span>
+    </div>
+    <div id="manualRatingChartHost"></div>
+    <table class="doc-table" id="manualRatingTable" style="margin-top:14px;">
       <thead>
         <tr>
           <th>ผรม.</th><th>จำนวนครั้งที่ประเมิน</th><th>คะแนนเฉลี่ยรวม</th><th>% คะแนนเฉลี่ยรวม</th><th>ความปลอดภัย</th><th>ตามแบบมาตรฐาน</th><th>เก็บงานเรียบร้อย</th><th>ทดสอบระบบ</th><th>เอกสารส่งมอบ</th>
@@ -495,7 +503,7 @@ function fetchRatingsSummary() {
     if (data && !data.error) {
       RATINGS_SUMMARY = data;
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) renderOverviewTable();
-      if (document.getElementById('tabSlaBtn').classList.contains('active')) renderManualRatingTable();
+      if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderManualRatingChart(); renderManualRatingTable(); }
     }
   }).catch(function() {
     // Ratings are supplementary -- if the endpoint isn't configured/reachable
@@ -1622,6 +1630,59 @@ function renderSlaMonthlyChart() {
   chartHost.innerHTML = svgParts.join('');
 }
 
+function renderManualRatingChart() {
+  var host = document.getElementById('manualRatingChartHost');
+  if (!host) return;
+  var byContractor = RATINGS_SUMMARY.byContractor || {};
+  var contractors = Object.keys(byContractor);
+  if (contractors.length === 0) {
+    host.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูลการให้คะแนน</div>';
+    return;
+  }
+  contractors.sort(function(a, b) { return (byContractor[b].avg || 0) - (byContractor[a].avg || 0); });
+
+  var criteria = [
+    { key: 'safety', label: 'ความปลอดภัย', color: '#2563eb' },
+    { key: 'design', label: 'ตามแบบมาตรฐาน', color: '#7c3aed' },
+    { key: 'workmanship', label: 'เก็บงานเรียบร้อย', color: '#0d9488' },
+    { key: 'testing', label: 'ทดสอบระบบ', color: '#d97706' },
+    { key: 'handover', label: 'เอกสารส่งมอบ', color: '#16a34a' }
+  ];
+  var maxVal = 5;
+  var subBarWidth = 16, subGap = 4, groupGap = 28, chartHeight = 200, leftPad = 30, topPad = 20, bottomPad = 56;
+  var groupWidth = criteria.length * subBarWidth + (criteria.length - 1) * subGap;
+  var width = leftPad + contractors.length * (groupWidth + groupGap);
+  var height = topPad + chartHeight + bottomPad;
+
+  var svgParts = [];
+  svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  var divisions = 5;
+  for (var g = 0; g <= divisions; g++) {
+    var gy = topPad + chartHeight - (chartHeight * g / divisions);
+    svgParts.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    svgParts.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + g + '</text>');
+  }
+
+  contractors.forEach(function(c, i) {
+    var r = byContractor[c];
+    var groupX = leftPad + i * (groupWidth + groupGap) + groupGap / 2;
+    criteria.forEach(function(cr, ci) {
+      var val = r[cr.key] || 0;
+      var x = groupX + ci * (subBarWidth + subGap);
+      var segH = (val / maxVal) * chartHeight;
+      var y = topPad + chartHeight - segH;
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + subBarWidth + '" height="' + segH + '" rx="2" fill="' + cr.color + '"><title>' + escHtml(c) + ' - ' + cr.label + ': ' + val + '/5</title></rect>');
+      svgParts.push('<text x="' + (x + subBarWidth / 2) + '" y="' + (y - 4) + '" font-size="9" fill="#1f2430" text-anchor="middle">' + val + '</text>');
+    });
+    var pct = Math.round((r.avg / 5) * 100);
+    svgParts.push('<text x="' + (groupX + groupWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(contractorAbbr(c)) + '</text>');
+    svgParts.push('<text x="' + (groupX + groupWidth / 2) + '" y="' + (topPad + chartHeight + 32) + '" font-size="10" fill="#6b7280" text-anchor="middle">รวม ' + r.avg + '/5 (' + pct + '%)</text>');
+  });
+
+  svgParts.push('</svg>');
+  host.innerHTML = svgParts.join('');
+}
+
 function renderManualRatingTable() {
   var body = document.getElementById('manualRatingTableBody');
   if (!body) return;
@@ -1662,14 +1723,14 @@ function switchView(view) {
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   if (view === 'doc') renderDocTable();
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingTable(); }
+  if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
 }
 
 function onFiltersChanged() {
   renderCalendar();
   if (document.getElementById('tabDocBtn').classList.contains('active')) renderDocTable();
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingTable(); }
+  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
 }
 
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };

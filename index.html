@@ -734,9 +734,9 @@ function jobSlaInfo(job) {
   var dates = job.actual_install_dates || [];
   if (!dates.length) return null;
   var sorted = dates.slice().sort();
-  var start = new Date(sorted[0] + 'T00:00:00');
+  var start = job.install_appointment ? new Date(job.install_appointment + 'T00:00:00') : new Date(sorted[0] + 'T00:00:00');
   var finish = new Date(sorted[sorted.length - 1] + 'T00:00:00');
-  var days = Math.round((finish - start) / 86400000) + 1;
+  var days = Math.max(1, Math.round((finish - start) / 86400000) + 1);
   var hasSmartGuard = /smart\s*guard/i.test(job.equipment || '');
   var min = hasSmartGuard ? 5 : 3;
   var max = hasSmartGuard ? 7 : 5;
@@ -1537,7 +1537,7 @@ function renderSlaTable() {
   body.innerHTML = items.map(function(x, i) {
     var j = x.job, s = x.sla;
     var tsAppNum = j.ts_app || j.job_code || j._key || '-';
-    var start = (j.actual_install_dates || []).slice().sort()[0] || '-';
+    var start = j.install_appointment || (j.actual_install_dates || []).slice().sort()[0] || '-';
     var finish = (j.actual_install_dates || []).slice().sort().slice(-1)[0] || '-';
     var reasonCell = s.tier === 'exceeded' ? escHtml(s.reason || 'ไม่ระบุเหตุผล') : '-';
     return '<tr>' +
@@ -1565,8 +1565,8 @@ function contractorSlaSummary() {
     if (!map[c]) map[c] = { contractor: c, total: 0, excellent: 0, met: 0, exceeded: 0, dates: [] };
     map[c].total++;
     map[c][x.sla.tier]++;
-    var starts = (x.job.actual_install_dates || []).slice().sort();
-    if (starts.length) map[c].dates.push(starts[0]);
+    var startDate = x.job.install_appointment || ((x.job.actual_install_dates || []).slice().sort()[0] || '');
+    if (startDate) map[c].dates.push(startDate);
   });
   var list = Object.keys(map).map(function(c) {
     var m = map[c];

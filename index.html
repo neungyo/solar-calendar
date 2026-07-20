@@ -732,10 +732,12 @@ function contractorAbbr(c) {
 function jobSlaInfo(job) {
   if (!job || job.status !== 'ดำเนินการเสร็จสิ้น') return null;
   var dates = job.actual_install_dates || [];
-  if (!dates.length) return null;
   var sorted = dates.slice().sort();
-  var start = job.install_appointment ? new Date(job.install_appointment + 'T00:00:00') : new Date(sorted[0] + 'T00:00:00');
-  var finish = new Date(sorted[sorted.length - 1] + 'T00:00:00');
+  var finishStr = sorted.length ? sorted[sorted.length - 1] : (job.install_complete_date || null);
+  if (!finishStr) return null;
+  var start = job.install_appointment ? new Date(job.install_appointment + 'T00:00:00') : (sorted.length ? new Date(sorted[0] + 'T00:00:00') : null);
+  if (!start) return null;
+  var finish = new Date(finishStr + 'T00:00:00');
   var days = Math.max(1, Math.round((finish - start) / 86400000) + 1);
   var hasSmartGuard = /smart\s*guard/i.test(job.equipment || '');
   var min = hasSmartGuard ? 5 : 3;
@@ -1538,7 +1540,8 @@ function renderSlaTable() {
     var j = x.job, s = x.sla;
     var tsAppNum = j.ts_app || j.job_code || j._key || '-';
     var start = j.install_appointment || (j.actual_install_dates || []).slice().sort()[0] || '-';
-    var finish = (j.actual_install_dates || []).slice().sort().slice(-1)[0] || '-';
+    var sortedActual = (j.actual_install_dates || []).slice().sort();
+    var finish = sortedActual.length ? sortedActual[sortedActual.length - 1] : (j.install_complete_date || '-');
     var reasonCell = s.tier === 'exceeded' ? escHtml(s.reason || 'ไม่ระบุเหตุผล') : '-';
     return '<tr>' +
       '<td>' + (i + 1) + '</td>' +

@@ -237,6 +237,26 @@
     <div id="tacPipelineChartHost"></div>
   </div>
 
+  <div class="card-box chart-card">
+    <div class="overview-section-title">ความคืบหน้าเอกสารขนานไฟฟ้า แยกตามผู้รับเหมา</div>
+    <div class="doc-table-toolbar">เลือก ผรม. เฉพาะรายที่ต้องการดูจากตัวกรองด้านบนสุดของหน้า (ผรม. ทั้งหมด) เพื่อโฟกัสตารางและกราฟด้านล่างทั้งหมดในแท็บนี้ไปที่ผู้รับเหมารายนั้นได้เลย</div>
+    <div class="chart-legend">
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#94a3b8;"></span>ยังไม่เริ่มยื่นเรื่อง</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#eab308;"></span>ดำเนินการยื่นเอกสาร</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#3b82f6;"></span>ตรวจเอกสาร/ออกเลขคำขอ</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>ได้เลขขนานไฟแล้ว</span>
+    </div>
+    <div id="tacContractorChartHost"></div>
+    <table class="doc-table" id="tacContractorTable" style="margin-top:14px;">
+      <thead>
+        <tr>
+          <th>#</th><th>ผรม.</th><th>งานทั้งหมด</th><th>ยังไม่เริ่ม</th><th>ยื่นเอกสาร</th><th>ตรวจเอกสาร/ออกเลข</th><th>ได้เลขแล้ว</th><th>% ได้เลขแล้ว</th>
+        </tr>
+      </thead>
+      <tbody id="tacContractorTableBody"></tbody>
+    </table>
+  </div>
+
   <div class="card-box">
     <div class="overview-section-title">ความประสงค์เพิ่มเติมของลูกค้า</div>
     <div class="stats-row" id="tacIntentStatsRow" style="margin-bottom:0;"></div>
@@ -660,6 +680,87 @@ function renderTacIntentStats() {
     '<div class="stat-card c-intent"><div class="stat-value">' + wantTou + '</div><div class="stat-label">ต้องการเปลี่ยนมิเตอร์ TOU</div></div>' +
     '<div class="stat-card c-intent"><div class="stat-value">' + wantTax + '</div><div class="stat-label">ต้องการใช้สิทธิ์ลดหย่อนภาษี</div></div>' +
     '<div class="stat-card c-intent"><div class="stat-value">' + wantSell + '</div><div class="stat-label">ต้องการขายไฟฟ้า</div></div>';
+}
+
+function tacContractorSummary() {
+  var jobs = currentFilteredJobs();
+  var map = {};
+  jobs.forEach(function(j) {
+    var c = j.contractor || 'ไม่ระบุ';
+    if (!map[c]) map[c] = { contractor: c, not: 0, filing: 0, review: 0, got: 0, total: 0 };
+    map[c][tacPipelineStage(j)]++;
+    map[c].total++;
+  });
+  var list = Object.keys(map).map(function(c) { return map[c]; });
+  list.forEach(function(m) { m.gotPct = m.total ? Math.round((m.got / m.total) * 100) : 0; });
+  list.sort(function(a, b) { return b.total - a.total; });
+  return list;
+}
+
+function renderTacContractorChart() {
+  var list = tacContractorSummary();
+  var host = document.getElementById('tacContractorChartHost');
+  if (!host) return;
+  if (list.length === 0) { host.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูล</div>'; return; }
+  var maxTotal = 0;
+  list.forEach(function(c) { if (c.total > maxTotal) maxTotal = c.total; });
+  if (maxTotal === 0) maxTotal = 1;
+
+  var barWidth = 46, gap = 26, chartHeight = 200, leftPad = 36, topPad = 16, bottomPad = 40;
+  var width = leftPad + list.length * (barWidth + gap);
+  var height = topPad + chartHeight + bottomPad;
+
+  var svgParts = [];
+  svgParts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  var divisions = 4;
+  for (var g = 0; g <= divisions; g++) {
+    var gy = topPad + chartHeight - (chartHeight * g / divisions);
+    var gv = Math.round(maxTotal * g / divisions);
+    svgParts.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    svgParts.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + gv + '</text>');
+  }
+
+  list.forEach(function(c, i) {
+    var x = leftPad + i * (barWidth + gap) + gap / 2;
+    var yCursor = topPad + chartHeight;
+    TAC_STAGE_ORDER.forEach(function(k) {
+      var n = c[k] || 0;
+      if (n === 0) return;
+      var m = TAC_STAGE_META[k];
+      var segH = (n / maxTotal) * chartHeight;
+      var y = yCursor - segH;
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + m.color + '"><title>' + escHtml(c.contractor) + ' - ' + m.label + ': ' + n + '</title></rect>');
+      yCursor = y;
+    });
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (c.total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + c.total + '</text>');
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(contractorAbbr(c.contractor)) + '</text>');
+    svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 32) + '" font-size="10" fill="#6b7280" text-anchor="middle">ได้เลข ' + c.gotPct + '%</text>');
+  });
+
+  svgParts.push('</svg>');
+  host.innerHTML = svgParts.join('');
+}
+
+function renderTacContractorTable() {
+  var list = tacContractorSummary();
+  var body = document.getElementById('tacContractorTableBody');
+  if (!body) return;
+  if (list.length === 0) {
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);">ยังไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(function(c, i) {
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escHtml(c.contractor) + '</td>' +
+      '<td>' + c.total + '</td>' +
+      '<td>' + c.not + '</td>' +
+      '<td>' + c.filing + '</td>' +
+      '<td>' + c.review + '</td>' +
+      '<td>' + c.got + '</td>' +
+      '<td>' + c.gotPct + '%</td>' +
+      '</tr>';
+  }).join('');
 }
 
 function passesFilters(e) {
@@ -1828,14 +1929,14 @@ function switchView(view) {
   document.getElementById('docTableWrap').style.display = (view === 'doc') ? '' : 'none';
   document.getElementById('overviewWrap').style.display = (view === 'overview') ? '' : 'none';
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
-  if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacIntentStats(); }
+  if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
 }
 
 function onFiltersChanged() {
   renderCalendar();
-  if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacIntentStats(); }
+  if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
 }
@@ -2095,7 +2196,7 @@ function fetchData(isManualClick) {
       rebuildFilterOptions();
       renderBanner(data.changed_jobs, data.new_jobs);
       renderCalendar();
-      if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacIntentStats(); }
+      if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
       updateStatusText(false);
       if (statusEl) statusEl.textContent = isManualClick ? '✓ อัปเดตข้อมูลล่าสุดเรียบร้อย' : '';

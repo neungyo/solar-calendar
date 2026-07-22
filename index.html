@@ -211,6 +211,7 @@
   <button class="secondary view-tab-btn" id="tabDocBtn">📋 ตารางเอกสารขนานไฟ</button>
   <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง/ประเมิน</button>
   <button class="secondary view-tab-btn" id="tabSlaBtn">🎯 SLA ติดตั้ง</button>
+  <button class="secondary view-tab-btn" id="tabAllocBtn">🧭 แนะนำ ผรม. งานใหม่</button>
 </div>
 
 <div class="month-nav" id="monthNavRow">
@@ -439,6 +440,30 @@
   </div>
 </div>
 
+<div id="allocWrap" style="display:none;">
+  <div class="card-box">
+    <div class="overview-section-title">แนะนำ ผรม. สำหรับงานสำรวจใหม่</div>
+    <div class="doc-table-toolbar">
+      เลือกวันที่นัดสำรวจ/ติดตั้งของงานใหม่ ระบบจะเช็กว่า ผรม. เจ้าไหนติดคิวงานอื่นอยู่แล้วในวันนั้น แล้วจัดอันดับที่เหลือด้วยคะแนนแนะนำ
+      (ถ่วงน้ำหนักจาก % ตรงตาม SLA, คะแนนประเมินคุณภาพ, และภาระงานค้างปัจจุบัน อย่างละเท่าๆ กัน) — ตามกฎ "ผรม. ที่เข้าสำรวจ จะได้เป็นผู้ติดตั้งงานนั้นเสมอ"
+      จึงควรเลือกจากคำแนะนำนี้ตั้งแต่ขั้นตอนมอบหมายสำรวจ
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <label style="font-size:13px;color:var(--muted);">วันที่นัดของงานใหม่:</label>
+      <input type="date" id="allocDateInput" style="padding:6px 10px;">
+    </div>
+    <div id="allocIneligibleNote" class="doc-table-toolbar" style="display:none;"></div>
+    <table class="doc-table" id="allocTable">
+      <thead>
+        <tr>
+          <th>อันดับ</th><th>ผรม.</th><th>สถานะวันที่เลือก</th><th>งานค้าง (กำลังดำเนินการ)</th><th>% ตรงตาม SLA</th><th>คะแนนประเมินคุณภาพ</th><th>คะแนนแนะนำ</th>
+        </tr>
+      </thead>
+      <tbody id="allocTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <div id="bannerHost"></div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -508,6 +533,14 @@ var CHART_PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2'
 var CONTRACTOR_COLOR_MAP = {};
 ALL_CONTRACTORS.forEach(function(c, i) { CONTRACTOR_COLOR_MAP[c] = CHART_PALETTE[i % CHART_PALETTE.length]; });
 
+// Contractors excluded from the "next survey" recommendation only (Sure's
+// instruction, 2026-07-20): a contractor whose contract ended (e.g. W&W)
+// must NOT be offered for new work going forward, but their historical
+// jobs/SLA/ratings must keep showing normally everywhere else in the app
+// (filters, charts, overview) since they already completed real work.
+// Raw (un-normalized) contractor strings, matching the sheet exactly.
+var SURVEY_INELIGIBLE_CONTRACTORS = ['W&W'];
+
 // Contractor quality scorecard (Sure's request, 2026-07-18): a human-entered
 // 1-5 rating across 5 checklist criteria, submitted per job via the "ให้
 // คะแนน" button in the Overview detail table. This is DELIBERATELY kept
@@ -542,6 +575,7 @@ function fetchRatingsSummary() {
       RATINGS_SUMMARY = data;
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) renderOverviewTable();
       if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderManualRatingChart(); renderManualRatingTable(); }
+      if (document.getElementById('tabAllocBtn').classList.contains('active')) renderAllocTable();
     }
   }).catch(function() {
     // Ratings are supplementary -- if the endpoint isn't configured/reachable
@@ -560,7 +594,7 @@ function openRatingModal(jobKey) {
   currentRatingJob = job;
   currentRatingScores = {};
   document.getElementById('ratingModalSub').textContent =
-    (job.ts_app || job.job_code || '-') + ' · ' + (job.customer || '') + ' · ' + (job.contractor || '-');
+    (job.ts_app || job.job_code || '-') + ' · ' + (job.customer || '') + ' · ' + (contractorDisplayName(job.contractor) || '-');
   var host = document.getElementById('ratingCriteriaHost');
   host.innerHTML = RATINGS_CRITERIA.map(function(cr) {
     return '<div style="margin-bottom:10px;">' +
@@ -729,7 +763,7 @@ function renderTacContractorChart() {
       var m = TAC_STAGE_META[k];
       var segH = (n / maxTotal) * chartHeight;
       var y = yCursor - segH;
-      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + m.color + '"><title>' + escHtml(c.contractor) + ' - ' + m.label + ': ' + n + '</title></rect>');
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + m.color + '"><title>' + escHtml(contractorDisplayName(c.contractor)) + ' - ' + m.label + ': ' + n + '</title></rect>');
       yCursor = y;
     });
     svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (c.total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + c.total + '</text>');
@@ -752,7 +786,7 @@ function renderTacContractorTable() {
   body.innerHTML = list.map(function(c, i) {
     return '<tr>' +
       '<td>' + (i + 1) + '</td>' +
-      '<td>' + escHtml(c.contractor) + '</td>' +
+      '<td>' + escHtml(contractorDisplayName(c.contractor)) + '</td>' +
       '<td>' + c.total + '</td>' +
       '<td>' + c.not + '</td>' +
       '<td>' + c.filing + '</td>' +
@@ -813,7 +847,25 @@ if (todayLabelEl) {
   todayLabelEl.textContent = TODAY.toLocaleDateString('th-TH', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
 }
 
+// Canonical display name for a contractor -- the raw "ผรม." field in the
+// sheet sometimes carries an extra contact-person nickname suffix (e.g.
+// "SPES k.Tey", "CP TEK GROUP  K.Film"). Per Sure's explicit instruction
+// (2026-07-20), the app should always SHOW the clean company name, matching
+// what's now in the Google Sheet -- this is presentation-only: the raw
+// value is untouched everywhere else (filter dropdown values, contractor
+// color map keys, grouping keys, the ratings Apps Script payload), so
+// nothing about filtering/grouping/coloring/rating-history continuity
+// changes, only what text gets displayed to a person.
+function contractorDisplayName(c) {
+  if (!c) return c;
+  var t = c.trim();
+  if (/^cp\s*tek/i.test(t)) return 'CP TEK Group';
+  if (/^spes/i.test(t)) return 'SPES';
+  return t;
+}
+
 function contractorAbbr(c) {
+  c = contractorDisplayName(c);
   if (!c) return '';
   c = c.trim();
   if (c.length <= 8) return c;
@@ -945,7 +997,7 @@ function openModalForEvent(e) {
   var mJob = jobByKey(e.job_key);
   var tsAppNum = mJob && mJob.ts_app ? mJob.ts_app : '';
   document.getElementById('mJobCode').textContent = tsAppNum || e.job_code || e.job_key || '-';
-  document.getElementById('mContractor').textContent = e.contractor || '-';
+  document.getElementById('mContractor').textContent = contractorDisplayName(e.contractor) || '-';
   document.getElementById('mEquipment').textContent = e.equipment || '-';
   document.getElementById('mAddress').textContent = e.address || '-';
   var locEl = document.getElementById('mLocation');
@@ -1042,7 +1094,7 @@ function renderDocTable() {
       '<td>' + escHtml(j.customer || '-') + '</td>' +
       '<td>' + escHtml(j.phone || '-') + '</td>' +
       '<td>' + escHtml(j.address || '-') + '</td>' +
-      '<td>' + escHtml(j.contractor || '-') + '</td>' +
+      '<td>' + escHtml(contractorDisplayName(j.contractor) || '-') + '</td>' +
       '<td>' + escHtml(installLabel) + '</td>' +
       '<td><span class="doc-tac-badge ' + tacCls + '">' + escHtml(tacLabel) + '</span></td>' +
       '</tr>';
@@ -1162,7 +1214,7 @@ function renderOverviewRow(j, i, cat) {
     '<td>' + escHtml(j.customer || '-') + '</td>' +
     '<td>' + escHtml(j.phone || '-') + '</td>' +
     '<td>' + escHtml(j.address || '-') + '</td>' +
-    '<td>' + escHtml(j.contractor || '-') + '</td>' +
+    '<td>' + escHtml(contractorDisplayName(j.contractor) || '-') + '</td>' +
     '<td>' + escHtml(j.survey_date || '-') + '</td>' +
     '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
     '<td><span class="ov-badge ' + cat + '">' + escHtml(OVERVIEW_STATUS_LABELS[cat]) + '</span></td>' +
@@ -1262,7 +1314,7 @@ function renderContractorStatusChart() {
       if (n === 0) return;
       var segH = (n / maxTotal) * chartHeight;
       var y = yCursor - segH;
-      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + colors[k] + '"><title>' + escHtml(c.contractor) + ' - ' + labels[k] + ': ' + n + '</title></rect>');
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + colors[k] + '"><title>' + escHtml(contractorDisplayName(c.contractor)) + ' - ' + labels[k] + ': ' + n + '</title></rect>');
       yCursor = y;
     });
     svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (c.total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + c.total + '</text>');
@@ -1325,7 +1377,7 @@ function renderSurveyMonthlyChart() {
   if (legendHost) {
     legendHost.innerHTML = presentContractors.map(function(c) {
       var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
-      return '<span class="chart-legend-item"><span class="chart-swatch" style="background:' + color + ';"></span>' + escHtml(c) + '</span>';
+      return '<span class="chart-legend-item"><span class="chart-swatch" style="background:' + color + ';"></span>' + escHtml(contractorDisplayName(c)) + '</span>';
     }).join('');
   }
 
@@ -1366,7 +1418,7 @@ function renderSurveyMonthlyChart() {
       var segH = (n / maxTotal) * chartHeight;
       var y = yCursor - segH;
       var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
-      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + color + '"><title>' + escHtml(c) + ': ' + n + '</title></rect>');
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + color + '"><title>' + escHtml(contractorDisplayName(c)) + ': ' + n + '</title></rect>');
       if (segH >= MIN_LABEL_SEG_H) {
         svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (y + segH / 2 + 4) + '" font-size="11" fill="#fff" font-weight="700" text-anchor="middle">' + n + '</text>');
       }
@@ -1497,7 +1549,7 @@ function renderMonthPickerBreakdown() {
       if (n === 0) return;
       var segH = (n / maxVal) * chartHeight;
       var y = topPad + chartHeight - segH;
-      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + subBarWidth + '" height="' + segH + '" rx="2" fill="' + seriesColors[s] + '"><title>' + escHtml(c.contractor) + ' - ' + seriesLabels[s] + ': ' + n + '</title></rect>');
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + subBarWidth + '" height="' + segH + '" rx="2" fill="' + seriesColors[s] + '"><title>' + escHtml(contractorDisplayName(c.contractor)) + ' - ' + seriesLabels[s] + ': ' + n + '</title></rect>');
       svgParts.push('<text x="' + (x + subBarWidth / 2) + '" y="' + (y - 4) + '" font-size="9" fill="#1f2430" text-anchor="middle">' + n + '</text>');
     });
     svgParts.push('<text x="' + (groupX + groupWidth / 2) + '" y="' + (topPad + chartHeight + 16) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(contractorAbbr(c.contractor)) + '</text>');
@@ -1508,7 +1560,7 @@ function renderMonthPickerBreakdown() {
 
   tblBody.innerHTML = list.map(function(c) {
     return '<tr>' +
-      '<td>' + escHtml(c.contractor) + '</td>' +
+      '<td>' + escHtml(contractorDisplayName(c.contractor)) + '</td>' +
       '<td>' + c.survey + '</td>' +
       '<td>' + c.completed + '</td>' +
       '<td>' + c.scheduled + '</td>' +
@@ -1648,7 +1700,7 @@ function renderSlaTable() {
       '<td>' + (i + 1) + '</td>' +
       '<td>' + escHtml(tsAppNum) + '</td>' +
       '<td>' + escHtml(j.customer || '-') + '</td>' +
-      '<td>' + escHtml(j.contractor || '-') + '</td>' +
+      '<td>' + escHtml(contractorDisplayName(j.contractor) || '-') + '</td>' +
       '<td>' + escHtml(j.equipment || '-') + '</td>' +
       '<td>' + (s.hasSmartGuard ? 'มี' : 'ไม่มี') + '</td>' +
       '<td>' + escHtml(start) + '</td>' +
@@ -1682,6 +1734,114 @@ function contractorSlaSummary() {
   });
   list.sort(function(a, b) { return b.score - a.score; });
   return list;
+}
+
+// Next-survey recommendation (Sure's request, 2026-07-20): combine current
+// workload, install-SLA compliance %, and manual quality rating into one
+// ranked list so assigning a new survey has a documented, defensible basis
+// rather than gut feel -- this is advisory only (no auto-assignment/lock).
+function contractorWorkload(c) {
+  var active = 0, total = 0;
+  JOBS.forEach(function(j) {
+    if ((j.contractor || 'ไม่ระบุ') !== c) return;
+    total++;
+    if (j.status !== 'ดำเนินการเสร็จสิ้น') active++;
+  });
+  return { active: active, total: total };
+}
+
+function contractorHasConflict(c, dateStr) {
+  if (!dateStr) return false;
+  return JOBS.some(function(j) {
+    return (j.contractor || 'ไม่ระบุ') === c &&
+      (j.survey_date === dateStr || j.install_appointment === dateStr);
+  });
+}
+
+function contractorAllocationSummary(dateStr) {
+  var slaByContractor = {};
+  contractorSlaSummary().forEach(function(m) { slaByContractor[m.contractor] = m; });
+  var ratingByContractor = (RATINGS_SUMMARY && RATINGS_SUMMARY.byContractor) || {};
+
+  var maxActive = 0;
+  ALL_CONTRACTORS.forEach(function(c) {
+    var wl = contractorWorkload(c);
+    if (wl.active > maxActive) maxActive = wl.active;
+  });
+
+  var rows = ALL_CONTRACTORS.map(function(c) {
+    var wl = contractorWorkload(c);
+    var sla = slaByContractor[c];
+    var slaPct = sla ? sla.compliance : null;
+    var rating = ratingByContractor[c];
+    var ratingAvg = rating ? rating.avg : null;
+    var ineligible = SURVEY_INELIGIBLE_CONTRACTORS.indexOf(c) !== -1;
+    var conflict = contractorHasConflict(c, dateStr);
+
+    // Each factor normalized to 0-100, missing data treated as a neutral
+    // 60/100 (not punished for lack of history, but not boosted either) so
+    // brand-new contractors aren't unfairly ranked top purely from having
+    // zero completed jobs yet.
+    var slaScore = slaPct === null ? 60 : slaPct;
+    var ratingScore = ratingAvg === null ? 60 : (ratingAvg / 5) * 100;
+    var workloadScore = maxActive === 0 ? 100 : Math.round(100 - (wl.active / maxActive) * 100);
+    var recommendScore = ineligible || conflict ? null : Math.round((slaScore + ratingScore + workloadScore) / 3);
+
+    return {
+      contractor: c,
+      active: wl.active,
+      total: wl.total,
+      slaPct: slaPct,
+      ratingAvg: ratingAvg,
+      ineligible: ineligible,
+      conflict: conflict,
+      recommendScore: recommendScore
+    };
+  });
+
+  rows.sort(function(a, b) {
+    if (a.recommendScore === null && b.recommendScore === null) return 0;
+    if (a.recommendScore === null) return 1;
+    if (b.recommendScore === null) return -1;
+    return b.recommendScore - a.recommendScore;
+  });
+  return rows;
+}
+
+function renderAllocTable() {
+  var body = document.getElementById('allocTableBody');
+  if (!body) return;
+  var dateInput = document.getElementById('allocDateInput');
+  var dateStr = dateInput ? dateInput.value : '';
+  var rows = contractorAllocationSummary(dateStr);
+
+  var noteEl = document.getElementById('allocIneligibleNote');
+  var ineligibleNames = SURVEY_INELIGIBLE_CONTRACTORS.map(contractorDisplayName).join(', ');
+  if (noteEl) {
+    if (ineligibleNames) {
+      noteEl.style.display = '';
+      noteEl.textContent = 'ไม่รวมในคำแนะนำ (ยกเลิกสัญญา ไม่รับงานสำรวจใหม่): ' + ineligibleNames + ' — ข้อมูลย้อนหลังของผรม.กลุ่มนี้ยังแสดงตามปกติในแท็บอื่น';
+    } else {
+      noteEl.style.display = 'none';
+    }
+  }
+
+  body.innerHTML = rows.map(function(r, i) {
+    var statusHtml;
+    if (r.ineligible) statusHtml = '<span style="color:var(--muted);">ไม่รับงานสำรวจใหม่</span>';
+    else if (r.conflict) statusHtml = '<span style="color:var(--red);">ติดคิวงานอื่นวันนี้</span>';
+    else statusHtml = '<span style="color:var(--green,#16a34a);">ว่าง</span>';
+    var rankCell = r.recommendScore === null ? '-' : (i + 1);
+    return '<tr' + (r.ineligible || r.conflict ? ' style="opacity:.55;"' : '') + '>' +
+      '<td>' + rankCell + '</td>' +
+      '<td>' + escHtml(contractorDisplayName(r.contractor)) + '</td>' +
+      '<td>' + statusHtml + '</td>' +
+      '<td>' + r.active + ' (สะสม ' + r.total + ')</td>' +
+      '<td>' + (r.slaPct === null ? 'ยังไม่มีข้อมูล' : r.slaPct + '%') + '</td>' +
+      '<td>' + (r.ratingAvg === null ? 'ยังไม่มีข้อมูล' : r.ratingAvg + '/5') + '</td>' +
+      '<td><b>' + (r.recommendScore === null ? '-' : r.recommendScore) + '</b></td>' +
+    '</tr>';
+  }).join('');
 }
 
 function renderSlaContractorChart() {
@@ -1722,7 +1882,7 @@ function renderSlaContractorChart() {
       if (n === 0) return;
       var segH = (n / maxTotal) * chartHeight;
       var y = yCursor - segH;
-      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + tierColors[t] + '"><title>' + escHtml(c.contractor) + ' - ' + tierLabels[t] + ': ' + n + '</title></rect>');
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="3" fill="' + tierColors[t] + '"><title>' + escHtml(contractorDisplayName(c.contractor)) + ' - ' + tierLabels[t] + ': ' + n + '</title></rect>');
       yCursor = y;
     });
     svgParts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight - (c.total / maxTotal) * chartHeight - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + c.total + '</text>');
@@ -1741,7 +1901,7 @@ function renderSlaContractorTable() {
   body.innerHTML = list.map(function(c, i) {
     return '<tr>' +
       '<td>' + (i + 1) + '</td>' +
-      '<td>' + escHtml(c.contractor) + '</td>' +
+      '<td>' + escHtml(contractorDisplayName(c.contractor)) + '</td>' +
       '<td>' + c.total + '</td>' +
       '<td>' + escHtml(c.firstDate || '-') + '</td>' +
       '<td>' + c.excellent + '</td>' +
@@ -1789,7 +1949,7 @@ function renderSlaMonthlyChart() {
   if (legendHost) {
     legendHost.innerHTML = presentContractors.map(function(c) {
       var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
-      return '<span class="chart-legend-item"><span class="chart-swatch" style="background:' + color + ';"></span>' + escHtml(c) + '</span>';
+      return '<span class="chart-legend-item"><span class="chart-swatch" style="background:' + color + ';"></span>' + escHtml(contractorDisplayName(c)) + '</span>';
     }).join('');
   }
 
@@ -1824,7 +1984,7 @@ function renderSlaMonthlyChart() {
       var segH = (n / maxTotal) * chartHeight;
       var y = yCursor - segH;
       var color = CONTRACTOR_COLOR_MAP[c] || '#94a3b8';
-      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="4" fill="' + color + '"><title>' + escHtml(c) + ': ' + n + '</title></rect>');
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" rx="4" fill="' + color + '"><title>' + escHtml(contractorDisplayName(c)) + ': ' + n + '</title></rect>');
       yCursor = y;
     });
     var total = 0;
@@ -1879,7 +2039,7 @@ function renderManualRatingChart() {
       var x = groupX + ci * (subBarWidth + subGap);
       var segH = (val / maxVal) * chartHeight;
       var y = topPad + chartHeight - segH;
-      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + subBarWidth + '" height="' + segH + '" rx="2" fill="' + cr.color + '"><title>' + escHtml(c) + ' - ' + cr.label + ': ' + val + '/5</title></rect>');
+      svgParts.push('<rect x="' + x + '" y="' + y + '" width="' + subBarWidth + '" height="' + segH + '" rx="2" fill="' + cr.color + '"><title>' + escHtml(contractorDisplayName(c)) + ' - ' + cr.label + ': ' + val + '/5</title></rect>');
       svgParts.push('<text x="' + (x + subBarWidth / 2) + '" y="' + (y - 4) + '" font-size="9" fill="#1f2430" text-anchor="middle">' + val + '</text>');
     });
     var pct = Math.round((r.avg / 5) * 100);
@@ -1905,7 +2065,7 @@ function renderManualRatingTable() {
     var r = byContractor[c];
     var pct = Math.round((r.avg / 5) * 100);
     return '<tr>' +
-      '<td>' + escHtml(c) + '</td>' +
+      '<td>' + escHtml(contractorDisplayName(c)) + '</td>' +
       '<td>' + r.count + '</td>' +
       '<td><b>' + r.avg + '/5</b></td>' +
       '<td>' + pct + '%</td>' +
@@ -1923,15 +2083,18 @@ function switchView(view) {
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
   document.getElementById('tabOverviewBtn').classList.toggle('active', view === 'overview');
   document.getElementById('tabSlaBtn').classList.toggle('active', view === 'sla');
+  document.getElementById('tabAllocBtn').classList.toggle('active', view === 'alloc');
   document.getElementById('calendarWrap').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('monthNavRow').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('zoomControls').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('docTableWrap').style.display = (view === 'doc') ? '' : 'none';
   document.getElementById('overviewWrap').style.display = (view === 'overview') ? '' : 'none';
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
+  document.getElementById('allocWrap').style.display = (view === 'alloc') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
+  if (view === 'alloc') { renderAllocTable(); }
 }
 
 function onFiltersChanged() {
@@ -1939,11 +2102,18 @@ function onFiltersChanged() {
   if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
+  if (document.getElementById('tabAllocBtn').classList.contains('active')) { renderAllocTable(); }
 }
 
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
 document.getElementById('tabDocBtn').onclick = function() { switchView('doc'); };
 document.getElementById('tabOverviewBtn').onclick = function() { switchView('overview'); };
+document.getElementById('tabAllocBtn').onclick = function() { switchView('alloc'); };
+var allocDateInputEl = document.getElementById('allocDateInput');
+if (allocDateInputEl) {
+  allocDateInputEl.value = TODAY_ISO;
+  allocDateInputEl.onchange = function() { renderAllocTable(); };
+}
 document.getElementById('tabSlaBtn').onclick = function() { switchView('sla'); };
 
 calGrid.addEventListener('click', function(ev) {

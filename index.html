@@ -528,7 +528,10 @@
       <label style="display:block;font-size:11px;color:var(--muted);margin:8px 0 3px;">ชื่อผู้บันทึก</label>
       <input type="text" id="mLogRecordedBy" placeholder="ชื่อผู้บันทึก" style="width:100%;box-sizing:border-box;">
       <div id="mLogError" style="color:var(--red);font-size:12px;margin-top:6px;display:none;"></div>
-      <button class="secondary" id="mLogSubmitBtn" style="margin-top:10px;align-self:flex-start;">+ เพิ่มบันทึก</button>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="secondary" id="mLogSubmitBtn">+ เพิ่มบันทึก</button>
+        <button class="secondary" id="mLogCancelEditBtn" style="display:none;">ยกเลิกแก้ไข</button>
+      </div>
     </div>
     <button class="secondary modal-close" id="mClose">ปิด</button>
   </div>
@@ -624,6 +627,7 @@ var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} } 
 var currentRatingJob = null;
 var currentRatingScores = {};
 var currentLogJob = null;
+var currentEditingLogRow = null;
 
 function ratingsConfigured() {
   return RATINGS_WEBAPP_URL && RATINGS_WEBAPP_URL.indexOf('REPLACE_WITH') !== 0;
@@ -1119,13 +1123,8 @@ function openModalForEvent(e) {
       // cells and rendered squeezed/overlapping side by side.
       mInstallLogRow.style.display = 'flex';
       currentLogJob = mJob;
+      resetInstallLogForm();
       renderInstallLogList(mJob);
-      document.getElementById('mLogDate').value = TODAY_ISO;
-      document.getElementById('mLogStatus').value = 'เสร็จ';
-      document.getElementById('mLogDetail').value = '';
-      document.getElementById('mLogRecordedBy').value = '';
-      var mLogErrEl = document.getElementById('mLogError');
-      if (mLogErrEl) mLogErrEl.style.display = 'none';
     } else if (mInstallLogRow) {
       mInstallLogRow.style.display = 'none';
       currentLogJob = null;
@@ -1152,12 +1151,87 @@ function renderInstallLogList(job) {
   }
   host.innerHTML = entries.map(function(en) {
     var statusColor = en.status === 'เสร็จ' ? '#16a34a' : '#dc2626';
-    return '<div style="border-bottom:1px solid var(--border);padding:4px 0;">' +
-      '<b>' + escHtml(en.date) + '</b> — <span style="color:' + statusColor + ';font-weight:600;">' + escHtml(en.status) + '</span>' +
+    return '<div style="border-bottom:1px solid var(--border);padding:6px 0;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+        '<div><b>' + escHtml(en.date) + '</b> — <span style="color:' + statusColor + ';font-weight:600;">' + escHtml(en.status) + '</span></div>' +
+        '<div style="white-space:nowrap;">' +
+          '<span class="log-edit-btn" data-row="' + en.row + '" style="cursor:pointer;color:var(--accent);font-size:11px;margin-right:10px;">แก้ไข</span>' +
+          '<span class="log-delete-btn" data-row="' + en.row + '" style="cursor:pointer;color:var(--red);font-size:11px;">ลบ</span>' +
+        '</div>' +
+      '</div>' +
       (en.detail ? ('<div>' + escHtml(en.detail) + '</div>') : '') +
       '<div style="color:var(--muted);font-size:11px;">โดย ' + escHtml(en.recordedBy || '-') + '</div>' +
     '</div>';
   }).join('');
+}
+
+var mInstallLogListEl = document.getElementById('mInstallLogList');
+if (mInstallLogListEl) {
+  mInstallLogListEl.addEventListener('click', function(ev) {
+    var editBtn = ev.target.closest('.log-edit-btn');
+    if (editBtn) { startEditInstallLog(parseInt(editBtn.getAttribute('data-row'), 10)); return; }
+    var delBtn = ev.target.closest('.log-delete-btn');
+    if (delBtn) { deleteInstallLog(parseInt(delBtn.getAttribute('data-row'), 10)); }
+  });
+}
+
+function resetInstallLogForm() {
+  currentEditingLogRow = null;
+  document.getElementById('mLogDate').value = TODAY_ISO;
+  document.getElementById('mLogStatus').value = 'เสร็จ';
+  document.getElementById('mLogDetail').value = '';
+  document.getElementById('mLogRecordedBy').value = '';
+  document.getElementById('mLogSubmitBtn').textContent = '+ เพิ่มบันทึก';
+  var cancelBtn = document.getElementById('mLogCancelEditBtn');
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  var errEl = document.getElementById('mLogError');
+  if (errEl) errEl.style.display = 'none';
+}
+
+function startEditInstallLog(row) {
+  if (!currentLogJob) return;
+  var entries = (RATINGS_SUMMARY.installLogs.byJob[currentLogJob.ts_app]) || [];
+  var entry = entries.filter(function(en) { return en.row === row; })[0];
+  if (!entry) return;
+  currentEditingLogRow = row;
+  document.getElementById('mLogDate').value = entry.date;
+  document.getElementById('mLogStatus').value = entry.status;
+  document.getElementById('mLogDetail').value = entry.detail || '';
+  document.getElementById('mLogRecordedBy').value = entry.recordedBy || '';
+  document.getElementById('mLogSubmitBtn').textContent = 'บันทึกการแก้ไข';
+  var cancelBtn = document.getElementById('mLogCancelEditBtn');
+  if (cancelBtn) cancelBtn.style.display = '';
+  var errEl = document.getElementById('mLogError');
+  if (errEl) errEl.style.display = 'none';
+}
+
+function deleteInstallLog(row) {
+  if (!currentLogJob) return;
+  if (!confirm('ยืนยันลบบันทึกนี้หรือไม่?')) return;
+  var job = currentLogJob;
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'install_log_delete', ts_app: job.ts_app, row: row })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.success) {
+        var msg = data && data.error === 'row_mismatch'
+          ? 'ข้อมูลมีการเปลี่ยนแปลงตั้งแต่โหลดหน้านี้ กรุณาปิดและเปิดหน้าต่างนี้ใหม่แล้วลองอีกครั้ง'
+          : ((data && data.error) || 'ลบไม่สำเร็จ');
+        alert(msg);
+        return;
+      }
+      var list = (RATINGS_SUMMARY.installLogs.byJob[job.ts_app]) || [];
+      RATINGS_SUMMARY.installLogs.byJob[job.ts_app] = list.filter(function(en) { return en.row !== row; });
+      if (currentEditingLogRow === row) resetInstallLogForm();
+      renderInstallLogList(job);
+      if (document.getElementById('tabSlaBtn').classList.contains('active')) renderSlaTable();
+    })
+    .catch(function() {
+      alert('เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง');
+    });
 }
 
 function submitInstallLog() {
@@ -1180,19 +1254,26 @@ function submitInstallLog() {
   var btn = document.getElementById('mLogSubmitBtn');
   btn.disabled = true;
   var job = currentLogJob;
+  var isEdit = currentEditingLogRow !== null;
+  var payload = {
+    key: RATINGS_ACCESS_KEY,
+    type: isEdit ? 'install_log_edit' : 'install_log',
+    ts_app: job.ts_app, customer: job.customer, contractor: job.contractor,
+    date: date, status: status, detail: detail, recordedBy: recordedBy
+  };
+  if (isEdit) payload.row = currentEditingLogRow;
   fetch(RATINGS_WEBAPP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({
-      key: RATINGS_ACCESS_KEY, type: 'install_log',
-      ts_app: job.ts_app, customer: job.customer, contractor: job.contractor,
-      date: date, status: status, detail: detail, recordedBy: recordedBy
-    })
+    body: JSON.stringify(payload)
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (!data || !data.success) {
-        errEl.textContent = (data && data.error) || 'บันทึกไม่สำเร็จ';
+        var msg = data && data.error === 'row_mismatch'
+          ? 'ข้อมูลมีการเปลี่ยนแปลงตั้งแต่โหลดหน้านี้ กรุณาปิดและเปิดหน้าต่างนี้ใหม่แล้วลองอีกครั้ง'
+          : ((data && data.error) || 'บันทึกไม่สำเร็จ');
+        errEl.textContent = msg;
         errEl.style.display = '';
         return;
       }
@@ -1201,10 +1282,20 @@ function submitInstallLog() {
       // without waiting for the next periodic ratings-summary refetch.
       if (!RATINGS_SUMMARY.installLogs) RATINGS_SUMMARY.installLogs = { byJob: {} };
       if (!RATINGS_SUMMARY.installLogs.byJob[job.ts_app]) RATINGS_SUMMARY.installLogs.byJob[job.ts_app] = [];
-      RATINGS_SUMMARY.installLogs.byJob[job.ts_app].unshift({ date: date, status: status, detail: detail, recordedBy: recordedBy });
+      if (isEdit) {
+        var list = RATINGS_SUMMARY.installLogs.byJob[job.ts_app];
+        var idx = -1;
+        for (var i = 0; i < list.length; i++) { if (list[i].row === currentEditingLogRow) { idx = i; break; } }
+        if (idx !== -1) list[idx] = { row: currentEditingLogRow, date: date, status: status, detail: detail, recordedBy: recordedBy };
+      } else {
+        // NOTE: a freshly-added entry has no real row number yet (the server
+        // assigns it on append) -- use a temp negative marker so it can't
+        // collide with a real row; the next periodic ratings refresh
+        // replaces it with the true row number from the sheet.
+        RATINGS_SUMMARY.installLogs.byJob[job.ts_app].unshift({ row: -Date.now(), date: date, status: status, detail: detail, recordedBy: recordedBy });
+      }
       renderInstallLogList(job);
-      document.getElementById('mLogDetail').value = '';
-      document.getElementById('mLogRecordedBy').value = '';
+      resetInstallLogForm();
       if (document.getElementById('tabSlaBtn').classList.contains('active')) renderSlaTable();
     })
     .catch(function() {
@@ -1214,6 +1305,7 @@ function submitInstallLog() {
     .finally(function() { btn.disabled = false; });
 }
 document.getElementById('mLogSubmitBtn').onclick = submitInstallLog;
+document.getElementById('mLogCancelEditBtn').onclick = resetInstallLogForm;
 
 // Reason shown for SLA-exceeded jobs (Sure's request, 2026-07-20): prefer the
 // day-by-day install log entries staff record above (specific, dated) over

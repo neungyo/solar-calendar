@@ -148,6 +148,7 @@
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.45); align-items:center; justify-content:center; z-index:1000; }
   .modal-overlay.open { display:flex; }
   .modal-box { background:#fff; border-radius:12px; padding:22px 26px; width:420px; max-width:92vw; max-height:86vh; overflow:auto; box-shadow:0 20px 50px rgba(0,0,0,0.25); }
+  #modalOverlay .modal-box { width:520px; }
   .modal-box h2 { font-size:16px; margin:0 0 14px; line-height:1.4; }
   .modal-row { display:grid; grid-template-columns:96px 1fr; gap:6px 12px; font-size:13px; margin-bottom:8px; align-items:start; }
   .modal-row .k { color:var(--muted); }
@@ -506,20 +507,28 @@
     <div class="modal-row"><div class="k">สถานะ:</div><div class="v" id="mStatus"></div></div>
     <div class="modal-row" id="mTacRow"><div class="k">เลขขนานไฟ:</div><div class="v" id="mTac"></div></div>
     <div class="modal-row" id="mSlaRow" style="display:none;"><div class="k">SLA ติดตั้ง:</div><div class="v" id="mSla"></div></div>
-    <div class="modal-row" id="mInstallLogRow" style="display:none;flex-direction:column;align-items:stretch;">
-      <div class="k" style="margin-bottom:6px;">บันทึกความคืบหน้ารายวัน (ทีมงานภายในเท่านั้น):</div>
-      <div id="mInstallLogList" style="font-size:12px;margin-bottom:8px;"></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <input type="date" id="mLogDate" style="flex:1;min-width:130px;">
-        <select id="mLogStatus" style="flex:1;min-width:100px;">
-          <option value="เสร็จ">เสร็จ</option>
-          <option value="ไม่เสร็จ">ไม่เสร็จ</option>
-        </select>
+    <div class="modal-row" id="mInstallLogRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+      <div class="k" style="margin-bottom:8px;font-weight:600;">บันทึกความคืบหน้ารายวัน (ทีมงานภายในเท่านั้น):</div>
+      <div id="mInstallLogList" style="font-size:12px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;">
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">วันที่</label>
+          <input type="date" id="mLogDate" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div style="flex:1;">
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">สถานะวันนี้</label>
+          <select id="mLogStatus" style="width:100%;box-sizing:border-box;">
+            <option value="เสร็จ">เสร็จ</option>
+            <option value="ไม่เสร็จ">ไม่เสร็จ</option>
+          </select>
+        </div>
       </div>
-      <textarea id="mLogDetail" placeholder="รายละเอียด/ปัญหาที่พบวันนี้" style="width:100%;margin-top:6px;min-height:50px;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;"></textarea>
-      <input type="text" id="mLogRecordedBy" placeholder="ชื่อผู้บันทึก" style="margin-top:6px;">
-      <div id="mLogError" style="color:var(--red);font-size:12px;margin-top:4px;display:none;"></div>
-      <button class="secondary" id="mLogSubmitBtn" style="margin-top:8px;">+ เพิ่มบันทึก</button>
+      <label style="display:block;font-size:11px;color:var(--muted);margin:8px 0 3px;">รายละเอียด/ปัญหาที่พบวันนี้</label>
+      <textarea id="mLogDetail" placeholder="เช่น ฝนตกหนัก ติดตั้งไม่เสร็จ, รอส่งอุปกรณ์เพิ่ม ฯลฯ" style="width:100%;min-height:72px;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;resize:vertical;"></textarea>
+      <label style="display:block;font-size:11px;color:var(--muted);margin:8px 0 3px;">ชื่อผู้บันทึก</label>
+      <input type="text" id="mLogRecordedBy" placeholder="ชื่อผู้บันทึก" style="width:100%;box-sizing:border-box;">
+      <div id="mLogError" style="color:var(--red);font-size:12px;margin-top:6px;display:none;"></div>
+      <button class="secondary" id="mLogSubmitBtn" style="margin-top:10px;align-self:flex-start;">+ เพิ่มบันทึก</button>
     </div>
     <button class="secondary modal-close" id="mClose">ปิด</button>
   </div>
@@ -1098,7 +1107,17 @@ function openModalForEvent(e) {
       mSlaRow.style.display = 'none';
     }
     if (mInstallLogRow && mJob) {
-      mInstallLogRow.style.display = '';
+      // NOTE (fix 2026-07-24): setting style.display = '' clears the inline
+      // override and falls back to the .modal-row CSS class, which is
+      // `display:grid; grid-template-columns:96px 1fr` -- meant for the
+      // simple label/value rows elsewhere in this modal. This row instead
+      // needs its own full-width flex-column layout (label, log list, the
+      // date+status row, textarea, name field, button each on their own
+      // line), so it must be set to 'flex' explicitly, not reset to ''.
+      // Symptom before this fix: the date box, status dropdown, textarea,
+      // name field and submit button got auto-placed into random grid
+      // cells and rendered squeezed/overlapping side by side.
+      mInstallLogRow.style.display = 'flex';
       currentLogJob = mJob;
       renderInstallLogList(mJob);
       document.getElementById('mLogDate').value = TODAY_ISO;

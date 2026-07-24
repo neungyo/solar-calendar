@@ -370,7 +370,7 @@
     <table class="doc-table" id="overviewTableStalled">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>Proposal Quotation (TAC)</th><th>FAT (TS)</th><th>ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableStalledBody"></tbody>
@@ -383,7 +383,7 @@
     <table class="doc-table" id="overviewTableScheduled">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>Proposal Quotation (TAC)</th><th>FAT (TS)</th><th>ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableScheduledBody"></tbody>
@@ -396,7 +396,7 @@
     <table class="doc-table" id="overviewTableCompleted">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>Proposal Quotation (TAC)</th><th>FAT (TS)</th><th>ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableCompletedBody"></tbody>
@@ -1488,6 +1488,19 @@ function renderOverviewRatingCell(j, cat) {
   return html;
 }
 
+function renderDocStatusCell(name, link) {
+  var hasDoc = !!(name && String(name).trim());
+  var dotColor = hasDoc ? '#16a34a' : '#dc2626';
+  var dot = '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' +
+    dotColor + ';margin-right:6px;vertical-align:middle;"></span>';
+  if (!hasDoc) return dot + '<span style="color:var(--muted);">ยังไม่มี</span>';
+  if (link) {
+    return dot + '<a href="' + escHtml(link) + '" target="_blank" rel="noopener" title="' + escHtml(name) + '">เปิดเอกสาร</a>';
+  }
+  var shortName = name.length > 22 ? name.slice(0, 22) + '…' : name;
+  return dot + '<span title="' + escHtml(name) + '">' + escHtml(shortName) + '</span>';
+}
+
 function renderOverviewRow(j, i, cat) {
   var tsAppNum = j.ts_app || j.job_code || j._key || '-';
   return '<tr>' +
@@ -1501,6 +1514,9 @@ function renderOverviewRow(j, i, cat) {
     '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
     '<td><span class="ov-badge ' + cat + '">' + escHtml(OVERVIEW_STATUS_LABELS[cat]) + '</span></td>' +
     '<td>' + renderOverviewRatingCell(j, cat) + '</td>' +
+    '<td>' + renderDocStatusCell(j.proposal_tac_name, j.proposal_tac_link) + '</td>' +
+    '<td>' + renderDocStatusCell(j.fat_ts_name, j.fat_ts_link) + '</td>' +
+    '<td>' + renderDocStatusCell(j.receipt_ts_name, j.receipt_ts_link) + '</td>' +
     '</tr>';
 }
 

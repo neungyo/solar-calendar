@@ -1288,11 +1288,14 @@ function submitInstallLog() {
         for (var i = 0; i < list.length; i++) { if (list[i].row === currentEditingLogRow) { idx = i; break; } }
         if (idx !== -1) list[idx] = { row: currentEditingLogRow, date: date, status: status, detail: detail, recordedBy: recordedBy };
       } else {
-        // NOTE: a freshly-added entry has no real row number yet (the server
-        // assigns it on append) -- use a temp negative marker so it can't
-        // collide with a real row; the next periodic ratings refresh
-        // replaces it with the true row number from the sheet.
-        RATINGS_SUMMARY.installLogs.byJob[job.ts_app].unshift({ row: -Date.now(), date: date, status: status, detail: detail, recordedBy: recordedBy });
+        // FIX (2026-07-24): the server now returns the real sheet row number
+        // of the entry it just appended (data.row) -- use that directly.
+        // Previously this used a temporary negative placeholder pending the
+        // next periodic ratings refresh, which meant clicking "แก้ไข"/"ลบ" on
+        // an entry added earlier in the SAME session (before that refresh
+        // happened) failed with "invalid row", since the server rejects any
+        // row that isn't a real >=2 sheet row number.
+        RATINGS_SUMMARY.installLogs.byJob[job.ts_app].unshift({ row: data.row, date: date, status: status, detail: detail, recordedBy: recordedBy });
       }
       renderInstallLogList(job);
       resetInstallLogForm();

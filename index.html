@@ -506,6 +506,21 @@
     <div class="modal-row"><div class="k">สถานะ:</div><div class="v" id="mStatus"></div></div>
     <div class="modal-row" id="mTacRow"><div class="k">เลขขนานไฟ:</div><div class="v" id="mTac"></div></div>
     <div class="modal-row" id="mSlaRow" style="display:none;"><div class="k">SLA ติดตั้ง:</div><div class="v" id="mSla"></div></div>
+    <div class="modal-row" id="mInstallLogRow" style="display:none;flex-direction:column;align-items:stretch;">
+      <div class="k" style="margin-bottom:6px;">บันทึกความคืบหน้ารายวัน (ทีมงานภายในเท่านั้น):</div>
+      <div id="mInstallLogList" style="font-size:12px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <input type="date" id="mLogDate" style="flex:1;min-width:130px;">
+        <select id="mLogStatus" style="flex:1;min-width:100px;">
+          <option value="เสร็จ">เสร็จ</option>
+          <option value="ไม่เสร็จ">ไม่เสร็จ</option>
+        </select>
+      </div>
+      <textarea id="mLogDetail" placeholder="รายละเอียด/ปัญหาที่พบวันนี้" style="width:100%;margin-top:6px;min-height:50px;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;"></textarea>
+      <input type="text" id="mLogRecordedBy" placeholder="ชื่อผู้บันทึก" style="margin-top:6px;">
+      <div id="mLogError" style="color:var(--red);font-size:12px;margin-top:4px;display:none;"></div>
+      <button class="secondary" id="mLogSubmitBtn" style="margin-top:8px;">+ เพิ่มบันทึก</button>
+    </div>
     <button class="secondary modal-close" id="mClose">ปิด</button>
   </div>
 </div>
@@ -596,9 +611,10 @@ var RATINGS_CRITERIA = [
   { key: 'testing', label: 'ทดสอบระบบก่อนส่งมอบ (Testing & Commissioning)', hint: 'ตรวจสอบแรงดัน ขั้วสาย การสื่อสาร Monitoring และทดสอบการทำงานครบทุกฟังก์ชัน' },
   { key: 'handover', label: 'ส่งมอบพร้อมเอกสาร (Documentation & Handover)', hint: 'ถ่ายรูป Before/After, ส่งรายงานติดตั้ง และอธิบายการใช้งานให้ลูกค้า' }
 ];
-var RATINGS_SUMMARY = { byJob: {}, byContractor: {} };
+var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} } };
 var currentRatingJob = null;
 var currentRatingScores = {};
+var currentLogJob = null;
 
 function ratingsConfigured() {
   return RATINGS_WEBAPP_URL && RATINGS_WEBAPP_URL.indexOf('REPLACE_WITH') !== 0;
@@ -611,7 +627,7 @@ function fetchRatingsSummary() {
     if (data && !data.error) {
       RATINGS_SUMMARY = data;
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) renderOverviewTable();
-      if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderManualRatingChart(); renderManualRatingTable(); }
+      if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderManualRatingChart(); renderManualRatingTable(); renderSlaTable(); }
       if (document.getElementById('tabAllocBtn').classList.contains('active')) renderAllocTable();
     }
   }).catch(function() {
@@ -938,7 +954,7 @@ function jobSlaInfo(job) {
   else tier = 'exceeded';
   return {
     tier: tier, met: tier !== 'exceeded', days: days, min: min, max: max,
-    hasSmartGuard: hasSmartGuard, reason: job.site_issues || ''
+    hasSmartGuard: hasSmartGuard, reason: installLogReasonText_(job)
   };
 }
 
@@ -1048,8 +1064,11 @@ function openModalForEvent(e) {
   document.getElementById('mStatus').textContent = e.status || '-';
   var tacRow = document.getElementById('mTacRow');
   var tacEl = document.getElementById('mTac');
+  var mInstallLogRow = document.getElementById('mInstallLogRow');
   if (e.type === 'survey') {
     if (tacRow) tacRow.style.display = 'none';
+    if (mInstallLogRow) mInstallLogRow.style.display = 'none';
+    currentLogJob = null;
   } else {
     if (tacRow) tacRow.style.display = '';
     var mTacRaw = e.doc_tac ? String(e.doc_tac).trim() : '';
@@ -1078,8 +1097,120 @@ function openModalForEvent(e) {
     } else if (mSlaRow) {
       mSlaRow.style.display = 'none';
     }
+    if (mInstallLogRow && mJob) {
+      mInstallLogRow.style.display = '';
+      currentLogJob = mJob;
+      renderInstallLogList(mJob);
+      document.getElementById('mLogDate').value = TODAY_ISO;
+      document.getElementById('mLogStatus').value = 'เสร็จ';
+      document.getElementById('mLogDetail').value = '';
+      document.getElementById('mLogRecordedBy').value = '';
+      var mLogErrEl = document.getElementById('mLogError');
+      if (mLogErrEl) mLogErrEl.style.display = 'none';
+    } else if (mInstallLogRow) {
+      mInstallLogRow.style.display = 'none';
+      currentLogJob = null;
+    }
   }
   document.getElementById('modalOverlay').classList.add('open');
+}
+
+// Install day log (Sure's request, 2026-07-20): internal staff (หนึ่งโย่ว/
+// ฟิล/ฟลุ๊ค/เอก only, not contractors/customers) record per-day progress
+// notes during a job's install phase -- what happened that day, finished or
+// not. This is what now supplies the SLA "เหตุผล" (reason) text, replacing
+// the old static site_issues sheet column (see installLogReasonText_() and
+// jobSlaInfo() below).
+function renderInstallLogList(job) {
+  var host = document.getElementById('mInstallLogList');
+  if (!host) return;
+  var tsApp = job && job.ts_app;
+  var entries = (tsApp && RATINGS_SUMMARY.installLogs && RATINGS_SUMMARY.installLogs.byJob &&
+    RATINGS_SUMMARY.installLogs.byJob[tsApp]) || [];
+  if (!entries.length) {
+    host.innerHTML = '<div style="color:var(--muted);">ยังไม่มีบันทึก</div>';
+    return;
+  }
+  host.innerHTML = entries.map(function(en) {
+    var statusColor = en.status === 'เสร็จ' ? '#16a34a' : '#dc2626';
+    return '<div style="border-bottom:1px solid var(--border);padding:4px 0;">' +
+      '<b>' + escHtml(en.date) + '</b> — <span style="color:' + statusColor + ';font-weight:600;">' + escHtml(en.status) + '</span>' +
+      (en.detail ? ('<div>' + escHtml(en.detail) + '</div>') : '') +
+      '<div style="color:var(--muted);font-size:11px;">โดย ' + escHtml(en.recordedBy || '-') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function submitInstallLog() {
+  if (!currentLogJob) return;
+  var date = document.getElementById('mLogDate').value;
+  var status = document.getElementById('mLogStatus').value;
+  var detail = document.getElementById('mLogDetail').value.trim();
+  var recordedBy = document.getElementById('mLogRecordedBy').value.trim();
+  var errEl = document.getElementById('mLogError');
+  if (!date || !recordedBy) {
+    errEl.textContent = 'กรุณากรอกวันที่และชื่อผู้บันทึก';
+    errEl.style.display = '';
+    return;
+  }
+  if (!ratingsConfigured()) {
+    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึก (RATINGS_WEBAPP_URL)';
+    errEl.style.display = '';
+    return;
+  }
+  var btn = document.getElementById('mLogSubmitBtn');
+  btn.disabled = true;
+  var job = currentLogJob;
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      key: RATINGS_ACCESS_KEY, type: 'install_log',
+      ts_app: job.ts_app, customer: job.customer, contractor: job.contractor,
+      date: date, status: status, detail: detail, recordedBy: recordedBy
+    })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.success) {
+        errEl.textContent = (data && data.error) || 'บันทึกไม่สำเร็จ';
+        errEl.style.display = '';
+        return;
+      }
+      errEl.style.display = 'none';
+      // Optimistic local update so the list + SLA reason reflect immediately,
+      // without waiting for the next periodic ratings-summary refetch.
+      if (!RATINGS_SUMMARY.installLogs) RATINGS_SUMMARY.installLogs = { byJob: {} };
+      if (!RATINGS_SUMMARY.installLogs.byJob[job.ts_app]) RATINGS_SUMMARY.installLogs.byJob[job.ts_app] = [];
+      RATINGS_SUMMARY.installLogs.byJob[job.ts_app].unshift({ date: date, status: status, detail: detail, recordedBy: recordedBy });
+      renderInstallLogList(job);
+      document.getElementById('mLogDetail').value = '';
+      document.getElementById('mLogRecordedBy').value = '';
+      if (document.getElementById('tabSlaBtn').classList.contains('active')) renderSlaTable();
+    })
+    .catch(function() {
+      errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง';
+      errEl.style.display = '';
+    })
+    .finally(function() { btn.disabled = false; });
+}
+document.getElementById('mLogSubmitBtn').onclick = submitInstallLog;
+
+// Reason shown for SLA-exceeded jobs (Sure's request, 2026-07-20): prefer the
+// day-by-day install log entries staff record above (specific, dated) over
+// the old static site_issues sheet column (one fixed value per job, never
+// granular per day). Falls back to site_issues only for jobs that predate
+// this log / were never logged, so older completed jobs aren't left blank.
+function installLogReasonText_(job) {
+  var tsApp = job && job.ts_app;
+  var entries = tsApp && RATINGS_SUMMARY.installLogs && RATINGS_SUMMARY.installLogs.byJob
+    ? RATINGS_SUMMARY.installLogs.byJob[tsApp] : null;
+  if (entries && entries.length) {
+    return entries.map(function(en) {
+      return en.date + ' (' + en.status + '): ' + (en.detail || 'ไม่ระบุรายละเอียด');
+    }).join(' | ');
+  }
+  return (job && job.site_issues) || '';
 }
 
 function escHtml(s) {

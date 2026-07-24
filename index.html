@@ -165,10 +165,35 @@
   }
   #loadingOverlay { position:fixed; inset:0; background:#f7f8fa; display:flex; align-items:center; justify-content:center; z-index:2000; font-size:14px; color:var(--muted); }
   .no-key-box { max-width:520px; margin:80px auto; background:#fff; border:1px solid var(--border); border-radius:10px; padding:24px; text-align:center; }
+  #loginOverlay { position:fixed; inset:0; background:#f7f8fa; z-index:2500; overflow:auto; }
+  .login-box { max-width:360px; margin:90px auto; background:#fff; border:1px solid var(--border); border-radius:10px; padding:28px; }
+  .login-box h2 { margin:0 0 4px; font-size:18px; }
+  .login-box .field { margin-top:14px; }
+  .login-box label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  .login-box input { width:100%; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-size:14px; }
+  .login-box button { width:100%; margin-top:18px; padding:10px; font-size:14px; }
+  .login-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
+  .logout-link { font-size:12px; color:var(--muted); text-decoration:underline; cursor:pointer; margin-left:10px; }
 </style>
 </head>
 <body>
 <div id="loadingOverlay">กำลังโหลดข้อมูลล่าสุด...</div>
+<div id="loginOverlay" style="display:none;">
+  <div class="login-box">
+    <h2>เข้าสู่ระบบ</h2>
+    <div class="sub" style="margin-bottom:0;">ปฏิทินงานติดตั้ง Solar Cell — สำหรับทีมงานเท่านั้น</div>
+    <div class="field">
+      <label for="loginUsername">ชื่อผู้ใช้</label>
+      <input type="text" id="loginUsername" autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="loginPassword">รหัสผ่าน</label>
+      <input type="password" id="loginPassword" autocomplete="current-password">
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <button id="loginSubmitBtn">เข้าสู่ระบบ</button>
+  </div>
+</div>
 <div class="brand-badge">☀️ NeuNgyo!26</div>
 <h1>ปฏิทินงานติดตั้ง Solar Cell — Progress Modern Trade</h1>
 <div class="sub">ข้อมูลจาก Google Sheet: SVP_Solar Cell Order Residential (sheet: Progress Modern trade) — ผ่าน Apps Script API</div>
@@ -190,6 +215,7 @@
 <div class="refresh-row">
   <button id="refreshBtn">อ่านข้อมูลล่าสุดอีกครั้ง</button>
   <button class="secondary" id="fullscreenBtn" title="ขยายปฏิทินเต็มจอ ดูได้ทุกวันในเดือน เลื่อนเดือนได้">⛶ เต็มจอ</button>
+  <span class="logout-link" id="logoutBtn">ออกจากระบบ</span>
   <div class="refresh-note">กดปุ่มนี้เพื่อดึงข้อมูลสดจากชีตทันที (ผ่าน Apps Script API) ใช้เวลาไม่กี่วินาที
   <div id="refreshStatus" class="refresh-status"></div></div>
 </div>
@@ -507,9 +533,20 @@
 
 <script>
 var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrRKjebecOzXuJv4WfzoqDUhAvTyid9mM7-yNhuTmJRqn8ID/exec";
-var DEFAULT_ACCESS_KEY = "POQDSQ3CuB6lMi0Q22HKBvnE9FZxZUq-";
+// SECURITY (2026-07-20, Sure's request): there used to be a DEFAULT_ACCESS_KEY
+// baked into this public page's source, so ANYONE with the bare URL (no ?k=
+// param at all) silently got full data access -- viewing page source revealed
+// a working key to anyone. That fallback is removed. Now the only ways to get
+// a working ACCESS_KEY are: (1) a pre-shared per-contractor link with its own
+// ?k=... param (unchanged, still works for existing contractor links), or
+// (2) logging in with a username/password below, which POSTs to the SAME
+// Apps Script (action=login) that checks credentials SERVER-SIDE against the
+// LOGIN_ACCOUNTS_JSON script property -- the password is never embedded in
+// this file, only checked remotely -- and only then hands back a real key,
+// which is cached in this browser's localStorage ("remember on this device").
+var LOGIN_KEY_STORAGE_NAME = 'solarLoginAccessKey';
 var urlParams = new URLSearchParams(window.location.search);
-var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || DEFAULT_ACCESS_KEY;
+var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || localStorage.getItem(LOGIN_KEY_STORAGE_NAME) || '';
 
 var JOBS = [];
 var EVENTS = [];
@@ -2332,6 +2369,65 @@ function showNoKeyMessage() {
     '<p style="color:#6b7280;font-size:13px;line-height:1.6;">ลิงก์นี้ไม่มี access key ต่อท้าย URL กรุณาติดต่อผู้ดูแลระบบเพื่อขอลิงก์ที่ถูกต้องสำหรับทีมของคุณ</p></div>';
 }
 
+function showLoginOverlay(errorMsg) {
+  document.getElementById('loadingOverlay').style.display = 'none';
+  var ov = document.getElementById('loginOverlay');
+  ov.style.display = '';
+  var errEl = document.getElementById('loginError');
+  if (errorMsg) { errEl.textContent = errorMsg; errEl.style.display = ''; }
+  else { errEl.style.display = 'none'; }
+}
+
+function hideLoginOverlay() {
+  document.getElementById('loginOverlay').style.display = 'none';
+}
+
+function attemptLogin() {
+  var username = (document.getElementById('loginUsername').value || '').trim();
+  var password = document.getElementById('loginPassword').value || '';
+  var btn = document.getElementById('loginSubmitBtn');
+  if (!username || !password) {
+    showLoginOverlay('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'กำลังตรวจสอบ...';
+  fetch(WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'login', username: username, password: password })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.ok || !data.key) {
+        showLoginOverlay('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+        return;
+      }
+      localStorage.setItem(LOGIN_KEY_STORAGE_NAME, data.key);
+      ACCESS_KEY = data.key;
+      hideLoginOverlay();
+      document.getElementById('loadingOverlay').style.display = '';
+      document.getElementById('loadingOverlay').textContent = 'กำลังโหลดข้อมูลล่าสุด...';
+      fetchData(false);
+    })
+    .catch(function() {
+      showLoginOverlay('เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง');
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'เข้าสู่ระบบ';
+    });
+}
+
+document.getElementById('loginSubmitBtn').onclick = attemptLogin;
+document.getElementById('loginPassword').addEventListener('keydown', function(ev) {
+  if (ev.key === 'Enter') attemptLogin();
+});
+document.getElementById('logoutBtn').onclick = function() {
+  localStorage.removeItem(LOGIN_KEY_STORAGE_NAME);
+  window.location.href = window.location.pathname;
+};
+
 function fetchData(isManualClick) {
   var btn = document.getElementById('refreshBtn');
   var statusEl = document.getElementById('refreshStatus');
@@ -2354,7 +2450,16 @@ function fetchData(isManualClick) {
   fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) throw new Error(data.error === 'unauthorized' ? 'access key ไม่ถูกต้อง' : data.error);
+      if (data.error === 'unauthorized') {
+        // Stored/URL key no longer works (e.g. revoked) -- clear it and send
+        // the person back to the login screen instead of looping on errors.
+        localStorage.removeItem(LOGIN_KEY_STORAGE_NAME);
+        ACCESS_KEY = '';
+        if (btn) btn.disabled = false;
+        showLoginOverlay('รหัสเข้าถึงหมดอายุหรือถูกยกเลิก กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
+      if (data.error) throw new Error(data.error);
       JOBS = data.jobs || [];
       EVENTS = data.events || [];
       rebuildContractorColorMap();
@@ -2443,8 +2548,12 @@ if (fsBtn) {
 setInterval(function(){ if (LAST_UPDATED_ISO) updateStatusText(false); }, 30000);
 applyZoom();
 renderCalendar();
-fetchData(false);
-fetchRatingsSummary();
+if (ACCESS_KEY) {
+  fetchData(false);
+  fetchRatingsSummary();
+} else {
+  showLoginOverlay();
+}
 </script>
 </body>
 </html>

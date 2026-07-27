@@ -370,7 +370,7 @@
     <table class="doc-table" id="overviewTableStalled">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>Proposal Quotation (TAC)</th><th>FAT (TS)</th><th>ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableStalledBody"></tbody>
@@ -383,7 +383,7 @@
     <table class="doc-table" id="overviewTableScheduled">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>Proposal Quotation (TAC)</th><th>FAT (TS)</th><th>ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableScheduledBody"></tbody>
@@ -396,7 +396,7 @@
     <table class="doc-table" id="overviewTableCompleted">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>Proposal Quotation (TAC)</th><th>FAT (TS)</th><th>ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableCompletedBody"></tbody>
@@ -1496,6 +1496,11 @@ function renderDocStatusCell(name, link) {
   // see effectiveLink below). If all we have is a plain filename (no real
   // URL available yet), the dot is still shown (green = doc present) but
   // isn't a link, since there is genuinely nowhere to send the click.
+  // 2026-07-27 follow-up: the bare 9px dot was a very small/unclear click
+  // target when wrapped directly in <a> -- padded the anchor itself so
+  // there's a comfortable ~17px hit area around the dot, and forced
+  // cursor:pointer explicitly (some contexts don't default to it on tiny
+  // inline elements) so it's obviously clickable.
   var hasDoc = !!(name && String(name).trim());
   var dotColor = hasDoc ? '#16a34a' : '#dc2626';
   var dotStyle = 'display:inline-block;width:9px;height:9px;border-radius:50%;background:' +
@@ -1505,7 +1510,8 @@ function renderDocStatusCell(name, link) {
     : '';
   if (effectiveLink) {
     return '<a href="' + escHtml(effectiveLink) + '" target="_blank" rel="noopener" title="' +
-      escHtml(name) + '"><span style="' + dotStyle + '"></span></a>';
+      escHtml(name) + '" style="display:inline-block;padding:4px;cursor:pointer;"><span style="' +
+      dotStyle + '"></span></a>';
   }
   return '<span style="' + dotStyle + '" title="' + escHtml(name || '') + '"></span>';
 }
@@ -1523,9 +1529,9 @@ function renderOverviewRow(j, i, cat) {
     '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
     '<td><span class="ov-badge ' + cat + '">' + escHtml(OVERVIEW_STATUS_LABELS[cat]) + '</span></td>' +
     '<td>' + renderOverviewRatingCell(j, cat) + '</td>' +
-    '<td>' + renderDocStatusCell(j.proposal_tac_name, j.proposal_tac_link) + '</td>' +
-    '<td>' + renderDocStatusCell(j.fat_ts_name, j.fat_ts_link) + '</td>' +
-    '<td>' + renderDocStatusCell(j.receipt_ts_name, j.receipt_ts_link) + '</td>' +
+    '<td style="text-align:center;">' + renderDocStatusCell(j.proposal_tac_name, j.proposal_tac_link) + '</td>' +
+    '<td style="text-align:center;">' + renderDocStatusCell(j.fat_ts_name, j.fat_ts_link) + '</td>' +
+    '<td style="text-align:center;">' + renderDocStatusCell(j.receipt_ts_name, j.receipt_ts_link) + '</td>' +
     '</tr>';
 }
 

@@ -128,6 +128,25 @@
   .donut-swatch { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
   .chart-card svg rect { transition:opacity 0.15s ease; cursor:pointer; }
   .chart-card svg rect:hover { opacity:0.82; }
+  .dash-scope-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .dash-scope-label { font-size:13px; color:var(--muted); }
+  .dash-scope-btn { font-size:12px; padding:6px 12px; }
+  .dash-scope-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .dash-scope-note { font-size:12px; color:var(--muted); }
+  .dash-sec-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
+  .dash-sec-title { font-size:14px; font-weight:600; color:var(--text); margin:0; }
+  .dash-sec-sub { font-size:12px; color:var(--muted); margin-top:3px; max-width:640px; line-height:1.5; }
+  .dash-type-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .dash-type-btn { font-size:11px; padding:5px 11px; border-radius:999px; background:#fff; color:var(--text); border:1px solid var(--border); cursor:pointer; }
+  .dash-type-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .dash-type-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .dash-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:10px; }
+  .dash-legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:middle; }
+  .dash-chart-host { overflow-x:auto; }
+  .dash-note { font-size:12px; color:var(--muted); margin-top:10px; line-height:1.6; }
+  .dash-trend-up { color:#16a34a; font-weight:600; }
+  .dash-trend-down { color:#dc2626; font-weight:600; }
+  .dash-trend-flat { color:var(--muted); }
   @media print { .view-tabs { display:none !important; } }
   .evt.survey-stalled { background:#fff7ed; color:#9a3412; font-weight:600; }
   .evt.survey-scheduled { background:#f5f3ff; color:#6d28d9; }
@@ -239,6 +258,7 @@
   <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง/ประเมิน</button>
   <button class="secondary view-tab-btn" id="tabSlaBtn">🎯 SLA ติดตั้ง</button>
   <button class="secondary view-tab-btn" id="tabAllocBtn">🧭 แนะนำ ผรม. งานใหม่</button>
+  <button class="secondary view-tab-btn" id="tabDashBtn">📈 Dashboard</button>
 </div>
 
 <div class="month-nav" id="monthNavRow">
@@ -491,6 +511,23 @@
   </div>
 </div>
 
+<div id="dashWrap" style="display:none;">
+  <div class="card-box">
+    <div class="overview-section-title">Dashboard รายงานสถานะภาพรวม</div>
+    <div class="doc-table-toolbar">
+      หน้ารวมสำหรับใช้นำเสนอ — ทุกกราฟอิงตามตัวกรองด้านบนของหน้า (ผรม./ประเภทงาน/สถานะ/คำค้น)
+      แต่ละหัวข้อกดเปลี่ยนรูปแบบกราฟได้เอง ส่วนตัวเลือกช่วงเดือนด้านล่างจะมีผลเฉพาะกราฟที่แยกตามเดือนเท่านั้น
+    </div>
+    <div class="dash-scope-bar">
+      <span class="dash-scope-label">ช่วงเดือนของกราฟรายเดือน:</span>
+      <button class="secondary dash-scope-btn" data-scope="3m">3 เดือน (ก่อนหน้า / ปัจจุบัน / ถัดไป)</button>
+      <button class="secondary dash-scope-btn" data-scope="all">ทุกเดือนที่ผ่านมา</button>
+      <span class="dash-scope-note" id="dashScopeNote"></span>
+    </div>
+  </div>
+  <div id="dashSections"></div>
+</div>
+
 <div id="bannerHost"></div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -642,6 +679,13 @@ function fetchRatingsSummary() {
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) renderOverviewTable();
       if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderManualRatingChart(); renderManualRatingTable(); renderSlaTable(); }
       if (document.getElementById('tabAllocBtn').classList.contains('active')) renderAllocTable();
+      // Unconditional (fix 2026-07-27): the Dashboard's rating section was
+      // coming up empty whenever the user opened that tab BEFORE this fetch
+      // resolved -- the old "only if the tab is active" guard meant the
+      // section never got a second chance to draw once the data landed.
+      // renderDashboard() is pure string-building into a hidden container,
+      // so calling it unconditionally costs nothing when the tab is closed.
+      renderDashboard();
     }
   }).catch(function() {
     // Ratings are supplementary -- if the endpoint isn't configured/reachable
@@ -2391,12 +2435,685 @@ function renderManualRatingTable() {
   }).join('');
 }
 
+// ---------------------------------------------------------------------------
+// Dashboard tab (Sure's request, 2026-07-27) -- a presentation-oriented page
+// that re-cuts data already computed elsewhere in this file into 10 report
+// sections, each with its own chart-type toggle. Deliberately built on a
+// single small generic SVG chart engine (dashBuildChart) rather than pulling
+// in Chart.js: this file has to stay a single self-contained HTML document
+// that works offline and on GitHub Pages, and every other chart here is
+// already hand-rolled SVG, so this keeps the visual language consistent.
+//
+// Everything honours the page's existing top filters via currentFilteredJobs().
+// DASH_MONTH_SCOPE ('3m' | 'all') only affects sections flagged monthly:true.
+// ---------------------------------------------------------------------------
+var DASH_MONTH_SCOPE = '3m';
+var DASH_TYPE_STATE = {};
+
+var DASH_PALETTE = ['#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0d9488',
+                    '#dc2626', '#0891b2', '#c026d3', '#65a30d', '#e11d48',
+                    '#4f46e5', '#ca8a04'];
+
+function dashColorFor(i) { return DASH_PALETTE[i % DASH_PALETTE.length]; }
+
+var DASH_TYPE_LABELS = {
+  bar: 'แท่ง', stacked: 'แท่งซ้อน', grouped: 'แท่งเทียบ',
+  line: 'เส้น', area: 'พื้นที่', pie: 'วงกลม', donut: 'โดนัท', hbar: 'แท่งแนวนอน'
+};
+
+// --- month helpers ---------------------------------------------------------
+function dashShiftMonth(mk, delta) {
+  var p = mk.split('-');
+  var y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1 + delta;
+  y += Math.floor(m / 12);
+  m = ((m % 12) + 12) % 12;
+  return y + '-' + (m + 1 < 10 ? '0' : '') + (m + 1);
+}
+
+// The 3-month window is anchored on today's real month, not on the data --
+// Sure presents this in a monthly meeting, so "previous / current / next"
+// must mean the actual calendar position, even if a month happens to be empty.
+function dashThreeMonthKeys() {
+  var cur = TODAY_ISO.slice(0, 7);
+  return [dashShiftMonth(cur, -1), cur, dashShiftMonth(cur, 1)];
+}
+
+function dashScopeMonths(dataMonths) {
+  if (DASH_MONTH_SCOPE === 'all') return dataMonths.slice().sort();
+  return dashThreeMonthKeys();
+}
+
+// --- generic SVG chart engine ----------------------------------------------
+// spec: { type, labels:[], series:[{name,color,data:[]}], max, valueFmt,
+//         hideValues, yTitle }
+function dashBuildChart(spec) {
+  var type = spec.type;
+  if (type === 'pie' || type === 'donut') return dashBuildPie(spec);
+  if (type === 'hbar') return dashBuildHBar(spec);
+  if (type === 'line' || type === 'area') return dashBuildLine(spec);
+  return dashBuildBars(spec);
+}
+
+function dashFmt(v, spec) {
+  if (spec && spec.valueFmt === 'pct') return v + '%';
+  if (spec && spec.valueFmt === 'score5') return v + '/5';
+  return String(v);
+}
+
+function dashSeriesTotalAt(series, i) {
+  var t = 0;
+  series.forEach(function(s) { t += (s.data[i] || 0); });
+  return t;
+}
+
+function dashBuildBars(spec) {
+  var labels = spec.labels, series = spec.series;
+  var stacked = spec.type === 'stacked';
+  var n = labels.length;
+  if (n === 0) return '<div class="chart-empty">ยังไม่มีข้อมูล</div>';
+
+  var maxVal = spec.max || 0;
+  if (!spec.max) {
+    for (var i = 0; i < n; i++) {
+      if (stacked) {
+        var t = dashSeriesTotalAt(series, i);
+        if (t > maxVal) maxVal = t;
+      } else {
+        series.forEach(function(s) { if ((s.data[i] || 0) > maxVal) maxVal = s.data[i] || 0; });
+      }
+    }
+  }
+  if (maxVal <= 0) maxVal = 1;
+
+  var subW = stacked ? 42 : Math.max(12, Math.min(30, Math.floor(120 / Math.max(1, series.length))));
+  var groupW = stacked ? subW : series.length * subW + (series.length - 1) * 3;
+  var gap = 30, chartH = 220, leftPad = 42, topPad = 22, bottomPad = 54;
+  var width = leftPad + n * (groupW + gap) + 10;
+  var height = topPad + chartH + bottomPad;
+
+  var p = [];
+  p.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + Math.max(width, 320) + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  for (var g = 0; g <= 4; g++) {
+    var gy = topPad + chartH - (chartH * g / 4);
+    p.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + (width - 6) + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    p.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + Math.round(maxVal * g / 4) + '</text>');
+  }
+
+  labels.forEach(function(lab, i) {
+    var gx = leftPad + i * (groupW + gap) + gap / 2;
+    if (stacked) {
+      var acc = 0;
+      series.forEach(function(s) {
+        var v = s.data[i] || 0;
+        if (v <= 0) return;
+        var segH = (v / maxVal) * chartH;
+        var y = topPad + chartH - segH - acc;
+        p.push('<rect x="' + gx + '" y="' + y + '" width="' + subW + '" height="' + segH + '" fill="' + s.color + '"><title>' + escHtml(lab) + ' — ' + escHtml(s.name) + ': ' + dashFmt(v, spec) + '</title></rect>');
+        if (segH > 14) p.push('<text x="' + (gx + subW / 2) + '" y="' + (y + segH / 2 + 4) + '" font-size="10" fill="#fff" text-anchor="middle">' + v + '</text>');
+        acc += segH;
+      });
+      var tot = dashSeriesTotalAt(series, i);
+      if (tot > 0) p.push('<text x="' + (gx + subW / 2) + '" y="' + (topPad + chartH - acc - 6) + '" font-size="10" fill="#1f2430" text-anchor="middle" font-weight="600">' + tot + '</text>');
+    } else {
+      series.forEach(function(s, si) {
+        var v = s.data[i] || 0;
+        var segH = (v / maxVal) * chartH;
+        var x = gx + si * (subW + 3);
+        var y = topPad + chartH - segH;
+        p.push('<rect x="' + x + '" y="' + y + '" width="' + subW + '" height="' + Math.max(segH, v > 0 ? 2 : 0) + '" rx="2" fill="' + s.color + '"><title>' + escHtml(lab) + ' — ' + escHtml(s.name) + ': ' + dashFmt(v, spec) + '</title></rect>');
+        if (!spec.hideValues && v > 0) p.push('<text x="' + (x + subW / 2) + '" y="' + (y - 4) + '" font-size="9" fill="#1f2430" text-anchor="middle">' + dashFmt(v, spec) + '</text>');
+      });
+    }
+    p.push('<text x="' + (gx + groupW / 2) + '" y="' + (topPad + chartH + 16) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(lab) + '</text>');
+  });
+  p.push('</svg>');
+  return p.join('');
+}
+
+function dashBuildHBar(spec) {
+  var labels = spec.labels, series = spec.series;
+  var n = labels.length;
+  if (n === 0) return '<div class="chart-empty">ยังไม่มีข้อมูล</div>';
+  var stacked = series.length > 1;
+
+  var maxVal = spec.max || 0;
+  if (!spec.max) {
+    for (var i = 0; i < n; i++) {
+      var t = stacked ? dashSeriesTotalAt(series, i) : (series[0].data[i] || 0);
+      if (t > maxVal) maxVal = t;
+    }
+  }
+  if (maxVal <= 0) maxVal = 1;
+
+  var rowH = 30, gap = 10, leftPad = 128, topPad = 10, rightPad = 46;
+  var barMax = 420;
+  var width = leftPad + barMax + rightPad;
+  var height = topPad + n * (rowH + gap);
+
+  var p = [];
+  p.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  labels.forEach(function(lab, i) {
+    var y = topPad + i * (rowH + gap);
+    p.push('<text x="' + (leftPad - 8) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11" fill="#374151" text-anchor="end">' + escHtml(lab) + '</text>');
+    var accX = leftPad;
+    series.forEach(function(s) {
+      var v = s.data[i] || 0;
+      if (v <= 0) return;
+      var w = (v / maxVal) * barMax;
+      p.push('<rect x="' + accX + '" y="' + y + '" width="' + w + '" height="' + rowH + '" rx="3" fill="' + s.color + '"><title>' + escHtml(lab) + ' — ' + escHtml(s.name) + ': ' + dashFmt(v, spec) + '</title></rect>');
+      if (w > 22) p.push('<text x="' + (accX + w / 2) + '" y="' + (y + rowH / 2 + 4) + '" font-size="10" fill="#fff" text-anchor="middle">' + v + '</text>');
+      accX += w;
+    });
+    var tot = stacked ? dashSeriesTotalAt(series, i) : (series[0].data[i] || 0);
+    p.push('<text x="' + (accX + 6) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11" fill="#1f2430" font-weight="600">' + dashFmt(tot, spec) + '</text>');
+  });
+  p.push('</svg>');
+  return p.join('');
+}
+
+function dashBuildLine(spec) {
+  var labels = spec.labels, series = spec.series;
+  var n = labels.length;
+  if (n === 0) return '<div class="chart-empty">ยังไม่มีข้อมูล</div>';
+  var isArea = spec.type === 'area';
+
+  var maxVal = spec.max || 0;
+  if (!spec.max) {
+    series.forEach(function(s) { s.data.forEach(function(v) { if ((v || 0) > maxVal) maxVal = v || 0; }); });
+  }
+  if (maxVal <= 0) maxVal = 1;
+
+  var chartH = 220, leftPad = 44, topPad = 22, bottomPad = 50;
+  var stepX = Math.max(70, Math.min(150, 620 / Math.max(1, n - 1 || 1)));
+  var width = leftPad + Math.max(1, n - 1) * stepX + 40;
+  var height = topPad + chartH + bottomPad;
+
+  var p = [];
+  p.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + Math.max(width, 320) + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  for (var g = 0; g <= 4; g++) {
+    var gy = topPad + chartH - (chartH * g / 4);
+    p.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + (width - 10) + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    p.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + Math.round(maxVal * g / 4) + '</text>');
+  }
+
+  function px(i) { return leftPad + i * stepX; }
+  function py(v) { return topPad + chartH - ((v || 0) / maxVal) * chartH; }
+
+  series.forEach(function(s) {
+    var pts = [];
+    for (var i = 0; i < n; i++) pts.push(px(i) + ',' + py(s.data[i]));
+    if (isArea) {
+      p.push('<polygon points="' + px(0) + ',' + (topPad + chartH) + ' ' + pts.join(' ') + ' ' + px(n - 1) + ',' + (topPad + chartH) + '" fill="' + s.color + '" opacity="0.16"></polygon>');
+    }
+    p.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + s.color + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>');
+    for (var k = 0; k < n; k++) {
+      var v = s.data[k] || 0;
+      p.push('<circle cx="' + px(k) + '" cy="' + py(v) + '" r="4" fill="#fff" stroke="' + s.color + '" stroke-width="2.5"><title>' + escHtml(labels[k]) + ' — ' + escHtml(s.name) + ': ' + dashFmt(v, spec) + '</title></circle>');
+      if (!spec.hideValues && series.length <= 3) {
+        p.push('<text x="' + px(k) + '" y="' + (py(v) - 10) + '" font-size="9" fill="#1f2430" text-anchor="middle">' + dashFmt(v, spec) + '</text>');
+      }
+    }
+  });
+  labels.forEach(function(lab, i) {
+    p.push('<text x="' + px(i) + '" y="' + (topPad + chartH + 18) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(lab) + '</text>');
+  });
+  p.push('</svg>');
+  return p.join('');
+}
+
+function dashBuildPie(spec) {
+  var labels = spec.labels, series = spec.series;
+  var vals = [];
+  var total = 0;
+  labels.forEach(function(lab, i) {
+    var v = series[0].data[i] || 0;
+    vals.push(v);
+    total += v;
+  });
+  if (total <= 0) return '<div class="chart-empty">ยังไม่มีข้อมูล</div>';
+
+  var size = 260, cx = size / 2, cy = size / 2, r = 104;
+  var inner = spec.type === 'donut' ? 58 : 0;
+  var p = [];
+  p.push('<svg viewBox="0 0 ' + size + ' ' + size + '" width="100%" style="max-width:' + size + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  var ang = -Math.PI / 2;
+  vals.forEach(function(v, i) {
+    if (v <= 0) return;
+    var frac = v / total;
+    var sweep = frac * Math.PI * 2;
+    var end = ang + sweep;
+    var color = spec.sliceColors ? spec.sliceColors[i] : dashColorFor(i);
+    var large = sweep > Math.PI ? 1 : 0;
+    var x1 = cx + r * Math.cos(ang), y1 = cy + r * Math.sin(ang);
+    var x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
+    var d;
+    if (vals.filter(function(x) { return x > 0; }).length === 1) {
+      d = 'M ' + cx + ' ' + (cy - r) + ' A ' + r + ' ' + r + ' 0 1 1 ' + (cx - 0.01) + ' ' + (cy - r) + ' Z';
+    } else {
+      d = 'M ' + cx + ' ' + cy + ' L ' + x1 + ' ' + y1 + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + x2 + ' ' + y2 + ' Z';
+    }
+    var pct = Math.round(frac * 100);
+    p.push('<path d="' + d + '" fill="' + color + '"><title>' + escHtml(labels[i]) + ': ' + v + ' (' + pct + '%)</title></path>');
+    if (frac > 0.05) {
+      var mid = ang + sweep / 2;
+      var lr = inner ? (inner + r) / 2 : r * 0.62;
+      p.push('<text x="' + (cx + lr * Math.cos(mid)) + '" y="' + (cy + lr * Math.sin(mid) + 4) + '" font-size="11" fill="#fff" text-anchor="middle" font-weight="600">' + pct + '%</text>');
+    }
+    ang = end;
+  });
+  if (inner) {
+    p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + inner + '" fill="#fff"></circle>');
+    p.push('<text x="' + cx + '" y="' + (cy - 2) + '" font-size="24" font-weight="700" fill="#1f2430" text-anchor="middle">' + total + '</text>');
+    p.push('<text x="' + cx + '" y="' + (cy + 16) + '" font-size="11" fill="#6b7280" text-anchor="middle">' + escHtml(spec.centerLabel || 'งานทั้งหมด') + '</text>');
+  }
+  p.push('</svg>');
+  return p.join('');
+}
+
+function dashLegend(spec) {
+  var items;
+  if (spec.type === 'pie' || spec.type === 'donut') {
+    items = spec.labels.map(function(lab, i) {
+      var v = spec.series[0].data[i] || 0;
+      var color = spec.sliceColors ? spec.sliceColors[i] : dashColorFor(i);
+      return { name: lab + ' (' + v + ')', color: color };
+    });
+  } else {
+    if (spec.series.length <= 1) return '';
+    items = spec.series.map(function(s) { return { name: s.name, color: s.color }; });
+  }
+  return '<div class="dash-legend">' + items.map(function(it) {
+    return '<span><span class="sw" style="background:' + it.color + ';"></span>' + escHtml(it.name) + '</span>';
+  }).join('') + '</div>';
+}
+
+// --- data builders per section ---------------------------------------------
+// 1. Raw "สถานะ" column breakdown -- deliberately the sheet's own status text
+// (not this page's derived 4-bucket category) so the numbers tie out exactly
+// with what staff see in the Google Sheet / intake form.
+function dashSpecStatusShare(type) {
+  var jobs = currentFilteredJobs();
+  var map = {};
+  jobs.forEach(function(j) {
+    var s = (j.status || '').trim() || 'ไม่ระบุสถานะ';
+    map[s] = (map[s] || 0) + 1;
+  });
+  var labels = Object.keys(map).sort(function(a, b) { return map[b] - map[a]; });
+  return {
+    type: type, labels: labels,
+    series: [{ name: 'จำนวนงาน', color: '#2563eb', data: labels.map(function(l) { return map[l]; }) }],
+    centerLabel: 'งานทั้งหมด'
+  };
+}
+
+// 2. Per-contractor pipeline composition (this page's 4 derived stages).
+function dashSpecContractorOverview(type) {
+  var list = contractorOverviewSummary();
+  var labels = list.map(function(c) { return contractorAbbr(c.contractor); });
+  var stages = [
+    { key: 'awaiting_survey', name: 'รอสำรวจ', color: '#94a3b8' },
+    { key: 'stalled', name: 'สำรวจแล้ว รอกำหนดติดตั้ง', color: '#f97316' },
+    { key: 'scheduled', name: 'มีกำหนดติดตั้งแล้ว', color: '#a78bfa' },
+    { key: 'completed', name: 'ติดตั้งเสร็จสิ้นแล้ว', color: '#16a34a' }
+  ];
+  if (type === 'pie' || type === 'donut') {
+    return {
+      type: type, labels: list.map(function(c) { return contractorDisplayName(c.contractor); }),
+      series: [{ name: 'งานทั้งหมด', color: '#2563eb', data: list.map(function(c) { return c.total; }) }],
+      centerLabel: 'งานทั้งหมด'
+    };
+  }
+  return {
+    type: type, labels: labels,
+    series: stages.map(function(s) {
+      return { name: s.name, color: s.color, data: list.map(function(c) { return c[s.key] || 0; }) };
+    })
+  };
+}
+
+// 3/7. Monthly job counts split by contractor. mode 'all' counts every job
+// that has any month anchor at all (install date first, else survey date);
+// mode 'completed' counts only jobs already marked finished.
+function dashMonthlyByContractor(mode) {
+  var jobs = currentFilteredJobs().filter(function(j) {
+    if (mode === 'completed') return jobFullCategory(j) === 'completed';
+    return true;
+  });
+  var counts = {}, seen = {};
+  jobs.forEach(function(j) {
+    var mk = deriveCompletedMonth(j) || deriveSurveyMonth(j);
+    if (!mk) return;
+    var c = j.contractor || 'ไม่ระบุ';
+    if (!counts[mk]) counts[mk] = {};
+    counts[mk][c] = (counts[mk][c] || 0) + 1;
+    seen[c] = true;
+  });
+  return { counts: counts, months: Object.keys(counts), contractors: Object.keys(seen) };
+}
+
+function dashSpecMonthlyByContractor(type, mode) {
+  var d = dashMonthlyByContractor(mode);
+  var months = dashScopeMonths(d.months);
+  var contractors = d.contractors.sort();
+  if (months.length === 0 || contractors.length === 0) {
+    return { type: type, labels: [], series: [] };
+  }
+  return {
+    type: type, labels: months.map(monthLabelFromKey),
+    series: contractors.map(function(c, i) {
+      return {
+        name: contractorDisplayName(c), color: dashColorFor(i),
+        data: months.map(function(mk) { return (counts_safe(d.counts, mk)[c] || 0); })
+      };
+    })
+  };
+}
+
+function counts_safe(counts, mk) { return counts[mk] || {}; }
+
+// 4. Survey counts per contractor across the 3-month window.
+function dashSpecSurveyByContractor(type) {
+  var jobs = currentFilteredJobs().filter(function(j) { return !!j.survey_date; });
+  var counts = {}, seen = {};
+  jobs.forEach(function(j) {
+    var mk = deriveSurveyMonth(j);
+    if (!mk) return;
+    var c = j.contractor || 'ไม่ระบุ';
+    if (!counts[mk]) counts[mk] = {};
+    counts[mk][c] = (counts[mk][c] || 0) + 1;
+    seen[c] = true;
+  });
+  var months = dashScopeMonths(Object.keys(counts));
+  var contractors = Object.keys(seen).sort();
+  if (months.length === 0 || contractors.length === 0) return { type: type, labels: [], series: [] };
+  return {
+    type: type, labels: months.map(monthLabelFromKey),
+    series: contractors.map(function(c, i) {
+      return {
+        name: contractorDisplayName(c), color: dashColorFor(i),
+        data: months.map(function(mk) { return (counts_safe(counts, mk)[c] || 0); })
+      };
+    })
+  };
+}
+
+// 5. Installs per month split done vs still pending.
+function dashSpecInstallsPerMonth(type) {
+  var jobs = currentFilteredJobs().filter(function(j) {
+    var c = jobFullCategory(j);
+    return c === 'completed' || c === 'scheduled';
+  });
+  var counts = {};
+  jobs.forEach(function(j) {
+    var mk = deriveCompletedMonth(j);
+    if (!mk) return;
+    if (!counts[mk]) counts[mk] = { completed: 0, scheduled: 0 };
+    counts[mk][jobFullCategory(j)]++;
+  });
+  var months = dashScopeMonths(Object.keys(counts));
+  if (months.length === 0) return { type: type, labels: [], series: [] };
+  return {
+    type: type, labels: months.map(monthLabelFromKey),
+    series: [
+      { name: 'ติดตั้งเสร็จสิ้นแล้ว', color: '#16a34a', data: months.map(function(mk) { return (counts[mk] || {}).completed || 0; }) },
+      { name: 'รอดำเนินการติดตั้ง', color: '#a78bfa', data: months.map(function(mk) { return (counts[mk] || {}).scheduled || 0; }) }
+    ]
+  };
+}
+
+// 6. SLA score per contractor per month, plus a month-over-month trend.
+// Score reuses the same weighting as the SLA tab (excellent 100 / met 80 /
+// exceeded 40) so the two tabs can never disagree.
+function dashSlaByContractorMonth() {
+  var items = jobsWithSla();
+  var byMonth = {}, seen = {};
+  items.forEach(function(x) {
+    var start = x.job.install_appointment || ((x.job.actual_install_dates || []).slice().sort()[0] || '');
+    if (!start) return;
+    var mk = start.slice(0, 7);
+    var c = x.job.contractor || 'ไม่ระบุ';
+    if (!byMonth[mk]) byMonth[mk] = {};
+    if (!byMonth[mk][c]) byMonth[mk][c] = { total: 0, pts: 0 };
+    byMonth[mk][c].total++;
+    byMonth[mk][c].pts += (x.sla.tier === 'excellent' ? 100 : (x.sla.tier === 'met' ? 80 : 40));
+    seen[c] = true;
+  });
+  return { byMonth: byMonth, contractors: Object.keys(seen) };
+}
+
+function dashSpecSlaTrend(type) {
+  var d = dashSlaByContractorMonth();
+  var months = dashScopeMonths(Object.keys(d.byMonth));
+  var contractors = d.contractors.sort();
+  if (months.length === 0 || contractors.length === 0) return { type: type, labels: [], series: [] };
+  return {
+    type: type, labels: months.map(monthLabelFromKey), max: 100, valueFmt: 'pct',
+    series: contractors.map(function(c, i) {
+      return {
+        name: contractorDisplayName(c), color: dashColorFor(i),
+        data: months.map(function(mk) {
+          var r = (d.byMonth[mk] || {})[c];
+          return r && r.total ? Math.round(r.pts / r.total) : 0;
+        })
+      };
+    })
+  };
+}
+
+function dashSlaTrendNote() {
+  var d = dashSlaByContractorMonth();
+  var months = Object.keys(d.byMonth).sort();
+  if (months.length < 2) return 'ยังมีข้อมูล SLA ไม่ถึง 2 เดือน จึงยังเทียบพัฒนาการรายเดือนไม่ได้';
+  var last = months[months.length - 1], prev = months[months.length - 2];
+  var rows = d.contractors.map(function(c) {
+    function scoreAt(mk) {
+      var r = (d.byMonth[mk] || {})[c];
+      return r && r.total ? Math.round(r.pts / r.total) : null;
+    }
+    return { c: c, last: scoreAt(last), prev: scoreAt(prev) };
+  }).filter(function(r) { return r.last !== null && r.prev !== null; });
+  if (rows.length === 0) return 'เดือน ' + monthLabelFromKey(prev) + ' และ ' + monthLabelFromKey(last) + ' ยังไม่มี ผรม. ที่มีข้อมูลครบทั้ง 2 เดือนให้เทียบกัน';
+  var parts = rows.map(function(r) {
+    var diff = r.last - r.prev;
+    var cls = diff > 0 ? 'dash-trend-up' : (diff < 0 ? 'dash-trend-down' : 'dash-trend-flat');
+    var arrow = diff > 0 ? '▲ ดีขึ้น' : (diff < 0 ? '▼ แย่ลง' : '● เท่าเดิม');
+    return '<span class="' + cls + '">' + escHtml(contractorDisplayName(r.c)) + ' ' + arrow + ' ' +
+      (diff > 0 ? '+' : '') + diff + ' คะแนน (' + r.prev + '% → ' + r.last + '%)</span>';
+  });
+  return 'เทียบ ' + monthLabelFromKey(prev) + ' → ' + monthLabelFromKey(last) + ': ' + parts.join(' &nbsp;|&nbsp; ');
+}
+
+// 8. Manual team quality ratings (1-5), with the sample size that produced them.
+function dashSpecManualRating(type) {
+  var byC = RATINGS_SUMMARY.byContractor || {};
+  var contractors = Object.keys(byC).filter(function(c) { return byC[c] && byC[c].count; });
+  contractors.sort(function(a, b) { return (byC[b].avg || 0) - (byC[a].avg || 0); });
+  if (contractors.length === 0) return { type: type, labels: [], series: [] };
+  return {
+    type: type, max: 5, valueFmt: 'score5',
+    labels: contractors.map(function(c) { return contractorDisplayName(c) + ' (' + byC[c].count + ' งาน)'; }),
+    series: [{ name: 'คะแนนเฉลี่ย', color: '#7c3aed', data: contractors.map(function(c) { return byC[c].avg || 0; }) }]
+  };
+}
+
+function dashManualRatingNote() {
+  var byC = RATINGS_SUMMARY.byContractor || {};
+  var contractors = Object.keys(byC).filter(function(c) { return byC[c] && byC[c].count; });
+  if (contractors.length === 0) return 'ยังไม่มีการให้คะแนนประเมินคุณภาพจากทีมงาน (ให้คะแนนได้ที่แท็บ "ภาพรวมสำรวจ/ติดตั้ง/ประเมิน" ปุ่ม "ให้คะแนน" ของงานที่ติดตั้งเสร็จแล้ว)';
+  var totalJobs = contractors.reduce(function(s, c) { return s + byC[c].count; }, 0);
+  return 'คำนวณจากงานที่ให้คะแนนแล้วทั้งหมด ' + totalJobs + ' งาน จาก ผรม. ' + contractors.length + ' ราย — ตัวเลขในวงเล็บคือจำนวนงานที่นำมาเฉลี่ยของแต่ละราย';
+}
+
+// 9/10. TAC (grid-connection paperwork) pipeline progress.
+// Scope narrowed 2026-07-27 at Sure's request: count ONLY jobs whose install
+// is already finished. Grid-connection paperwork can't meaningfully progress
+// before the system is physically installed, so including not-yet-installed
+// jobs just inflated the "ยังไม่เริ่มยื่นเรื่อง" bucket with work that isn't
+// actually late -- which made the chart useless for chasing real backlog.
+// NOTE: deliberately does NOT reuse tacPipelineCounts(), because that helper
+// is shared with the "ตารางเอกสารขนานไฟ" tab, which must keep showing every
+// job. Filtering here keeps the two views independent.
+function dashCompletedJobs() {
+  return currentFilteredJobs().filter(function(j) { return jobFullCategory(j) === 'completed'; });
+}
+
+function dashSpecTacOverall(type) {
+  var counts = { not: 0, filing: 0, review: 0, got: 0 };
+  dashCompletedJobs().forEach(function(j) { counts[tacPipelineStage(j)]++; });
+  var labels = TAC_STAGE_ORDER.map(function(k) { return TAC_STAGE_META[k].label; });
+  return {
+    type: type, labels: labels, centerLabel: 'งานติดตั้งเสร็จแล้ว',
+    sliceColors: TAC_STAGE_ORDER.map(function(k) { return TAC_STAGE_META[k].color; }),
+    series: [{ name: 'จำนวนงาน', color: '#2563eb', data: TAC_STAGE_ORDER.map(function(k) { return counts[k]; }) }]
+  };
+}
+
+function dashSpecTacByContractor(type) {
+  var jobs = dashCompletedJobs();
+  var map = {};
+  jobs.forEach(function(j) {
+    var c = j.contractor || 'ไม่ระบุ';
+    if (!map[c]) map[c] = { not: 0, filing: 0, review: 0, got: 0, total: 0 };
+    map[c][tacPipelineStage(j)]++;
+    map[c].total++;
+  });
+  var contractors = Object.keys(map).sort(function(a, b) { return map[b].total - map[a].total; });
+  if (contractors.length === 0) return { type: type, labels: [], series: [] };
+  return {
+    type: type,
+    labels: contractors.map(function(c) { return type === 'hbar' ? contractorDisplayName(c) : contractorAbbr(c); }),
+    series: TAC_STAGE_ORDER.map(function(k) {
+      return {
+        name: TAC_STAGE_META[k].label, color: TAC_STAGE_META[k].color,
+        data: contractors.map(function(c) { return map[c][k]; })
+      };
+    })
+  };
+}
+
+// --- section registry ------------------------------------------------------
+var DASH_SECTIONS = [
+  { id: 'statusShare', title: '1. สัดส่วนสถานะงานโดยรวมทั้งหมด',
+    sub: 'นับตามค่าในคอลัมน์ "สถานะ" ของชีตโดยตรง ตัวเลขจึงตรงกับที่ทีมกรอกในระบบทุกประการ',
+    types: ['donut', 'pie', 'bar', 'hbar'], def: 'donut', monthly: false,
+    build: dashSpecStatusShare },
+
+  { id: 'contractorOverview', title: '2. ภาพรวมงานแยกตามผู้รับเหมา',
+    sub: 'แยกตามขั้นตอนที่งานอยู่ในปัจจุบัน — รอสำรวจ / สำรวจแล้วรอกำหนดติดตั้ง / มีกำหนดติดตั้งแล้ว / ติดตั้งเสร็จสิ้น',
+    types: ['stacked', 'grouped', 'hbar', 'donut'], def: 'stacked', monthly: false,
+    build: dashSpecContractorOverview },
+
+  { id: 'monthlyByContractor', title: '3. รายละเอียดรายเดือน แยกตามผู้รับเหมา',
+    sub: 'ปริมาณงานที่แต่ละ ผรม. รับผิดชอบในแต่ละเดือน (เลือก "ทุกเดือนที่ผ่านมา" ด้านบนเพื่อดูย้อนหลังทั้งหมด)',
+    types: ['stacked', 'grouped', 'line', 'area'], def: 'stacked', monthly: true,
+    build: function(t) { return dashSpecMonthlyByContractor(t, 'all'); } },
+
+  { id: 'surveyByContractor', title: '4. จำนวนงานเข้าสำรวจของผู้รับเหมา รายเดือน',
+    sub: 'ค่าเริ่มต้นแสดง 3 เดือน (เดือนก่อนหน้า / เดือนปัจจุบัน / เดือนถัดไป) เพื่อดูคิวสำรวจที่กำลังจะมาถึง',
+    types: ['grouped', 'stacked', 'line', 'area'], def: 'grouped', monthly: true,
+    build: dashSpecSurveyByContractor },
+
+  { id: 'installsPerMonth', title: '5. จำนวนงานติดตั้งต่อเดือน (เสร็จสิ้น + รอดำเนินการ)',
+    sub: 'เทียบสัดส่วนงานที่ปิดจบแล้วกับงานที่ยังค้างอยู่ในแต่ละเดือน',
+    types: ['stacked', 'grouped', 'line', 'area'], def: 'stacked', monthly: true,
+    build: dashSpecInstallsPerMonth },
+
+  { id: 'slaTrend', title: '6. คะแนนคุณภาพ SLA รายผู้รับเหมา (พัฒนาการรายเดือน)',
+    sub: 'คะแนน 0-100 ถ่วงน้ำหนักจากผลการติดตั้งจริง (ดีมาก=100, ตรงตาม SLA=80, เกิน SLA=40) เฉลี่ยต่อเดือน',
+    types: ['line', 'area', 'grouped'], def: 'line', monthly: true,
+    build: dashSpecSlaTrend, note: dashSlaTrendNote },
+
+  { id: 'completedByContractor', title: '7. ปริมาณงานติดตั้งเสร็จสิ้นต่อเดือน แยกตามผู้รับเหมา',
+    sub: 'นับเฉพาะงานที่สถานะเป็น "ดำเนินการเสร็จสิ้น" แล้วเท่านั้น',
+    types: ['stacked', 'grouped', 'line', 'area'], def: 'stacked', monthly: true,
+    build: function(t) { return dashSpecMonthlyByContractor(t, 'completed'); } },
+
+  { id: 'manualRating', title: '8. คะแนนประเมินคุณภาพจากทีมงาน',
+    sub: 'คะแนนเฉลี่ย 5 หัวข้อ (ความปลอดภัย / ตามแบบมาตรฐาน / เก็บงาน / ทดสอบระบบ / เอกสารส่งมอบ) ที่ทีมงานให้ไว้เอง',
+    types: ['hbar', 'bar'], def: 'hbar', monthly: false,
+    build: dashSpecManualRating, note: dashManualRatingNote },
+
+  { id: 'tacOverall', title: '9. ความคืบหน้าเอกสารขนานไฟฟ้า (ทุกงาน)',
+    sub: 'นับเฉพาะงานที่ติดตั้งเสร็จแล้วเท่านั้น ตั้งแต่ยังไม่เริ่มยื่นเรื่อง จนถึงได้เลขขนานไฟแล้ว',
+    types: ['donut', 'pie', 'bar', 'hbar'], def: 'donut', monthly: false,
+    build: dashSpecTacOverall },
+
+  { id: 'tacByContractor', title: '10. ความคืบหน้าเอกสารขนานไฟฟ้า แยกตามผู้รับเหมา',
+    sub: 'นับเฉพาะงานที่ติดตั้งเสร็จแล้ว — ดูว่าเอกสารค้างอยู่ที่ ผรม. รายไหนมากที่สุด เพื่อตามงานได้ตรงจุด',
+    types: ['stacked', 'hbar', 'grouped'], def: 'stacked', monthly: false,
+    build: dashSpecTacByContractor }
+];
+
+function dashTypeFor(sec) {
+  return DASH_TYPE_STATE[sec.id] || sec.def;
+}
+
+function renderDashboard() {
+  var host = document.getElementById('dashSections');
+  if (!host) return;
+
+  document.querySelectorAll('.dash-scope-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-scope') === DASH_MONTH_SCOPE);
+  });
+  var noteEl = document.getElementById('dashScopeNote');
+  if (noteEl) {
+    noteEl.innerHTML = DASH_MONTH_SCOPE === '3m'
+      ? 'กำลังแสดง: ' + dashThreeMonthKeys().map(monthLabelFromKey).join(' / ')
+      : 'กำลังแสดงทุกเดือนที่มีข้อมูล';
+  }
+
+  host.innerHTML = DASH_SECTIONS.map(function(sec) {
+    var type = dashTypeFor(sec);
+    var spec;
+    try { spec = sec.build(type); } catch (e) { spec = { type: type, labels: [], series: [] }; }
+    var chartHtml = (spec.labels && spec.labels.length)
+      ? dashBuildChart(spec) + dashLegend(spec)
+      : '<div class="chart-empty">ยังไม่มีข้อมูลสำหรับหัวข้อนี้</div>';
+    var noteHtml = '';
+    if (sec.note) {
+      try { noteHtml = '<div class="dash-note">' + sec.note() + '</div>'; } catch (e) { noteHtml = ''; }
+    }
+    var btns = sec.types.map(function(t) {
+      return '<button class="dash-type-btn' + (t === type ? ' active' : '') +
+        '" data-sec="' + sec.id + '" data-type="' + t + '">' + (DASH_TYPE_LABELS[t] || t) + '</button>';
+    }).join('');
+    return '<div class="card-box">' +
+      '<div class="dash-sec-head">' +
+        '<div><div class="dash-sec-title">' + escHtml(sec.title) + (sec.monthly ? ' <span style="font-weight:400;color:var(--muted);font-size:12px;">(ตามช่วงเดือนที่เลือก)</span>' : '') + '</div>' +
+        '<div class="dash-sec-sub">' + escHtml(sec.sub) + '</div></div>' +
+        '<div class="dash-type-row">' + btns + '</div>' +
+      '</div>' +
+      '<div class="dash-chart-host">' + chartHtml + '</div>' +
+      noteHtml +
+    '</div>';
+  }).join('');
+}
+
+// Event delegation set up once -- renderDashboard() replaces its own innerHTML
+// on every redraw, so per-button handlers would be lost each time.
+var dashSectionsEl = document.getElementById('dashSections');
+if (dashSectionsEl) {
+  dashSectionsEl.addEventListener('click', function(ev) {
+    var btn = ev.target.closest('.dash-type-btn');
+    if (!btn) return;
+    DASH_TYPE_STATE[btn.getAttribute('data-sec')] = btn.getAttribute('data-type');
+    renderDashboard();
+  });
+}
+document.querySelectorAll('.dash-scope-btn').forEach(function(b) {
+  b.onclick = function() {
+    DASH_MONTH_SCOPE = b.getAttribute('data-scope');
+    renderDashboard();
+  };
+});
+
 function switchView(view) {
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
   document.getElementById('tabOverviewBtn').classList.toggle('active', view === 'overview');
   document.getElementById('tabSlaBtn').classList.toggle('active', view === 'sla');
   document.getElementById('tabAllocBtn').classList.toggle('active', view === 'alloc');
+  document.getElementById('tabDashBtn').classList.toggle('active', view === 'dash');
   document.getElementById('calendarWrap').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('monthNavRow').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('zoomControls').style.display = (view === 'calendar') ? '' : 'none';
@@ -2404,10 +3121,12 @@ function switchView(view) {
   document.getElementById('overviewWrap').style.display = (view === 'overview') ? '' : 'none';
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   document.getElementById('allocWrap').style.display = (view === 'alloc') ? '' : 'none';
+  document.getElementById('dashWrap').style.display = (view === 'dash') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (view === 'alloc') { renderAllocTable(); }
+  if (view === 'dash') { renderDashboard(); }
 }
 
 function onFiltersChanged() {
@@ -2416,6 +3135,7 @@ function onFiltersChanged() {
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (document.getElementById('tabAllocBtn').classList.contains('active')) { renderAllocTable(); }
+  if (document.getElementById('tabDashBtn').classList.contains('active')) { renderDashboard(); }
 }
 
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
@@ -2428,6 +3148,7 @@ if (allocDateInputEl) {
   allocDateInputEl.onchange = function() { renderAllocTable(); };
 }
 document.getElementById('tabSlaBtn').onclick = function() { switchView('sla'); };
+document.getElementById('tabDashBtn').onclick = function() { switchView('dash'); };
 
 calGrid.addEventListener('click', function(ev) {
   var moreTarget = ev.target.closest('.evt-more');

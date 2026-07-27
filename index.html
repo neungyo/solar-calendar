@@ -1489,25 +1489,25 @@ function renderOverviewRatingCell(j, cat) {
 }
 
 function renderDocStatusCell(name, link) {
+  // 2026-07-27 (Sure's request): dot only, no filename/status text. The dot
+  // itself becomes a clickable <a> when we actually have a URL to point to
+  // (either from the Apps Script live-link fetch, once that's authorized,
+  // or because the sheet cell's own display text already IS a bare URL --
+  // see effectiveLink below). If all we have is a plain filename (no real
+  // URL available yet), the dot is still shown (green = doc present) but
+  // isn't a link, since there is genuinely nowhere to send the click.
   var hasDoc = !!(name && String(name).trim());
   var dotColor = hasDoc ? '#16a34a' : '#dc2626';
-  var dot = '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' +
-    dotColor + ';margin-right:6px;vertical-align:middle;"></span>';
-  if (!hasDoc) return dot + '<span style="color:var(--muted);">ยังไม่มี</span>';
-  // 2026-07-24 (Sure's request): skip the Apps Script live-link fetch
-  // dependency for now -- if the cell's own display text is already a bare
-  // URL (someone pasted a raw Drive/Sheets link straight into the cell,
-  // instead of naming a file that's hyperlinked underneath), just use that
-  // text directly as the href. This covers most real cases without needing
-  // getRichTextValues() (which needs Sheets API auth the team hasn't sorted
-  // out yet). `link` (from fetchDocLinksForOverview, when/if that's ever
-  // authorized) still takes priority if present.
-  var effectiveLink = link || (/^https?:\/\//i.test(String(name).trim()) ? String(name).trim() : '');
+  var dotStyle = 'display:inline-block;width:9px;height:9px;border-radius:50%;background:' +
+    dotColor + ';vertical-align:middle;';
+  var effectiveLink = hasDoc
+    ? (link || (/^https?:\/\//i.test(String(name).trim()) ? String(name).trim() : ''))
+    : '';
   if (effectiveLink) {
-    return dot + '<a href="' + escHtml(effectiveLink) + '" target="_blank" rel="noopener" title="' + escHtml(name) + '">เปิดเอกสาร</a>';
+    return '<a href="' + escHtml(effectiveLink) + '" target="_blank" rel="noopener" title="' +
+      escHtml(name) + '"><span style="' + dotStyle + '"></span></a>';
   }
-  var shortName = name.length > 22 ? name.slice(0, 22) + '…' : name;
-  return dot + '<span title="' + escHtml(name) + '">' + escHtml(shortName) + '</span>';
+  return '<span style="' + dotStyle + '" title="' + escHtml(name || '') + '"></span>';
 }
 
 function renderOverviewRow(j, i, cat) {

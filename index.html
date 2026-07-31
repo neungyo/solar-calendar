@@ -3242,6 +3242,11 @@ var DX = {
   red: '#ef4444'
 };
 
+// Real SYNNEX brand mark (embedded so the export stays a single offline
+// file). Natural size 1057x234 -- always scaled with this aspect preserved.
+var DX_LOGO_B64 = "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";
+var DX_LOGO_SRC = 'data:image/png;base64,' + DX_LOGO_B64;
+
 function dxEsc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -3374,20 +3379,20 @@ function dxLegendItems(spec) {
 // Horizontal legend that wraps inside maxW (used along the top of bar panels,
 // matching the reference where series keys sit under the panel title).
 function dxLegendRow(spec, x, y, maxW, size) {
-  size = size || 10;
+  size = size || 11;
   var items = dxLegendItems(spec);
   if (!items.length) return '';
   // Single line only -- anything that doesn't fit is summarised as "+N".
   var out = [], cx = x, shown = 0;
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
-    var w = 12 + String(it.name).length * (size * 0.53);
+    var w = 13 + String(it.name).length * (size * 0.53);
     var remaining = items.length - i;
-    var reserve = remaining > 1 ? 34 : 0;
+    var reserve = remaining > 1 ? 36 : 0;
     if (shown > 0 && cx + w + reserve > x + maxW) break;
-    out.push('<rect x="' + cx + '" y="' + (y - size + 1.5) + '" width="7" height="7" rx="1.5" fill="' + it.color + '"></rect>');
-    out.push(dxText(cx + 11, y, it.name, size, DX.text));
-    cx += w + 8;
+    out.push('<rect x="' + cx + '" y="' + (y - size + 2) + '" width="8" height="8" rx="1.5" fill="' + it.color + '"></rect>');
+    out.push(dxText(cx + 12, y, it.name, size, DX.text));
+    cx += w + 9;
     shown++;
   }
   if (shown < items.length) {
@@ -3398,13 +3403,13 @@ function dxLegendRow(spec, x, y, maxW, size) {
 
 // Vertical legend column, used beside the donuts exactly as in the reference.
 function dxLegendCol(spec, x, y, size) {
-  size = size || 11;
+  size = size || 12.5;
   var items = dxLegendItems(spec);
-  var out = [], lineH = size + 9;
+  var out = [], lineH = size + 10;
   items.forEach(function(it, i) {
     var cy = y + i * lineH;
-    out.push('<rect x="' + x + '" y="' + (cy - size + 2) + '" width="9" height="9" rx="2" fill="' + it.color + '"></rect>');
-    out.push(dxText(x + 15, cy, it.name, size, DX.text));
+    out.push('<rect x="' + x + '" y="' + (cy - size + 2) + '" width="10" height="10" rx="2" fill="' + it.color + '"></rect>');
+    out.push(dxText(x + 16, cy, it.name, size, DX.text));
   });
   return out.join('');
 }
@@ -3412,10 +3417,10 @@ function dxLegendCol(spec, x, y, size) {
 function dxPanel(x, y, w, h, num, title, tag) {
   var o = [];
   o.push(dxRect(x, y, w, h, DX.panel, { stroke: DX.edge, sw: 1, r: 10 }));
-  o.push('<circle cx="' + (x + 24) + '" cy="' + (y + 24) + '" r="12" fill="none" stroke="' + DX.gold + '" stroke-width="1.4"></circle>');
-  o.push(dxText(x + 24, y + 28.5, num, 12, DX.gold, { anchor: 'middle', weight: '700' }));
-  o.push(dxText(x + 44, y + 29, title, 14, DX.white, { weight: '700' }));
-  if (tag) o.push(dxText(x + w - 14, y + 29, tag, 10.5, DX.goldSoft));
+  o.push('<circle cx="' + (x + 25) + '" cy="' + (y + 26) + '" r="13.5" fill="none" stroke="' + DX.gold + '" stroke-width="1.5"></circle>');
+  o.push(dxText(x + 25, y + 31, num, 13.5, DX.gold, { anchor: 'middle', weight: '700' }));
+  o.push(dxText(x + 47, y + 31, title, 16, DX.white, { weight: '700' }));
+  if (tag) o.push(dxText(x + w - 14, y + 31, tag, 11.5, DX.goldSoft));
   return o.join('');
 }
 
@@ -3525,30 +3530,28 @@ function dashExportSvg() {
   o.push('<rect width="' + W + '" height="' + H + '" fill="' + DX.bg + '"></rect>');
 
   // ================= HEADER =================
-  var hdH = 104;
+  var hdH = 112;
   o.push(dxRect(0, 0, W, hdH, '#04060a', { r: 0 }));
 
-  // hero strip (stylised sunset + panels, standing in for the photo)
-  var heroX = 1010, heroW = 436;
+  // hero strip -- tucked beside the summary box so the title has the full
+  // width to breathe at the larger size below.
+  var heroX = 1180, heroW = 282;
   o.push('<rect x="' + heroX + '" y="0" width="' + heroW + '" height="' + hdH + '" fill="url(#dxHero)" opacity="0.45"></rect>');
 
-  // SYNNEX lockup
-  o.push(dxRect(24, 18, 176, 40, '#ffffff', { r: 5 }));
-  o.push('<g transform="translate(36,28)">' +
-    '<path d="M0 12 L11 0 L22 12 Z" fill="#0b4ea2"></path>' +
-    '<path d="M6 18 L17 6 L28 18 Z" fill="#1a73c7" opacity="0.9"></path></g>');
-  o.push(dxText(78, 46, 'SYNNEX', 21, '#0b1220', { weight: '800', spacing: '0.5' }));
-  o.push(dxText(24, 76, 'TRUSTED BY SYNNEX', 11.5, DX.white, { weight: '600', spacing: '1.6' }));
-  o.push('<rect x="212" y="14" width="1" height="76" fill="' + DX.edgeSoft + '"></rect>');
+  // SYNNEX lockup -- real brand mark, aspect-correct (1057x234 native)
+  o.push(dxRect(24, 16, 190, 50, '#ffffff', { r: 6 }));
+  o.push('<image x="46.75" y="25" width="144.5" height="32" href="' + DX_LOGO_SRC + '"></image>');
+  o.push(dxText(24, 82, 'TRUSTED BY SYNNEX', 11, DX.white, { weight: '600', spacing: '1.2' }));
+  o.push('<rect x="236" y="10" width="1" height="84" fill="' + DX.edgeSoft + '"></rect>');
 
-  o.push(dxText(240, 48, 'RESIDENTIAL SOLAR OPERATIONS DASHBOARD', 31, DX.gold, { weight: '800', spacing: '0.4' }));
-  o.push(dxText(240, 80, 'MONTHLY EXECUTIVE REVIEW    |    ' + dxMonthEn(), 15, DX.white,
+  o.push(dxText(266, 52, 'RESIDENTIAL SOLAR OPERATIONS DASHBOARD', 36, DX.gold, { weight: '800', spacing: '0.4' }));
+  o.push(dxText(266, 88, 'MONTHLY EXECUTIVE REVIEW    |    ' + dxMonthEn(), 17, DX.white,
     { weight: '700', spacing: '1.4' }));
 
   // executive summary
   var exX = 1462, exW = W - exX - 18;
   o.push(dxRect(exX, 10, exW, hdH - 20, DX.panelDeep, { stroke: DX.edge, r: 8 }));
-  o.push(dxText(exX + 16, 32, 'EXECUTIVE SUMMARY', 13, DX.gold, { weight: '800', spacing: '0.8' }));
+  o.push(dxText(exX + 16, 34, 'EXECUTIVE SUMMARY', 14, DX.gold, { weight: '800', spacing: '0.8' }));
   // Factual, fully data-derived lines -- deliberately no hand-written
   // narrative, so a weekly export never states something the numbers don't.
   var summary = [
@@ -3559,27 +3562,27 @@ function dashExportSvg() {
        f.delta < 0 ? 'ลดลง ' + Math.abs(f.delta) + ' งานจากเดือนก่อน' : 'เท่าเดือนก่อน'),
     'เอกสารขนานไฟเดินหน้า ' + f.tacMoving + '% · ได้เลขแล้ว ' + f.tac.got + ' งาน'
   ];
-  var syY = 52;
+  var syY = 56;
   summary.forEach(function(b) {
-    o.push('<circle cx="' + (exX + 20) + '" cy="' + (syY - 3.2) + '" r="2.1" fill="' + DX.gold + '"></circle>');
-    o.push(dxText(exX + 30, syY, dxWrap(b, 58, 1)[0], 10, '#dfe4ec'));
-    syY += 16;
+    o.push('<circle cx="' + (exX + 20) + '" cy="' + (syY - 3.4) + '" r="2.3" fill="' + DX.gold + '"></circle>');
+    o.push(dxText(exX + 30, syY, dxWrap(b, 54, 1)[0], 11.5, '#dfe4ec'));
+    syY += 18;
   });
 
   // ================= KPI STRIP =================
-  var kY = 116, kH = 92;
+  var kY = 126, kH = 106;
   var kMainW = 986;
   o.push(dxRect(18, kY, kMainW, kH, DX.panel, { stroke: DX.edge, r: 10 }));
   var top5 = f.statuses.slice(0, 5);
   var cellW = kMainW / top5.length;
   top5.forEach(function(st, i) {
     var cx0 = 18 + i * cellW;
-    if (i > 0) o.push('<rect x="' + cx0 + '" y="' + (kY + 14) + '" width="1" height="' + (kH - 28) + '" fill="' + DX.edgeSoft + '"></rect>');
-    o.push(dxIcon(dxStatusIcon(st), cx0 + 16, kY + 26, 40, DX.gold));
-    var tx = cx0 + 66;
-    o.push(dxText(tx, kY + 26, st, 11.5, DX.white, { weight: '600' }));
-    o.push(dxText(tx, kY + 62, String(f.byStatus[st]), 32, DX.white, { weight: '800' }));
-    o.push(dxText(tx, kY + 80, 'งาน (' + (f.total ? Math.round(f.byStatus[st] / f.total * 100) : 0) + '%)', 11.5, DX.gold, { weight: '600' }));
+    if (i > 0) o.push('<rect x="' + cx0 + '" y="' + (kY + 16) + '" width="1" height="' + (kH - 32) + '" fill="' + DX.edgeSoft + '"></rect>');
+    o.push(dxIcon(dxStatusIcon(st), cx0 + 16, kY + 22, 44, DX.gold));
+    var tx = cx0 + 70;
+    o.push(dxText(tx, kY + 28, st, 13, DX.white, { weight: '600' }));
+    o.push(dxText(tx, kY + 70, String(f.byStatus[st]), 36, DX.white, { weight: '800' }));
+    o.push(dxText(tx, kY + 92, 'งาน (' + (f.total ? Math.round(f.byStatus[st] / f.total * 100) : 0) + '%)', 13, DX.gold, { weight: '600' }));
   });
 
   // secondary block: cumulative completed / scheduled
@@ -3593,27 +3596,27 @@ function dashExportSvg() {
   var s2Cell = s2W / 3;
   sec2.forEach(function(it, i) {
     var cx0 = s2X + i * s2Cell;
-    if (i > 0) o.push('<rect x="' + cx0 + '" y="' + (kY + 14) + '" width="1" height="' + (kH - 28) + '" fill="' + DX.edgeSoft + '"></rect>');
-    o.push(dxIcon(it.icon, cx0 + 12, kY + 16, 26, DX.gold));
-    o.push(dxText(cx0 + 44, kY + 26, it.label, 9.5, DX.white, { weight: '600' }));
-    o.push(dxText(cx0 + 44, kY + 38, it.sub, 9, DX.goldSoft));
-    o.push(dxText(cx0 + s2Cell / 2, kY + 70, String(it.value), 27, DX.white, { anchor: 'middle', weight: '800' }));
-    o.push(dxText(cx0 + s2Cell / 2, kY + 85, 'งาน', 10, DX.gold, { anchor: 'middle' }));
+    if (i > 0) o.push('<rect x="' + cx0 + '" y="' + (kY + 16) + '" width="1" height="' + (kH - 32) + '" fill="' + DX.edgeSoft + '"></rect>');
+    o.push(dxIcon(it.icon, cx0 + 12, kY + 18, 29, DX.gold));
+    o.push(dxText(cx0 + 47, kY + 30, it.label, 11, DX.white, { weight: '600' }));
+    o.push(dxText(cx0 + 47, kY + 44, it.sub, 10.5, DX.goldSoft));
+    o.push(dxText(cx0 + s2Cell / 2, kY + 81, String(it.value), 31, DX.white, { anchor: 'middle', weight: '800' }));
+    o.push(dxText(cx0 + s2Cell / 2, kY + 98, 'งาน', 11.5, DX.gold, { anchor: 'middle' }));
   });
 
   // SLA gauge card
   var gX = s2X + s2W + 12, gW = W - 18 - gX;
   o.push(dxRect(gX, kY, gW, kH, DX.panel, { stroke: DX.gold, r: 10 }));
-  o.push(dxIcon('gauge', gX + 16, kY + 30, 46, DX.gold));
-  o.push(dxText(gX + 76, kY + 32, 'คะแนนเฉลี่ย SLA', 12.5, DX.white, { weight: '700' }));
-  o.push(dxText(gX + 76, kY + 49, '(เป้าหมาย ≥ 80%)', 10.5, DX.goldSoft));
-  o.push(dxText(gX + 76, kY + 82, f.slaScore + '%', 30, f.slaScore >= 80 ? DX.gold : DX.red, { weight: '800' }));
+  o.push(dxIcon('gauge', gX + 16, kY + 34, 50, DX.gold));
+  o.push(dxText(gX + 78, kY + 37, 'คะแนนเฉลี่ย SLA', 14, DX.white, { weight: '700' }));
+  o.push(dxText(gX + 78, kY + 57, '(เป้าหมาย ≥ 80%)', 12, DX.goldSoft));
+  o.push(dxText(gX + 78, kY + 96, f.slaScore + '%', 34, f.slaScore >= 80 ? DX.gold : DX.red, { weight: '800' }));
 
   // ================= PANEL GRID =================
   var rows = [
-    { y: 220, h: 216, cols: 3 },
-    { y: 444, h: 202, cols: 3 },
-    { y: 654, h: 202, cols: 4 }
+    { y: 246, h: 222, cols: 3 },
+    { y: 478, h: 208, cols: 3 },
+    { y: 696, h: 208, cols: 4 }
   ];
   var mL = 18, gapX = 12;
   function colBox(rowIdx, colIdx) {
@@ -3634,32 +3637,32 @@ function dashExportSvg() {
     try { spec = sec.build(forcedType); } catch (e) { spec = { type: forcedType, labels: [], series: [] }; }
     o.push(dxPanel(box.x, box.y, box.w, box.h, num, title, tag));
     var hasData = spec.labels && spec.labels.length;
-    var noteH = opts.note ? 14 : 0;
+    var noteH = opts.note ? 16 : 0;
 
     if (!hasData) {
-      o.push(dxText(box.x + box.w / 2, box.y + box.h / 2, 'ยังไม่มีข้อมูล', 13, DX.dim, { anchor: 'middle' }));
+      o.push(dxText(box.x + box.w / 2, box.y + box.h / 2, 'ยังไม่มีข้อมูล', 14, DX.dim, { anchor: 'middle' }));
       return;
     }
 
     if (opts.legend === 'col') {
       // donut left, legend column right (reference layout for panels 1 & 9)
       var chartW = box.w * 0.44;
-      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 38, chartW, box.h - 46 - noteH));
+      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 42, chartW, box.h - 50 - noteH));
       var items = dxLegendItems(spec);
-      var lh = 18;
-      var startY = box.y + (box.h - noteH - items.length * lh) / 2 + 16;
-      o.push(dxLegendCol(spec, box.x + chartW + 14, startY, 10.5));
+      var lh = 20;
+      var startY = box.y + (box.h - noteH - items.length * lh) / 2 + 18;
+      o.push(dxLegendCol(spec, box.x + chartW + 14, startY, 11.5));
     } else if (opts.legend === 'none') {
-      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 38, box.w - 16, box.h - 46 - noteH));
+      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 42, box.w - 16, box.h - 50 - noteH));
     } else {
       // One compact legend line under the title, chart takes everything else.
-      var legH = dxLegendItems(spec).length ? 15 : 0;
-      o.push(dxLegendRow(spec, box.x + 12, box.y + 47, box.w - 24, 9));
-      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 40 + legH,
-        box.w - 16, box.h - 46 - legH - noteH));
+      var legH = dxLegendItems(spec).length ? 16 : 0;
+      o.push(dxLegendRow(spec, box.x + 12, box.y + 51, box.w - 24, 10));
+      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 44 + legH,
+        box.w - 16, box.h - 50 - legH - noteH));
     }
     if (opts.note) {
-      o.push(dxText(box.x + 14, box.y + box.h - 9, opts.note, 9.5, DX.goldSoft));
+      o.push(dxText(box.x + 14, box.y + box.h - 10, opts.note, 10.5, DX.goldSoft));
     }
   }
 
@@ -3693,12 +3696,12 @@ function dashExportSvg() {
     { note: '* นับเฉพาะงานที่ติดตั้งเสร็จแล้ว' });
 
   // ================= FOOTER =================
-  var fY = 868, fH = H - fY;
+  var fY = 918, fH = H - fY;
   o.push(dxRect(0, fY, W, fH, '#04060a', { r: 0 }));
   o.push('<rect x="0" y="' + fY + '" width="' + W + '" height="1" fill="' + DX.edge + '" opacity="0.6"></rect>');
-  o.push(dxText(24, fY + 52, 'MANAGEMENT', 21, DX.gold, { weight: '800', spacing: '0.6' }));
-  o.push(dxText(24, fY + 78, 'INSIGHT', 21, DX.gold, { weight: '800', spacing: '0.6' }));
-  o.push('<path d="M212 ' + (fY + 26) + ' L232 ' + (fY + 56) + ' L212 ' + (fY + 86) +
+  o.push(dxText(24, fY + 54, 'MANAGEMENT', 23, DX.gold, { weight: '800', spacing: '0.6' }));
+  o.push(dxText(24, fY + 81, 'INSIGHT', 23, DX.gold, { weight: '800', spacing: '0.6' }));
+  o.push('<path d="M212 ' + (fY + 27) + ' L233 ' + (fY + 58) + ' L212 ' + (fY + 89) +
     '" fill="none" stroke="' + DX.gold + '" stroke-width="2" opacity="0.75"></path>');
 
   var insights = [
@@ -3729,16 +3732,16 @@ function dashExportSvg() {
   var inX = 256, inW = (W - inX - 300) / 4;
   insights.forEach(function(it, i) {
     var x = inX + i * inW;
-    o.push('<circle cx="' + (x + 26) + '" cy="' + (fY + 56) + '" r="24" fill="none" stroke="' + DX.gold + '" stroke-width="1.3" opacity="0.85"></circle>');
-    o.push(dxIcon(it.icon, x + 12, fY + 42, 28, DX.gold));
+    o.push('<circle cx="' + (x + 27) + '" cy="' + (fY + 59) + '" r="26" fill="none" stroke="' + DX.gold + '" stroke-width="1.4" opacity="0.85"></circle>');
+    o.push(dxIcon(it.icon, x + 12, fY + 44, 30, DX.gold));
     it.lines.forEach(function(ln, li) {
-      o.push(dxText(x + 62, fY + 40 + li * 17, ln, 11.5, li === 0 ? DX.white : DX.text,
+      o.push(dxText(x + 66, fY + 42 + li * 19, ln, 13, li === 0 ? DX.white : DX.text,
         { weight: li === 0 ? '600' : '400' }));
     });
   });
-  o.push(dxText(W - 24, fY + 92, 'ข้อมูล ณ วันที่ ' + dxThaiDate() +
+  o.push(dxText(W - 24, fY + 108, 'ข้อมูล ณ วันที่ ' + dxThaiDate() +
     '  ·  ช่วงเดือน: ' + (DASH_MONTH_SCOPE === '3m' ? '3 เดือน' : 'ทุกเดือน'),
-    10, DX.dim, { anchor: 'end' }));
+    11, DX.dim, { anchor: 'end' }));
 
   o.push('</svg>');
   DASH_THEME = prevTheme;

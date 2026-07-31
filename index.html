@@ -133,6 +133,11 @@
   .dash-scope-btn { font-size:12px; padding:6px 12px; }
   .dash-scope-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   .dash-scope-note { font-size:12px; color:var(--muted); }
+  .dash-export-group { display:inline-flex; gap:8px; margin-left:auto; }
+  .dash-export-btn { font-size:12px; padding:6px 14px; background:#0f172a; color:#fff; border:1px solid #0f172a; }
+  .dash-export-btn:hover { background:#1e293b; border-color:#1e293b; }
+  .dash-export-btn:disabled { opacity:0.6; }
+  .dash-export-hint { font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.5; }
   .dash-sec-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
   .dash-sec-title { font-size:14px; font-weight:600; color:var(--text); margin:0; }
   .dash-sec-sub { font-size:12px; color:var(--muted); margin-top:3px; max-width:640px; line-height:1.5; }
@@ -523,7 +528,12 @@
       <button class="secondary dash-scope-btn" data-scope="3m">3 เดือน (ก่อนหน้า / ปัจจุบัน / ถัดไป)</button>
       <button class="secondary dash-scope-btn" data-scope="all">ทุกเดือนที่ผ่านมา</button>
       <span class="dash-scope-note" id="dashScopeNote"></span>
+      <span class="dash-export-group">
+        <button class="secondary dash-export-btn" id="dashExportPdfBtn" title="เปิดหน้าต่างพิมพ์ แล้วเลือก &quot;บันทึกเป็น PDF&quot;">⬇ Export PDF</button>
+        <button class="secondary dash-export-btn" id="dashExportJpgBtn" title="ดาวน์โหลดเป็นไฟล์ภาพ JPEG ขนาด 16:9">⬇ Export JPEG</button>
+      </span>
     </div>
+    <div class="dash-export-hint">ไฟล์ที่ได้เป็นบอร์ดสรุปผู้บริหารหน้าเดียว ขนาด 16:9 (1920×1080) รวมทั้ง 10 หัวข้อ พร้อมสรุปตัวเลขและข้อสังเกต — ใช้ข้อมูลชุดเดียวกับที่แสดงอยู่บนหน้านี้</div>
   </div>
   <div id="dashSections"></div>
 </div>
@@ -2035,15 +2045,24 @@ function renderSlaStats() {
 
 function renderSlaTable() {
   var items = jobsWithSla();
-  var order = { exceeded: 0, met: 1, excellent: 2 };
+  // Sort changed 2026-07-27 at Sure's request: newest install first, instead
+  // of the old "worst SLA breach first" grouping. Day-to-day this table is
+  // read as a running log of recent work, so recency is the more useful
+  // ordering; the SLA tab's charts/stats above already surface who is
+  // breaching. Sorted on the same start date the table itself displays, so
+  // the visible "เริ่มติดตั้ง" column always reads top-to-bottom newest-first.
+  function slaStartOf(x) {
+    return x.job.install_appointment ||
+      (x.job.actual_install_dates || []).slice().sort()[0] || '';
+  }
   items.sort(function(a, b) {
-    var oa = order[a.sla.tier], ob = order[b.sla.tier];
-    if (oa !== ob) return oa - ob;
-    return b.sla.days - a.sla.days;
+    var sa = slaStartOf(a), sb = slaStartOf(b);
+    if (sa !== sb) return sa < sb ? 1 : -1;   // ISO dates sort lexically
+    return b.sla.days - a.sla.days;           // tie-break: longer job first
   });
   var body = document.getElementById('slaTableBody');
   var countEl = document.getElementById('slaTableCount');
-  if (countEl) countEl.textContent = 'ทั้งหมด ' + items.length + ' งาน (เรียงงานที่เกิน SLA ขึ้นก่อน)';
+  if (countEl) countEl.textContent = 'ทั้งหมด ' + items.length + ' งาน (เรียงจากวันที่ติดตั้งล่าสุดขึ้นก่อน)';
   if (!body) return;
   var tierLabels = { excellent: 'ดีมาก', met: 'ตรงตาม SLA', exceeded: 'เกิน SLA' };
   body.innerHTML = items.map(function(x, i) {
@@ -2450,6 +2469,27 @@ function renderManualRatingTable() {
 var DASH_MONTH_SCOPE = '3m';
 var DASH_TYPE_STATE = {};
 
+// Charts are drawn light on the page but dark on the exported executive
+// board. Rather than duplicating every builder, the builders ask dashInk()
+// for their structural colours and dashExportSvg() flips this one flag while
+// it composes (then restores it), so on-screen rendering is never affected.
+var DASH_THEME = 'light';
+// Chart body geometry. The on-page dashboard uses the roomy default; the
+// executive export drops these so each chart's natural aspect is close to the
+// panel it has to fill (otherwise uniform scale-to-fit shrinks the whole
+// chart, and its labels, to a fraction of the available box).
+var DASH_CHART_H = 220;
+var DASH_CHART_PAD = 54;
+function dashInk(kind) {
+  var d = DASH_THEME === 'dark';
+  if (kind === 'grid') return d ? '#2b2b2b' : '#e2e5ea';
+  if (kind === 'axis') return d ? '#9aa0ab' : '#6b7280';
+  if (kind === 'label') return d ? '#e8e8e8' : '#374151';
+  if (kind === 'value') return d ? '#ffffff' : '#1f2430';
+  if (kind === 'hole') return d ? '#0a0d14' : '#ffffff';
+  return d ? '#ffffff' : '#1f2430';
+}
+
 var DASH_PALETTE = ['#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0d9488',
                     '#dc2626', '#0891b2', '#c026d3', '#65a30d', '#e11d48',
                     '#4f46e5', '#ca8a04'];
@@ -2458,7 +2498,8 @@ function dashColorFor(i) { return DASH_PALETTE[i % DASH_PALETTE.length]; }
 
 var DASH_TYPE_LABELS = {
   bar: 'แท่ง', stacked: 'แท่งซ้อน', grouped: 'แท่งเทียบ',
-  line: 'เส้น', area: 'พื้นที่', pie: 'วงกลม', donut: 'โดนัท', hbar: 'แท่งแนวนอน'
+  line: 'เส้น', area: 'พื้นที่', pie: 'วงกลม', donut: 'โดนัท', hbar: 'แท่งแนวนอน',
+  tiers: 'จำนวนงาน'
 };
 
 // --- month helpers ---------------------------------------------------------
@@ -2527,7 +2568,7 @@ function dashBuildBars(spec) {
 
   var subW = stacked ? 42 : Math.max(12, Math.min(30, Math.floor(120 / Math.max(1, series.length))));
   var groupW = stacked ? subW : series.length * subW + (series.length - 1) * 3;
-  var gap = 30, chartH = 220, leftPad = 42, topPad = 22, bottomPad = 54;
+  var gap = 30, chartH = DASH_CHART_H, leftPad = 42, topPad = 22, bottomPad = DASH_CHART_PAD;
   var width = leftPad + n * (groupW + gap) + 10;
   var height = topPad + chartH + bottomPad;
 
@@ -2535,8 +2576,8 @@ function dashBuildBars(spec) {
   p.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + Math.max(width, 320) + 'px;" xmlns="http://www.w3.org/2000/svg">');
   for (var g = 0; g <= 4; g++) {
     var gy = topPad + chartH - (chartH * g / 4);
-    p.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + (width - 6) + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
-    p.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + Math.round(maxVal * g / 4) + '</text>');
+    p.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + (width - 6) + '" y2="' + gy + '" stroke="' + dashInk('grid') + '" stroke-width="1"></line>');
+    p.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="' + dashInk('axis') + '" text-anchor="end">' + Math.round(maxVal * g / 4) + '</text>');
   }
 
   labels.forEach(function(lab, i) {
@@ -2553,18 +2594,19 @@ function dashBuildBars(spec) {
         acc += segH;
       });
       var tot = dashSeriesTotalAt(series, i);
-      if (tot > 0) p.push('<text x="' + (gx + subW / 2) + '" y="' + (topPad + chartH - acc - 6) + '" font-size="10" fill="#1f2430" text-anchor="middle" font-weight="600">' + tot + '</text>');
+      if (tot > 0) p.push('<text x="' + (gx + subW / 2) + '" y="' + (topPad + chartH - acc - 6) + '" font-size="10" fill="' + dashInk('value') + '" text-anchor="middle" font-weight="600">' + tot + '</text>');
     } else {
       series.forEach(function(s, si) {
         var v = s.data[i] || 0;
         var segH = (v / maxVal) * chartH;
         var x = gx + si * (subW + 3);
         var y = topPad + chartH - segH;
-        p.push('<rect x="' + x + '" y="' + y + '" width="' + subW + '" height="' + Math.max(segH, v > 0 ? 2 : 0) + '" rx="2" fill="' + s.color + '"><title>' + escHtml(lab) + ' — ' + escHtml(s.name) + ': ' + dashFmt(v, spec) + '</title></rect>');
-        if (!spec.hideValues && v > 0) p.push('<text x="' + (x + subW / 2) + '" y="' + (y - 4) + '" font-size="9" fill="#1f2430" text-anchor="middle">' + dashFmt(v, spec) + '</text>');
+        var tipX = spec.tipExtra ? spec.tipExtra(i, si) : '';
+        p.push('<rect x="' + x + '" y="' + y + '" width="' + subW + '" height="' + Math.max(segH, v > 0 ? 2 : 0) + '" rx="2" fill="' + s.color + '"><title>' + escHtml(lab) + ' — ' + escHtml(s.name) + ': ' + dashFmt(v, spec) + escHtml(tipX) + '</title></rect>');
+        if (!spec.hideValues && v > 0) p.push('<text x="' + (x + subW / 2) + '" y="' + (y - 4) + '" font-size="9" fill="' + dashInk('value') + '" text-anchor="middle">' + dashFmt(v, spec) + '</text>');
       });
     }
-    p.push('<text x="' + (gx + groupW / 2) + '" y="' + (topPad + chartH + 16) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(lab) + '</text>');
+    p.push('<text x="' + (gx + groupW / 2) + '" y="' + (topPad + chartH + 16) + '" font-size="10" fill="' + dashInk('label') + '" text-anchor="middle">' + escHtml(lab) + '</text>');
   });
   p.push('</svg>');
   return p.join('');
@@ -2594,7 +2636,7 @@ function dashBuildHBar(spec) {
   p.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
   labels.forEach(function(lab, i) {
     var y = topPad + i * (rowH + gap);
-    p.push('<text x="' + (leftPad - 8) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11" fill="#374151" text-anchor="end">' + escHtml(lab) + '</text>');
+    p.push('<text x="' + (leftPad - 8) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11" fill="' + dashInk('label') + '" text-anchor="end">' + escHtml(lab) + '</text>');
     var accX = leftPad;
     series.forEach(function(s) {
       var v = s.data[i] || 0;
@@ -2605,7 +2647,7 @@ function dashBuildHBar(spec) {
       accX += w;
     });
     var tot = stacked ? dashSeriesTotalAt(series, i) : (series[0].data[i] || 0);
-    p.push('<text x="' + (accX + 6) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11" fill="#1f2430" font-weight="600">' + dashFmt(tot, spec) + '</text>');
+    p.push('<text x="' + (accX + 6) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11" fill="' + dashInk('value') + '" font-weight="600">' + dashFmt(tot, spec) + '</text>');
   });
   p.push('</svg>');
   return p.join('');
@@ -2623,7 +2665,7 @@ function dashBuildLine(spec) {
   }
   if (maxVal <= 0) maxVal = 1;
 
-  var chartH = 220, leftPad = 44, topPad = 22, bottomPad = 50;
+  var chartH = DASH_CHART_H, leftPad = 44, topPad = 22, bottomPad = DASH_CHART_PAD;
   var stepX = Math.max(70, Math.min(150, 620 / Math.max(1, n - 1 || 1)));
   var width = leftPad + Math.max(1, n - 1) * stepX + 40;
   var height = topPad + chartH + bottomPad;
@@ -2632,14 +2674,14 @@ function dashBuildLine(spec) {
   p.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + Math.max(width, 320) + 'px;" xmlns="http://www.w3.org/2000/svg">');
   for (var g = 0; g <= 4; g++) {
     var gy = topPad + chartH - (chartH * g / 4);
-    p.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + (width - 10) + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
-    p.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + Math.round(maxVal * g / 4) + '</text>');
+    p.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + (width - 10) + '" y2="' + gy + '" stroke="' + dashInk('grid') + '" stroke-width="1"></line>');
+    p.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="' + dashInk('axis') + '" text-anchor="end">' + Math.round(maxVal * g / 4) + '</text>');
   }
 
   function px(i) { return leftPad + i * stepX; }
   function py(v) { return topPad + chartH - ((v || 0) / maxVal) * chartH; }
 
-  series.forEach(function(s) {
+  series.forEach(function(s, sIdx) {
     var pts = [];
     for (var i = 0; i < n; i++) pts.push(px(i) + ',' + py(s.data[i]));
     if (isArea) {
@@ -2648,14 +2690,15 @@ function dashBuildLine(spec) {
     p.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + s.color + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>');
     for (var k = 0; k < n; k++) {
       var v = s.data[k] || 0;
-      p.push('<circle cx="' + px(k) + '" cy="' + py(v) + '" r="4" fill="#fff" stroke="' + s.color + '" stroke-width="2.5"><title>' + escHtml(labels[k]) + ' — ' + escHtml(s.name) + ': ' + dashFmt(v, spec) + '</title></circle>');
+      var tipX = spec.tipExtra ? spec.tipExtra(k, sIdx) : '';
+      p.push('<circle cx="' + px(k) + '" cy="' + py(v) + '" r="4" fill="' + dashInk('hole') + '" stroke="' + s.color + '" stroke-width="2.5"><title>' + escHtml(labels[k]) + ' — ' + escHtml(s.name) + ': ' + dashFmt(v, spec) + escHtml(tipX) + '</title></circle>');
       if (!spec.hideValues && series.length <= 3) {
-        p.push('<text x="' + px(k) + '" y="' + (py(v) - 10) + '" font-size="9" fill="#1f2430" text-anchor="middle">' + dashFmt(v, spec) + '</text>');
+        p.push('<text x="' + px(k) + '" y="' + (py(v) - 10) + '" font-size="9" fill="' + dashInk('value') + '" text-anchor="middle">' + dashFmt(v, spec) + '</text>');
       }
     }
   });
   labels.forEach(function(lab, i) {
-    p.push('<text x="' + px(i) + '" y="' + (topPad + chartH + 18) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(lab) + '</text>');
+    p.push('<text x="' + px(i) + '" y="' + (topPad + chartH + 18) + '" font-size="10" fill="' + dashInk('label') + '" text-anchor="middle">' + escHtml(lab) + '</text>');
   });
   p.push('</svg>');
   return p.join('');
@@ -2702,9 +2745,9 @@ function dashBuildPie(spec) {
     ang = end;
   });
   if (inner) {
-    p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + inner + '" fill="#fff"></circle>');
-    p.push('<text x="' + cx + '" y="' + (cy - 2) + '" font-size="24" font-weight="700" fill="#1f2430" text-anchor="middle">' + total + '</text>');
-    p.push('<text x="' + cx + '" y="' + (cy + 16) + '" font-size="11" fill="#6b7280" text-anchor="middle">' + escHtml(spec.centerLabel || 'งานทั้งหมด') + '</text>');
+    p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + inner + '" fill="' + dashInk('hole') + '"></circle>');
+    p.push('<text x="' + cx + '" y="' + (cy - 2) + '" font-size="24" font-weight="700" fill="' + dashInk('value') + '" text-anchor="middle">' + total + '</text>');
+    p.push('<text x="' + cx + '" y="' + (cy + 16) + '" font-size="11" fill="' + dashInk('axis') + '" text-anchor="middle">' + escHtml(spec.centerLabel || 'งานทั้งหมด') + '</text>');
   }
   p.push('</svg>');
   return p.join('');
@@ -2873,21 +2916,57 @@ function dashSlaByContractorMonth() {
     var mk = start.slice(0, 7);
     var c = x.job.contractor || 'ไม่ระบุ';
     if (!byMonth[mk]) byMonth[mk] = {};
-    if (!byMonth[mk][c]) byMonth[mk][c] = { total: 0, pts: 0 };
+    if (!byMonth[mk][c]) byMonth[mk][c] = { total: 0, pts: 0, excellent: 0, met: 0, exceeded: 0 };
     byMonth[mk][c].total++;
     byMonth[mk][c].pts += (x.sla.tier === 'excellent' ? 100 : (x.sla.tier === 'met' ? 80 : 40));
+    byMonth[mk][c][x.sla.tier]++;
     seen[c] = true;
   });
   return { byMonth: byMonth, contractors: Object.keys(seen) };
 }
+
+var SLA_TIER_META = [
+  { key: 'excellent', name: 'ดีมาก', color: '#eab308' },
+  { key: 'met', name: 'ตรงตาม SLA', color: '#16a34a' },
+  { key: 'exceeded', name: 'เกิน SLA', color: '#dc2626' }
+];
 
 function dashSpecSlaTrend(type) {
   var d = dashSlaByContractorMonth();
   var months = dashScopeMonths(Object.keys(d.byMonth));
   var contractors = d.contractors.sort();
   if (months.length === 0 || contractors.length === 0) return { type: type, labels: [], series: [] };
+
+  // "จำนวนงาน" mode (added 2026-07-27 at Sure's request): the score alone
+  // hid how many jobs sat behind it -- an 80% could be one job or twenty.
+  // This mode drops the contractor split and instead stacks the raw job
+  // count per SLA outcome per month, which is what gets asked about in the
+  // meeting ("แล้วเกิน SLA กี่งาน").
+  if (type === 'tiers') {
+    return {
+      type: 'stacked', labels: months.map(monthLabelFromKey),
+      series: SLA_TIER_META.map(function(t) {
+        return {
+          name: t.name, color: t.color,
+          data: months.map(function(mk) {
+            var perC = d.byMonth[mk] || {};
+            return Object.keys(perC).reduce(function(s, c) { return s + (perC[c][t.key] || 0); }, 0);
+          })
+        };
+      })
+    };
+  }
+
   return {
     type: type, labels: months.map(monthLabelFromKey), max: 100, valueFmt: 'pct',
+    // Every score point also carries its own tier breakdown in the tooltip,
+    // so the count is one hover away even in the score view.
+    tipExtra: function(mi, si) {
+      var r = (d.byMonth[months[mi]] || {})[contractors[si]];
+      if (!r || !r.total) return ' (ยังไม่มีงานในเดือนนี้)';
+      return ' — ' + r.total + ' งาน: ดีมาก ' + r.excellent +
+        ' / ตรงตาม SLA ' + r.met + ' / เกิน SLA ' + r.exceeded;
+    },
     series: contractors.map(function(c, i) {
       return {
         name: contractorDisplayName(c), color: dashColorFor(i),
@@ -2920,7 +2999,23 @@ function dashSlaTrendNote() {
     return '<span class="' + cls + '">' + escHtml(contractorDisplayName(r.c)) + ' ' + arrow + ' ' +
       (diff > 0 ? '+' : '') + diff + ' คะแนน (' + r.prev + '% → ' + r.last + '%)</span>';
   });
-  return 'เทียบ ' + monthLabelFromKey(prev) + ' → ' + monthLabelFromKey(last) + ': ' + parts.join(' &nbsp;|&nbsp; ');
+  var tally = { excellent: 0, met: 0, exceeded: 0, total: 0 };
+  Object.keys(d.byMonth).forEach(function(mk) {
+    var perC = d.byMonth[mk];
+    Object.keys(perC).forEach(function(c) {
+      tally.excellent += perC[c].excellent || 0;
+      tally.met += perC[c].met || 0;
+      tally.exceeded += perC[c].exceeded || 0;
+      tally.total += perC[c].total || 0;
+    });
+  });
+  var tallyLine = '<div style="margin-top:6px;">รวมทุกเดือน ' + tally.total + ' งาน — ' +
+    '<span class="dash-trend-flat" style="color:#eab308;font-weight:600;">ดีมาก ' + tally.excellent + ' งาน</span> / ' +
+    '<span class="dash-trend-up">ตรงตาม SLA ' + tally.met + ' งาน</span> / ' +
+    '<span class="dash-trend-down">เกิน SLA ' + tally.exceeded + ' งาน</span>' +
+    ' &nbsp;·&nbsp; <span style="color:var(--muted);">กดปุ่ม "จำนวนงาน" มุมขวาบนเพื่อดูแยกรายเดือน</span></div>';
+  return 'เทียบ ' + monthLabelFromKey(prev) + ' → ' + monthLabelFromKey(last) + ': ' +
+    parts.join(' &nbsp;|&nbsp; ') + tallyLine;
 }
 
 // 8. Manual team quality ratings (1-5), with the sample size that produced them.
@@ -3019,8 +3114,8 @@ var DASH_SECTIONS = [
     build: dashSpecInstallsPerMonth },
 
   { id: 'slaTrend', title: '6. คะแนนคุณภาพ SLA รายผู้รับเหมา (พัฒนาการรายเดือน)',
-    sub: 'คะแนน 0-100 ถ่วงน้ำหนักจากผลการติดตั้งจริง (ดีมาก=100, ตรงตาม SLA=80, เกิน SLA=40) เฉลี่ยต่อเดือน',
-    types: ['line', 'area', 'grouped'], def: 'line', monthly: true,
+    sub: 'คะแนน 0-100 ถ่วงน้ำหนักจากผลการติดตั้งจริง (ดีมาก=100, ตรงตาม SLA=80, เกิน SLA=40) เฉลี่ยต่อเดือน — กด "จำนวนงาน" เพื่อดูเป็นจำนวนงานแยกตามผล SLA แทนคะแนน',
+    types: ['line', 'area', 'grouped', 'tiers'], def: 'line', monthly: true,
     build: dashSpecSlaTrend, note: dashSlaTrendNote },
 
   { id: 'completedByContractor', title: '7. ปริมาณงานติดตั้งเสร็จสิ้นต่อเดือน แยกตามผู้รับเหมา',
@@ -3106,6 +3201,661 @@ document.querySelectorAll('.dash-scope-btn').forEach(function(b) {
     renderDashboard();
   };
 });
+
+var dashPdfBtnEl = document.getElementById('dashExportPdfBtn');
+if (dashPdfBtnEl) dashPdfBtnEl.onclick = function() { dashExportPdf(); };
+var dashJpgBtnEl = document.getElementById('dashExportJpgBtn');
+if (dashJpgBtnEl) dashJpgBtnEl.onclick = function() { dashExportJpeg(dashJpgBtnEl); };
+
+// ---------------------------------------------------------------------------
+// Executive export board (Sure's request, 2026-07-28; restyled 2026-07-31 to
+// match the reference design he supplied). Renders the whole Dashboard as ONE
+// 1920x1080 (16:9) black/gold "executive review" board, saved as JPEG or PDF.
+//
+// Sure runs this weekly, so the styling is deliberately pinned here as a fixed
+// design system (DX tokens below) rather than inheriting the page's light
+// theme: every export must come out looking identical week to week, with only
+// the numbers moving. All figures are derived live from the same filtered data
+// the on-screen Dashboard uses -- nothing is hand-entered.
+//
+// Composed as a single SVG rather than via a screenshot library: every chart
+// here is already native SVG, so this keeps text vector-sharp at any zoom,
+// needs no external dependency (must work offline and inside the Cowork
+// artifact sandbox), and rasterises through a plain <canvas> without tainting.
+// ---------------------------------------------------------------------------
+var DASH_EXPORT_W = 1920, DASH_EXPORT_H = 1080;
+
+// --- design tokens (the whole look lives here) ------------------------------
+var DX = {
+  bg: '#05070c',
+  panel: '#0a0d14',
+  panelDeep: '#070a10',
+  edge: '#a5741d',
+  edgeSoft: '#4a3512',
+  gold: '#f2a541',
+  goldSoft: '#c98f38',
+  goldBright: '#ffc061',
+  white: '#ffffff',
+  text: '#e8e8e8',
+  dim: '#9aa0ab',
+  green: '#22c55e',
+  red: '#ef4444'
+};
+
+function dxEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function dxText(x, y, str, size, color, opts) {
+  opts = opts || {};
+  return '<text x="' + x + '" y="' + y + '" font-size="' + size + '" fill="' + color + '"' +
+    (opts.anchor ? ' text-anchor="' + opts.anchor + '"' : '') +
+    (opts.weight ? ' font-weight="' + opts.weight + '"' : '') +
+    (opts.spacing ? ' letter-spacing="' + opts.spacing + '"' : '') +
+    (opts.opacity ? ' opacity="' + opts.opacity + '"' : '') +
+    '>' + dxEsc(str) + '</text>';
+}
+
+function dxRect(x, y, w, h, fill, opts) {
+  opts = opts || {};
+  return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' +
+    (opts.r == null ? 10 : opts.r) + '" fill="' + fill + '"' +
+    (opts.stroke ? ' stroke="' + opts.stroke + '" stroke-width="' + (opts.sw || 1) + '"' : '') +
+    (opts.opacity ? ' opacity="' + opts.opacity + '"' : '') + '></rect>';
+}
+
+// Line-art icons, drawn in a 24x24 space then translated/scaled into place.
+// Kept as thin gold strokes to match the reference sheet's iconography.
+function dxIcon(kind, x, y, size, color) {
+  var s = size / 24;
+  var p = [];
+  var st = ' fill="none" stroke="' + color + '" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"';
+  switch (kind) {
+    case 'clipboard':
+      p.push('<rect x="4" y="4" width="16" height="18" rx="2"' + st + '></rect>');
+      p.push('<rect x="9" y="1.5" width="6" height="4" rx="1"' + st + '></rect>');
+      p.push('<path d="M8 11l2 2 4-4"' + st + '></path>');
+      p.push('<path d="M8 17h8"' + st + '></path>');
+      break;
+    case 'calendar':
+      p.push('<rect x="3" y="5" width="18" height="16" rx="2"' + st + '></rect>');
+      p.push('<path d="M3 10h18M8 3v4M16 3v4"' + st + '></path>');
+      p.push('<path d="M7 14h3M14 14h3M7 17h3M14 17h3"' + st + '></path>');
+      break;
+    case 'wrench':
+      p.push('<path d="M20 5.5a5 5 0 0 1-6.6 6.3L6 19.2a2 2 0 1 1-2.8-2.8l7.4-7.4A5 5 0 0 1 17 2.4l-3 3 1.6 1.6 3-3c.6.7 1 1.6 1.4 2.5z"' + st + '></path>');
+      break;
+    case 'clock':
+      p.push('<circle cx="12" cy="12" r="9"' + st + '></circle>');
+      p.push('<path d="M12 7v5l3.5 2"' + st + '></path>');
+      break;
+    case 'search':
+      p.push('<circle cx="10.5" cy="10.5" r="6.5"' + st + '></circle>');
+      p.push('<path d="M15.5 15.5L21 21"' + st + '></path>');
+      break;
+    case 'doc':
+      p.push('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"' + st + '></path>');
+      p.push('<path d="M14 3v5h5M9 13h6M9 17h6"' + st + '></path>');
+      break;
+    case 'check':
+      p.push('<circle cx="12" cy="12" r="9"' + st + '></circle>');
+      p.push('<path d="M8 12.5l2.5 2.5L16 9.5"' + st + '></path>');
+      break;
+    case 'hourglass':
+      p.push('<path d="M7 3h10M7 21h10"' + st + '></path>');
+      p.push('<path d="M8 3c0 4 4 5.5 4 9 0-3.5 4-5 4-9M8 21c0-4 4-5.5 4-9 0 3.5 4 5 4 9"' + st + '></path>');
+      break;
+    case 'gauge':
+      p.push('<path d="M4 17a9 9 0 1 1 16 0"' + st + '></path>');
+      p.push('<path d="M12 17l4.5-5"' + st + '></path>');
+      p.push('<circle cx="12" cy="17" r="1.6" fill="' + color + '"></circle>');
+      break;
+    case 'chartup':
+      p.push('<path d="M4 20V5M4 20h16"' + st + '></path>');
+      p.push('<path d="M7 16l4-4 3 2.5L20 8"' + st + '></path>');
+      p.push('<path d="M16 8h4v4"' + st + '></path>');
+      break;
+    case 'gear':
+      p.push('<circle cx="12" cy="12" r="3.4"' + st + '></circle>');
+      p.push('<path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3"' + st + '></path>');
+      break;
+    case 'warning':
+      p.push('<path d="M12 3.5L22 20H2z"' + st + '></path>');
+      p.push('<path d="M12 9.5v5"' + st + '></path>');
+      p.push('<circle cx="12" cy="17" r="1.05" fill="' + color + '"></circle>');
+      break;
+    case 'star':
+      p.push('<path d="M12 3.5l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.9l6-.8z"' + st + '></path>');
+      break;
+  }
+  return '<g transform="translate(' + x + ',' + y + ') scale(' + (Math.round(s * 10000) / 10000) + ')">' +
+    p.join('') + '</g>';
+}
+
+// Re-hosts a chart SVG from dashBuildChart() at an exact box.
+// Uses <g transform="translate() scale()"> rather than a nested <svg>: nested
+// <svg> is valid SVG 1.1 and fine in browsers, but several rasterisers and PDF
+// importers ignore its x/y and stack every chart at the origin. A
+// translate+scale group is understood everywhere.
+function dxEmbedChart(svgStr, x, y, w, h) {
+  if (!svgStr || svgStr.indexOf('<svg') !== 0) {
+    return dxText(x + w / 2, y + h / 2, 'ยังไม่มีข้อมูล', 13, DX.dim, { anchor: 'middle' });
+  }
+  var vb = /viewBox="([^"]+)"/.exec(svgStr);
+  var inner = svgStr.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+  var nw = w, nh = h;
+  if (vb) {
+    var parts = vb[1].split(/[ ,]+/);
+    nw = parseFloat(parts[2]) || w;
+    nh = parseFloat(parts[3]) || h;
+  }
+  var scale = Math.min(w / nw, h / nh);
+  if (!isFinite(scale) || scale <= 0) scale = 1;
+  var tx = x + (w - nw * scale) / 2;
+  var ty = y + (h - nh * scale) / 2;
+  return '<g transform="translate(' + (Math.round(tx * 100) / 100) + ',' +
+    (Math.round(ty * 100) / 100) + ') scale(' + (Math.round(scale * 10000) / 10000) + ')">' +
+    inner + '</g>';
+}
+
+function dxLegendItems(spec) {
+  if (spec.type === 'pie' || spec.type === 'donut') {
+    return spec.labels.map(function(lab, i) {
+      return { name: lab + ' (' + (spec.series[0].data[i] || 0) + ')',
+               color: spec.sliceColors ? spec.sliceColors[i] : dashColorFor(i) };
+    });
+  }
+  if (!spec.series || spec.series.length <= 1) return [];
+  return spec.series.map(function(s) { return { name: s.name, color: s.color }; });
+}
+
+// Horizontal legend that wraps inside maxW (used along the top of bar panels,
+// matching the reference where series keys sit under the panel title).
+function dxLegendRow(spec, x, y, maxW, size) {
+  size = size || 10;
+  var items = dxLegendItems(spec);
+  if (!items.length) return '';
+  // Single line only -- anything that doesn't fit is summarised as "+N".
+  var out = [], cx = x, shown = 0;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var w = 12 + String(it.name).length * (size * 0.53);
+    var remaining = items.length - i;
+    var reserve = remaining > 1 ? 34 : 0;
+    if (shown > 0 && cx + w + reserve > x + maxW) break;
+    out.push('<rect x="' + cx + '" y="' + (y - size + 1.5) + '" width="7" height="7" rx="1.5" fill="' + it.color + '"></rect>');
+    out.push(dxText(cx + 11, y, it.name, size, DX.text));
+    cx += w + 8;
+    shown++;
+  }
+  if (shown < items.length) {
+    out.push(dxText(cx, y, '+' + (items.length - shown), size, DX.goldSoft));
+  }
+  return out.join('');
+}
+
+// Vertical legend column, used beside the donuts exactly as in the reference.
+function dxLegendCol(spec, x, y, size) {
+  size = size || 11;
+  var items = dxLegendItems(spec);
+  var out = [], lineH = size + 9;
+  items.forEach(function(it, i) {
+    var cy = y + i * lineH;
+    out.push('<rect x="' + x + '" y="' + (cy - size + 2) + '" width="9" height="9" rx="2" fill="' + it.color + '"></rect>');
+    out.push(dxText(x + 15, cy, it.name, size, DX.text));
+  });
+  return out.join('');
+}
+
+function dxPanel(x, y, w, h, num, title, tag) {
+  var o = [];
+  o.push(dxRect(x, y, w, h, DX.panel, { stroke: DX.edge, sw: 1, r: 10 }));
+  o.push('<circle cx="' + (x + 24) + '" cy="' + (y + 24) + '" r="12" fill="none" stroke="' + DX.gold + '" stroke-width="1.4"></circle>');
+  o.push(dxText(x + 24, y + 28.5, num, 12, DX.gold, { anchor: 'middle', weight: '700' }));
+  o.push(dxText(x + 44, y + 29, title, 14, DX.white, { weight: '700' }));
+  if (tag) o.push(dxText(x + w - 14, y + 29, tag, 10.5, DX.goldSoft));
+  return o.join('');
+}
+
+// --- live figures -----------------------------------------------------------
+function dxFigures() {
+  var jobs = currentFilteredJobs();
+  var byStatus = {};
+  jobs.forEach(function(j) {
+    var s = (j.status || '').trim() || 'ไม่ระบุสถานะ';
+    byStatus[s] = (byStatus[s] || 0) + 1;
+  });
+  var statuses = Object.keys(byStatus).sort(function(a, b) { return byStatus[b] - byStatus[a]; });
+
+  var completedJobs = jobs.filter(function(j) { return jobFullCategory(j) === 'completed'; });
+  var completed = completedJobs.length;
+  var scheduled = jobs.filter(function(j) { return jobFullCategory(j) === 'scheduled'; }).length;
+
+  var sla = jobsWithSla();
+  var slaScore = sla.length
+    ? Math.round(sla.reduce(function(s, x) {
+        return s + (x.sla.tier === 'excellent' ? 100 : (x.sla.tier === 'met' ? 80 : 40));
+      }, 0) / sla.length)
+    : 0;
+  var slaTiers = { excellent: 0, met: 0, exceeded: 0 };
+  sla.forEach(function(x) { slaTiers[x.sla.tier]++; });
+
+  var tac = { not: 0, filing: 0, review: 0, got: 0 };
+  completedJobs.forEach(function(j) { tac[tacPipelineStage(j)]++; });
+  var tacTotal = tac.not + tac.filing + tac.review + tac.got;
+  var tacMoving = tacTotal ? Math.round(((tac.filing + tac.review + tac.got) / tacTotal) * 100) : 0;
+
+  var perMonth = {};
+  completedJobs.forEach(function(j) {
+    var mk = deriveCompletedMonth(j);
+    if (mk) perMonth[mk] = (perMonth[mk] || 0) + 1;
+  });
+  var mks = Object.keys(perMonth).sort();
+  var lastM = mks.length ? perMonth[mks[mks.length - 1]] : 0;
+  var prevM = mks.length > 1 ? perMonth[mks[mks.length - 2]] : 0;
+  var delta = lastM - prevM;
+  var deltaPct = prevM ? Math.round((delta / prevM) * 100) : null;
+
+  var ratings = RATINGS_SUMMARY.byContractor || {};
+  var rKeys = Object.keys(ratings).filter(function(c) { return ratings[c] && ratings[c].count; });
+  var rJobs = rKeys.reduce(function(s, c) { return s + ratings[c].count; }, 0);
+  var rAvg = rJobs ? Math.round((rKeys.reduce(function(s, c) {
+    return s + ratings[c].avg * ratings[c].count; }, 0) / rJobs) * 10) / 10 : null;
+
+  return {
+    total: jobs.length, statuses: statuses, byStatus: byStatus,
+    completed: completed, scheduled: scheduled,
+    slaScore: slaScore, slaTiers: slaTiers, slaCount: sla.length,
+    tac: tac, tacTotal: tacTotal, tacMoving: tacMoving,
+    lastM: lastM, prevM: prevM, delta: delta, deltaPct: deltaPct,
+    ratingAvg: rAvg, ratingJobs: rJobs, ratingContractors: rKeys.length
+  };
+}
+
+function dxMonthEn() {
+  var EN = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE',
+            'JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+  var p = TODAY_ISO.split('-');
+  return EN[parseInt(p[1], 10) - 1] + ' ' + p[0];
+}
+
+function dxThaiDate() {
+  var THAI = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+              'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  var p = TODAY_ISO.split('-');
+  return parseInt(p[2], 10) + ' ' + THAI[parseInt(p[1], 10) - 1] + ' ' + (parseInt(p[0], 10) + 543);
+}
+
+// Picks an icon per status label so the KPI strip reads like the reference
+// even as Sure adds or renames statuses in the sheet.
+function dxStatusIcon(label) {
+  var s = String(label);
+  if (s.indexOf('เสร็จสิ้น') !== -1) return 'clipboard';
+  if (s.indexOf('รอนัดหมายเข้าติดตั้ง') !== -1 || s.indexOf('นัดหมาย') !== -1) return 'calendar';
+  if (s.indexOf('รอทำการติดตั้ง') !== -1) return 'wrench';
+  if (s.indexOf('ระหว่างติดตั้ง') !== -1) return 'clock';
+  if (s.indexOf('สำรวจ') !== -1) return 'search';
+  return 'doc';
+}
+
+// --- the board --------------------------------------------------------------
+function dashExportSvg() {
+  var prevTheme = DASH_THEME, prevH = DASH_CHART_H, prevPad = DASH_CHART_PAD;
+  DASH_THEME = 'dark';
+  DASH_CHART_H = 132;
+  DASH_CHART_PAD = 34;
+  var f = dxFigures();
+  var o = [];
+  var W = DASH_EXPORT_W, H = DASH_EXPORT_H;
+
+  o.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H +
+    '" viewBox="0 0 ' + W + ' ' + H + '" font-family="Sarabun, Segoe UI, Tahoma, sans-serif">');
+  o.push('<defs>' +
+    '<linearGradient id="dxHero" x1="0" y1="0" x2="1" y2="0">' +
+      '<stop offset="0" stop-color="#05070c"/><stop offset="0.45" stop-color="#2a1a06"/>' +
+      '<stop offset="0.75" stop-color="#8a5a10"/><stop offset="1" stop-color="#2a1a06"/></linearGradient>' +
+    '<linearGradient id="dxGoldV" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#ffcf7a"/><stop offset="1" stop-color="#e08f22"/></linearGradient>' +
+    '<radialGradient id="dxSun" cx="0.5" cy="0.5" r="0.5">' +
+      '<stop offset="0" stop-color="#ffd591" stop-opacity="0.95"/>' +
+      '<stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient>' +
+    '</defs>');
+  o.push('<rect width="' + W + '" height="' + H + '" fill="' + DX.bg + '"></rect>');
+
+  // ================= HEADER =================
+  var hdH = 104;
+  o.push(dxRect(0, 0, W, hdH, '#04060a', { r: 0 }));
+
+  // hero strip (stylised sunset + panels, standing in for the photo)
+  var heroX = 1010, heroW = 436;
+  o.push('<rect x="' + heroX + '" y="0" width="' + heroW + '" height="' + hdH + '" fill="url(#dxHero)" opacity="0.45"></rect>');
+
+  // SYNNEX lockup
+  o.push(dxRect(24, 18, 176, 40, '#ffffff', { r: 5 }));
+  o.push('<g transform="translate(36,28)">' +
+    '<path d="M0 12 L11 0 L22 12 Z" fill="#0b4ea2"></path>' +
+    '<path d="M6 18 L17 6 L28 18 Z" fill="#1a73c7" opacity="0.9"></path></g>');
+  o.push(dxText(78, 46, 'SYNNEX', 21, '#0b1220', { weight: '800', spacing: '0.5' }));
+  o.push(dxText(24, 76, 'TRUSTED BY SYNNEX', 11.5, DX.white, { weight: '600', spacing: '1.6' }));
+  o.push('<rect x="212" y="14" width="1" height="76" fill="' + DX.edgeSoft + '"></rect>');
+
+  o.push(dxText(240, 48, 'RESIDENTIAL SOLAR OPERATIONS DASHBOARD', 31, DX.gold, { weight: '800', spacing: '0.4' }));
+  o.push(dxText(240, 80, 'MONTHLY EXECUTIVE REVIEW    |    ' + dxMonthEn(), 15, DX.white,
+    { weight: '700', spacing: '1.4' }));
+
+  // executive summary
+  var exX = 1462, exW = W - exX - 18;
+  o.push(dxRect(exX, 10, exW, hdH - 20, DX.panelDeep, { stroke: DX.edge, r: 8 }));
+  o.push(dxText(exX + 16, 32, 'EXECUTIVE SUMMARY', 13, DX.gold, { weight: '800', spacing: '0.8' }));
+  // Factual, fully data-derived lines -- deliberately no hand-written
+  // narrative, so a weekly export never states something the numbers don't.
+  var summary = [
+    'ติดตั้งเสร็จสิ้นสะสม ' + f.completed + ' งาน (' +
+      (f.total ? Math.round(f.completed / f.total * 100) : 0) + '% ของ ' + f.total + ' งาน)',
+    'เดือนล่าสุด ' + f.lastM + ' งาน ' +
+      (f.delta > 0 ? 'เพิ่มขึ้น ' + f.delta + ' งานจากเดือนก่อน' :
+       f.delta < 0 ? 'ลดลง ' + Math.abs(f.delta) + ' งานจากเดือนก่อน' : 'เท่าเดือนก่อน'),
+    'เอกสารขนานไฟเดินหน้า ' + f.tacMoving + '% · ได้เลขแล้ว ' + f.tac.got + ' งาน'
+  ];
+  var syY = 52;
+  summary.forEach(function(b) {
+    o.push('<circle cx="' + (exX + 20) + '" cy="' + (syY - 3.2) + '" r="2.1" fill="' + DX.gold + '"></circle>');
+    o.push(dxText(exX + 30, syY, dxWrap(b, 58, 1)[0], 10, '#dfe4ec'));
+    syY += 16;
+  });
+
+  // ================= KPI STRIP =================
+  var kY = 116, kH = 92;
+  var kMainW = 986;
+  o.push(dxRect(18, kY, kMainW, kH, DX.panel, { stroke: DX.edge, r: 10 }));
+  var top5 = f.statuses.slice(0, 5);
+  var cellW = kMainW / top5.length;
+  top5.forEach(function(st, i) {
+    var cx0 = 18 + i * cellW;
+    if (i > 0) o.push('<rect x="' + cx0 + '" y="' + (kY + 14) + '" width="1" height="' + (kH - 28) + '" fill="' + DX.edgeSoft + '"></rect>');
+    o.push(dxIcon(dxStatusIcon(st), cx0 + 16, kY + 26, 40, DX.gold));
+    var tx = cx0 + 66;
+    o.push(dxText(tx, kY + 26, st, 11.5, DX.white, { weight: '600' }));
+    o.push(dxText(tx, kY + 62, String(f.byStatus[st]), 32, DX.white, { weight: '800' }));
+    o.push(dxText(tx, kY + 80, 'งาน (' + (f.total ? Math.round(f.byStatus[st] / f.total * 100) : 0) + '%)', 11.5, DX.gold, { weight: '600' }));
+  });
+
+  // secondary block: cumulative completed / scheduled
+  var s2X = 18 + kMainW + 12, s2W = 372;
+  o.push(dxRect(s2X, kY, s2W, kH, DX.panel, { stroke: DX.edge, r: 10 }));
+  var sec2 = [
+    { icon: 'doc', label: 'งานติดตั้งเสร็จสิ้น', sub: '(สะสม)', value: f.completed },
+    { icon: 'check', label: 'ติดตั้งเสร็จแล้ว', sub: '(สะสม)', value: f.completed },
+    { icon: 'hourglass', label: 'รอดำเนินการติดตั้ง', sub: '(สะสม)', value: f.scheduled }
+  ];
+  var s2Cell = s2W / 3;
+  sec2.forEach(function(it, i) {
+    var cx0 = s2X + i * s2Cell;
+    if (i > 0) o.push('<rect x="' + cx0 + '" y="' + (kY + 14) + '" width="1" height="' + (kH - 28) + '" fill="' + DX.edgeSoft + '"></rect>');
+    o.push(dxIcon(it.icon, cx0 + 12, kY + 16, 26, DX.gold));
+    o.push(dxText(cx0 + 44, kY + 26, it.label, 9.5, DX.white, { weight: '600' }));
+    o.push(dxText(cx0 + 44, kY + 38, it.sub, 9, DX.goldSoft));
+    o.push(dxText(cx0 + s2Cell / 2, kY + 70, String(it.value), 27, DX.white, { anchor: 'middle', weight: '800' }));
+    o.push(dxText(cx0 + s2Cell / 2, kY + 85, 'งาน', 10, DX.gold, { anchor: 'middle' }));
+  });
+
+  // SLA gauge card
+  var gX = s2X + s2W + 12, gW = W - 18 - gX;
+  o.push(dxRect(gX, kY, gW, kH, DX.panel, { stroke: DX.gold, r: 10 }));
+  o.push(dxIcon('gauge', gX + 16, kY + 30, 46, DX.gold));
+  o.push(dxText(gX + 76, kY + 32, 'คะแนนเฉลี่ย SLA', 12.5, DX.white, { weight: '700' }));
+  o.push(dxText(gX + 76, kY + 49, '(เป้าหมาย ≥ 80%)', 10.5, DX.goldSoft));
+  o.push(dxText(gX + 76, kY + 82, f.slaScore + '%', 30, f.slaScore >= 80 ? DX.gold : DX.red, { weight: '800' }));
+
+  // ================= PANEL GRID =================
+  var rows = [
+    { y: 220, h: 216, cols: 3 },
+    { y: 444, h: 202, cols: 3 },
+    { y: 654, h: 202, cols: 4 }
+  ];
+  var mL = 18, gapX = 12;
+  function colBox(rowIdx, colIdx) {
+    var r = rows[rowIdx];
+    var usable = W - mL * 2 - gapX * (r.cols - 1);
+    var w = usable / r.cols;
+    return { x: mL + colIdx * (w + gapX), y: r.y, w: w, h: r.h };
+  }
+
+  var SECT = {};
+  DASH_SECTIONS.forEach(function(s) { SECT[s.id] = s; });
+
+  // opts: { legend:'row'|'col'|'none', note:string }
+  function drawPanel(id, forcedType, box, num, title, tag, opts) {
+    opts = opts || {};
+    var sec = SECT[id];
+    var spec;
+    try { spec = sec.build(forcedType); } catch (e) { spec = { type: forcedType, labels: [], series: [] }; }
+    o.push(dxPanel(box.x, box.y, box.w, box.h, num, title, tag));
+    var hasData = spec.labels && spec.labels.length;
+    var noteH = opts.note ? 14 : 0;
+
+    if (!hasData) {
+      o.push(dxText(box.x + box.w / 2, box.y + box.h / 2, 'ยังไม่มีข้อมูล', 13, DX.dim, { anchor: 'middle' }));
+      return;
+    }
+
+    if (opts.legend === 'col') {
+      // donut left, legend column right (reference layout for panels 1 & 9)
+      var chartW = box.w * 0.44;
+      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 38, chartW, box.h - 46 - noteH));
+      var items = dxLegendItems(spec);
+      var lh = 18;
+      var startY = box.y + (box.h - noteH - items.length * lh) / 2 + 16;
+      o.push(dxLegendCol(spec, box.x + chartW + 14, startY, 10.5));
+    } else if (opts.legend === 'none') {
+      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 38, box.w - 16, box.h - 46 - noteH));
+    } else {
+      // One compact legend line under the title, chart takes everything else.
+      var legH = dxLegendItems(spec).length ? 15 : 0;
+      o.push(dxLegendRow(spec, box.x + 12, box.y + 47, box.w - 24, 9));
+      o.push(dxEmbedChart(dashBuildChart(spec), box.x + 8, box.y + 40 + legH,
+        box.w - 16, box.h - 46 - legH - noteH));
+    }
+    if (opts.note) {
+      o.push(dxText(box.x + 14, box.y + box.h - 9, opts.note, 9.5, DX.goldSoft));
+    }
+  }
+
+  drawPanel('statusShare', 'donut', colBox(0, 0), '1',
+    'สัดส่วนสถานะงานโดยรวมทั้งหมด', '', { legend: 'col' });
+  drawPanel('contractorOverview', 'stacked', colBox(0, 1), '2',
+    'ภาพรวมงานแยกตามผู้รับเหมา', '(สะสม)', {});
+  drawPanel('monthlyByContractor', 'stacked', colBox(0, 2), '3',
+    'รายละเอียดรายเดือน แยกตามผู้รับเหมา', '', {});
+
+  drawPanel('surveyByContractor', 'grouped', colBox(1, 0), '4',
+    'จำนวนงานเข้าสำรวจของผู้รับเหมา รายเดือน', '(สะสม)', {});
+  drawPanel('installsPerMonth', 'grouped', colBox(1, 1), '5',
+    'จำนวนงานติดตั้งต่อเดือน (เสร็จสิ้น + รอดำเนินการ)', '(สะสม)', {});
+  drawPanel('slaTrend', 'grouped', colBox(1, 2), '6',
+    'คะแนนคุณภาพ SLA รายผู้รับเหมา (พัฒนาการรายเดือน)', '',
+    { note: dxSlaDeltaNote() });
+
+  drawPanel('completedByContractor', 'stacked', colBox(2, 0), '7',
+    'ปริมาณงานติดตั้งเสร็จสิ้นต่อเดือน แยกตามผู้รับเหมา', '(สะสม)', {});
+  drawPanel('manualRating', 'hbar', colBox(2, 1), '8',
+    'คะแนนประเมินคุณภาพจากทีมงาน', '(สะสม)',
+    { legend: 'none',
+      note: f.ratingJobs ? '★ คำนวณจากงานที่ให้คะแนนแล้วทั้งหมด ' + f.ratingJobs +
+              ' งาน จาก ผรม. ' + f.ratingContractors + ' ราย'
+            : '★ ยังไม่มีการให้คะแนนประเมินจากทีมงาน' });
+  drawPanel('tacOverall', 'donut', colBox(2, 2), '9',
+    'ความคืบหน้าเอกสารขนานไฟฟ้า', '(สะสม)', { legend: 'col' });
+  drawPanel('tacByContractor', 'hbar', colBox(2, 3), '10',
+    'ความคืบหน้าเอกสารขนานไฟฟ้า แยกตามผู้รับเหมา', '(สะสม)',
+    { note: '* นับเฉพาะงานที่ติดตั้งเสร็จแล้ว' });
+
+  // ================= FOOTER =================
+  var fY = 868, fH = H - fY;
+  o.push(dxRect(0, fY, W, fH, '#04060a', { r: 0 }));
+  o.push('<rect x="0" y="' + fY + '" width="' + W + '" height="1" fill="' + DX.edge + '" opacity="0.6"></rect>');
+  o.push(dxText(24, fY + 52, 'MANAGEMENT', 21, DX.gold, { weight: '800', spacing: '0.6' }));
+  o.push(dxText(24, fY + 78, 'INSIGHT', 21, DX.gold, { weight: '800', spacing: '0.6' }));
+  o.push('<path d="M212 ' + (fY + 26) + ' L232 ' + (fY + 56) + ' L212 ' + (fY + 86) +
+    '" fill="none" stroke="' + DX.gold + '" stroke-width="2" opacity="0.75"></path>');
+
+  var insights = [
+    { icon: 'chartup', lines: [
+        'ปริมาณงาน' + (f.delta > 0 ? 'เพิ่มขึ้น' : (f.delta < 0 ? 'ลดลง' : 'ทรงตัว')) + 'ต่อเนื่อง',
+        'เทียบเดือนก่อน',
+        '(เดือนล่าสุด ' + f.lastM + ' งาน' +
+          (f.deltaPct !== null ? ', ' + (f.deltaPct >= 0 ? '+' : '') + f.deltaPct + '%' : '') + ')'
+      ] },
+    { icon: 'gear', lines: [
+        'ทีมรักษาศักยภาพการติดตั้งได้ดี',
+        'ติดตั้งเสร็จแล้ว ' + f.completed + ' งาน',
+        '(คิดเป็น ' + (f.total ? Math.round(f.completed / f.total * 100) : 0) + '% ของทั้งหมด)'
+      ] },
+    { icon: 'doc', lines: [
+        'งานเอกสารขนานไฟฟ้า',
+        'อยู่ระหว่างดำเนินการ ' + f.tacMoving + '%',
+        'เร่งรัดการยื่นเอกสารต่อเนื่อง'
+      ] },
+    { icon: 'warning', lines: [
+        f.slaTiers.exceeded > 0
+          ? 'มีงานเกิน SLA ' + f.slaTiers.exceeded + ' งาน จาก ' + f.slaCount + ' งาน'
+          : 'ไม่มีงานเกิน SLA ในรอบนี้',
+        'คะแนน SLA เฉลี่ย ' + f.slaScore + '%',
+        f.slaScore >= 80 ? 'อยู่ในเกณฑ์เป้าหมาย' : 'ต่ำกว่าเป้าหมาย ต้องติดตามใกล้ชิด'
+      ] }
+  ];
+  var inX = 256, inW = (W - inX - 300) / 4;
+  insights.forEach(function(it, i) {
+    var x = inX + i * inW;
+    o.push('<circle cx="' + (x + 26) + '" cy="' + (fY + 56) + '" r="24" fill="none" stroke="' + DX.gold + '" stroke-width="1.3" opacity="0.85"></circle>');
+    o.push(dxIcon(it.icon, x + 12, fY + 42, 28, DX.gold));
+    it.lines.forEach(function(ln, li) {
+      o.push(dxText(x + 62, fY + 40 + li * 17, ln, 11.5, li === 0 ? DX.white : DX.text,
+        { weight: li === 0 ? '600' : '400' }));
+    });
+  });
+  o.push(dxText(W - 24, fY + 92, 'ข้อมูล ณ วันที่ ' + dxThaiDate() +
+    '  ·  ช่วงเดือน: ' + (DASH_MONTH_SCOPE === '3m' ? '3 เดือน' : 'ทุกเดือน'),
+    10, DX.dim, { anchor: 'end' }));
+
+  o.push('</svg>');
+  DASH_THEME = prevTheme;
+  DASH_CHART_H = prevH;
+  DASH_CHART_PAD = prevPad;
+  return o.join('');
+}
+
+// Naive width-based wrapper -- good enough for the fixed-width summary box.
+function dxWrap(str, perLine, maxLines) {
+  maxLines = maxLines || 3;
+  var words = String(str).split(' ');
+  var lines = [], cur = '';
+  words.forEach(function(w) {
+    if ((cur + ' ' + w).trim().length > perLine && cur) { lines.push(cur); cur = w; }
+    else cur = (cur ? cur + ' ' : '') + w;
+  });
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    lines[maxLines - 1] = lines[maxLines - 1] + ' …';
+  }
+  return lines;
+}
+
+function dxSlaDeltaNote() {
+  var d = dashSlaByContractorMonth();
+  var months = Object.keys(d.byMonth).sort();
+  if (months.length < 2) return '';
+  var last = months[months.length - 1], prev = months[months.length - 2];
+  var parts = [];
+  d.contractors.forEach(function(c) {
+    function at(mk) {
+      var r = (d.byMonth[mk] || {})[c];
+      return r && r.total ? Math.round(r.pts / r.total) : null;
+    }
+    var a = at(prev), b = at(last);
+    if (a === null || b === null) return;
+    var diff = b - a;
+    parts.push(contractorDisplayName(c) + ' ' + (diff > 0 ? '▲ +' : (diff < 0 ? '▼ ' : '● ')) + diff);
+  });
+  if (!parts.length) return '';
+  return 'เทียบ ' + monthLabelFromKey(prev) + ' → ' + monthLabelFromKey(last) + ': ' + parts.slice(0, 4).join('  ');
+}
+
+function dxDownload(blob, filename) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1500);
+}
+
+function dxStamp() {
+  return TODAY_ISO.replace(/-/g, '');
+}
+
+function dashExportJpeg(btn) {
+  var old = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = 'กำลังสร้าง...'; btn.disabled = true; }
+  function done() { if (btn) { btn.textContent = old; btn.disabled = false; } }
+  try {
+    var svg = dashExportSvg();
+    var blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function() {
+      var scale = 2; // supersample so it stays sharp when projected
+      var c = document.createElement('canvas');
+      c.width = DASH_EXPORT_W * scale;
+      c.height = DASH_EXPORT_H * scale;
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = DX.bg;
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(function(b) {
+        if (b) dxDownload(b, 'solar-dashboard-' + dxStamp() + '.jpg');
+        else alert('สร้างไฟล์ JPEG ไม่สำเร็จ ลองใช้ปุ่ม PDF แทนได้ครับ');
+        done();
+      }, 'image/jpeg', 0.95);
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      alert('สร้างไฟล์ JPEG ไม่สำเร็จ ลองใช้ปุ่ม PDF แทนได้ครับ');
+      done();
+    };
+    img.src = url;
+  } catch (e) {
+    alert('สร้างไฟล์ JPEG ไม่สำเร็จ: ' + e.message);
+    done();
+  }
+}
+
+function dashExportPdf() {
+  var svg = dashExportSvg();
+  // 297mm x 167mm keeps the page at 16:9 so the board fills it edge to edge.
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+    '<title>Solar Operations Dashboard ' + dxStamp() + '</title>' +
+    '<style>@page{size:297mm 167mm;margin:0;}' +
+    'html,body{margin:0;padding:0;background:' + DX.bg + ';}' +
+    'svg{display:block;width:100%;height:auto;}' +
+    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
+    '</style></head><body>' + svg + '</body></html>';
+  var w = window.open('', '_blank');
+  if (!w) {
+    alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาต pop-up ของเว็บนี้ แล้วกดใหม่อีกครั้งครับ');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function() { try { w.focus(); w.print(); } catch (e) {} }, 600);
+}
 
 function switchView(view) {
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');

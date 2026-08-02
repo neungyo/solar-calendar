@@ -57,7 +57,11 @@
   .dow { font-size:12px; color:var(--muted); text-align:center; padding:4px; font-weight:600; }
   .day { background:var(--card); border:1px solid var(--border); border-radius:8px; min-height:96px; padding:6px; font-size:12px; }
   .day.other-month { opacity:0.35; }
+  .day.weekend { background:#fdf1f4; }
+  .day.holiday { background:#f2ecff; border-color:#c7b6f5; }
   .day.today { border:2px solid var(--accent); background:#eff6ff; }
+  .day.holiday.today { border:2px solid var(--accent); background:#ece2ff; }
+  .day-holiday-name { font-weight:600; font-size:10px; color:#6d28d9; }
   .day-num { font-weight:600; margin-bottom:4px; }
   .evt { border-radius:4px; padding:2px 4px; margin-bottom:2px; font-size:11px; cursor:pointer; display:flex; align-items:center; gap:4px; }
   .evt:hover { filter:brightness(0.96); }
@@ -954,9 +958,60 @@ var cur = new Date();
 var monthLabelEl = document.getElementById('monthLabel');
 var calGrid = document.getElementById('calGrid');
 var dowRow = document.getElementById('dowRow');
-var DOW = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+// Week starts Monday per Sure's request (2026-08-02).
+var DOW = ['จ','อ','พ','พฤ','ศ','ส','อา'];
 var currentRenderedEvents = [];
 var expandedDays = {};
+
+// Thai public holidays as announced by the Bank of Thailand (สถาบันการเงิน
+// ตามประกาศ ธปท.) -- Sure's request, 2026-08-02: shade these cells light
+// purple on the calendar and list them under the grid each month. Sourced
+// from BOT's official annual holiday announcements (17-19 days/year is
+// normal; a couple of "special additional" days are usually announced
+// later in the year, e.g. Jan 2 2026 and Jun 2 / Aug 11 2025).
+// NOTE: add next year's list here once the BOT publishes it (usually
+// announced around Aug-Oct of the preceding year).
+var THAI_HOLIDAYS = {
+  '2025-01-01': 'วันขึ้นปีใหม่',
+  '2025-02-12': 'วันมาฆบูชา',
+  '2025-04-07': 'ชดเชยวันจักรี (วันพระบาทสมเด็จพระพุทธยอดฟ้าจุฬาโลกมหาราช)',
+  '2025-04-14': 'วันสงกรานต์',
+  '2025-04-15': 'วันสงกรานต์',
+  '2025-05-01': 'วันแรงงานแห่งชาติ',
+  '2025-05-05': 'ชดเชยวันฉัตรมงคล',
+  '2025-05-12': 'ชดเชยวันวิสาขบูชา',
+  '2025-06-02': 'วันหยุดพิเศษเพิ่มเติม (ธปท.)',
+  '2025-06-03': 'วันเฉลิมพระชนมพรรษาสมเด็จพระนางเจ้าสุทิดาฯ พระบรมราชินี',
+  '2025-07-10': 'วันอาสาฬหบูชา',
+  '2025-07-28': 'วันเฉลิมพระชนมพรรษาพระบาทสมเด็จพระเจ้าอยู่หัว',
+  '2025-08-11': 'วันหยุดพิเศษเพิ่มเติม (ธปท.)',
+  '2025-08-12': 'วันแม่แห่งชาติ',
+  '2025-10-13': 'วันนวมินทรมหาราช',
+  '2025-10-23': 'วันปิยมหาราช',
+  '2025-12-05': 'วันคล้ายวันพระบรมราชสมภพ ร.9 / วันชาติ / วันพ่อแห่งชาติ',
+  '2025-12-10': 'วันรัฐธรรมนูญ',
+  '2025-12-31': 'วันสิ้นปี',
+
+  '2026-01-01': 'วันขึ้นปีใหม่',
+  '2026-01-02': 'วันหยุดพิเศษเพิ่มเติม (ธปท.)',
+  '2026-03-03': 'วันมาฆบูชา',
+  '2026-04-06': 'วันจักรี (วันพระบาทสมเด็จพระพุทธยอดฟ้าจุฬาโลกมหาราช)',
+  '2026-04-13': 'วันสงกรานต์',
+  '2026-04-14': 'วันสงกรานต์',
+  '2026-04-15': 'วันสงกรานต์',
+  '2026-05-01': 'วันแรงงานแห่งชาติ',
+  '2026-05-04': 'วันฉัตรมงคล',
+  '2026-06-01': 'ชดเชยวันวิสาขบูชา',
+  '2026-06-03': 'วันเฉลิมพระชนมพรรษาสมเด็จพระนางเจ้าสุทิดาฯ พระบรมราชินี',
+  '2026-07-28': 'วันเฉลิมพระชนมพรรษาพระบาทสมเด็จพระเจ้าอยู่หัว',
+  '2026-07-29': 'วันอาสาฬหบูชา',
+  '2026-08-12': 'วันแม่แห่งชาติ',
+  '2026-10-13': 'วันนวมินทรมหาราช',
+  '2026-10-23': 'วันปิยมหาราช',
+  '2026-12-07': 'ชดเชยวันคล้ายวันพระบรมราชสมภพ ร.9 / วันชาติ / วันพ่อแห่งชาติ',
+  '2026-12-10': 'วันรัฐธรรมนูญ',
+  '2026-12-31': 'วันสิ้นปี'
+};
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -1030,7 +1085,8 @@ function renderCalendar() {
   var y = cur.getFullYear(), m = cur.getMonth();
   monthLabelEl.textContent = cur.toLocaleDateString('th-TH', {year:'numeric', month:'long'});
   var first = new Date(y, m, 1);
-  var startDow = first.getDay();
+  // Week starts Monday: JS getDay() is 0=Sun..6=Sat, so shift it to 0=Mon..6=Sun.
+  var startDow = (first.getDay() + 6) % 7;
   var daysInMonth = new Date(y, m+1, 0).getDate();
   var cells = [];
   for (var i=0;i<startDow;i++) cells.push(null);
@@ -1099,7 +1155,13 @@ function renderCalendar() {
       moreHtml = '<div class="evt-more" data-date="' + iso + '">แสดงน้อยลง</div>';
     }
     var todayCls = (iso === TODAY_ISO) ? ' today' : '';
-    return '<div class="day' + todayCls + '"><div class="day-num">' + d + '</div>' + evtHtml + moreHtml + '</div>';
+    var jsWeekday = new Date(y, m, d).getDay(); // 0=Sun..6=Sat, independent of display order
+    var weekendCls = (jsWeekday === 0 || jsWeekday === 6) ? ' weekend' : '';
+    var holidayName = THAI_HOLIDAYS[iso];
+    var holidayCls = holidayName ? ' holiday' : '';
+    var holidayTitle = holidayName ? ' title="' + String(holidayName).replace(/"/g, '&quot;') + '"' : '';
+    var holidayLabel = holidayName ? ' <span class="day-holiday-name">' + escHtml(holidayName) + '</span>' : '';
+    return '<div class="day' + todayCls + weekendCls + holidayCls + '"' + holidayTitle + '><div class="day-num">' + d + holidayLabel + '</div>' + evtHtml + moreHtml + '</div>';
   }).join('');
 }
 

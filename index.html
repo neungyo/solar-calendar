@@ -4247,6 +4247,45 @@ document.getElementById('logoutBtn').onclick = function() {
   window.location.href = window.location.pathname;
 };
 
+// Transient-failure retry wrapper (Sure's request, 2026-08-04).
+// Google Apps Script occasionally answers a web-app request with ITS OWN HTML
+// error page instead of our JSON -- a server-side hiccup (execution timeout,
+// concurrent-execution throttling, momentary Google outage), not a bug in
+// this page or in the .gs code (every path in doGet() is already wrapped in
+// try/catch and would return {"error":...} as JSON if OUR code threw).
+// Symptom was a red banner reading: Unexpected token '<', "<!DOCTYPE "...
+// It happened twice, and both times the exact same request worked again a
+// moment later with nothing changed. So: read the body as TEXT first, decide
+// whether it's really JSON, and quietly retry a couple of times with backoff
+// before ever showing the user an error.
+function fetchJsonWithRetry(url, attemptsLeft, delayMs, onRetry) {
+  var bustUrl = url + (url.indexOf('?') === -1 ? '?' : '&') + '_r=' + Date.now();
+  return fetch(bustUrl)
+    .then(function(r) { return r.text(); })
+    .then(function(txt) {
+      var t = String(txt || '').replace(/^﻿/, '').trim();
+      // An HTML error page starts with '<' -- never with '{' or '['.
+      if (t.charAt(0) !== '{' && t.charAt(0) !== '[') throw new Error('__TRANSIENT__');
+      try { return JSON.parse(t); }
+      catch (parseErr) { throw new Error('__TRANSIENT__'); }
+    })
+    .catch(function(err) {
+      // Treat both "not JSON" and raw network failures as retryable; a real
+      // application-level error (data.error) is thrown by the caller instead
+      // and never reaches this point.
+      var isTransient = !!err && (err.message === '__TRANSIENT__' || err.name === 'TypeError');
+      if (isTransient && attemptsLeft > 1) {
+        if (onRetry) { try { onRetry(attemptsLeft); } catch (cbErr) {} }
+        return new Promise(function(resolve) { setTimeout(resolve, delayMs); })
+          .then(function() { return fetchJsonWithRetry(url, attemptsLeft - 1, delayMs * 2, onRetry); });
+      }
+      if (isTransient) {
+        throw new Error('เซิร์ฟเวอร์ Google ตอบไม่สมบูรณ์ (ลองใหม่ให้แล้ว 3 ครั้ง) — มักเป็นปัญหาชั่วคราว รอสักครู่แล้วกดปุ่มรีเฟรชอีกครั้งได้เลย');
+      }
+      throw err;
+    });
+}
+
 function fetchData(isManualClick) {
   var btn = document.getElementById('refreshBtn');
   var statusEl = document.getElementById('refreshStatus');
@@ -4266,8 +4305,9 @@ function fetchData(isManualClick) {
     return;
   }
   var url = WEBAPP_URL + (WEBAPP_URL.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(ACCESS_KEY) + '&_t=' + Date.now();
-  fetch(url)
-    .then(function(r) { return r.json(); })
+  fetchJsonWithRetry(url, 3, 1500, function() {
+    if (statusEl) statusEl.textContent = '⏳ เซิร์ฟเวอร์ตอบไม่สมบูรณ์ กำลังลองใหม่อัตโนมัติ...';
+  })
     .then(function(data) {
       if (data.error === 'unauthorized') {
         // Stored/URL key no longer works (e.g. revoked) -- clear it and send

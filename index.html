@@ -3061,9 +3061,15 @@ function dashSlaTrendNote() {
     return '<span class="' + cls + '">' + escHtml(contractorDisplayName(r.c)) + ' ' + arrow + ' ' +
       (diff > 0 ? '+' : '') + diff + ' คะแนน (' + r.prev + '% → ' + r.last + '%)</span>';
   });
+  // Tally is scoped to the same months the chart above is currently showing
+  // (the 3-month window, or every month if that toggle is set to "ทุกเดือน")
+  // -- Sure's request, 2026-08-04: this line used to always sum every month
+  // with SLA data regardless of the chart's scope, which could show a bigger
+  // total than what the bars above visibly add up to.
+  var scopedMonths = dashScopeMonths(Object.keys(d.byMonth));
   var tally = { excellent: 0, met: 0, exceeded: 0, total: 0 };
-  Object.keys(d.byMonth).forEach(function(mk) {
-    var perC = d.byMonth[mk];
+  scopedMonths.forEach(function(mk) {
+    var perC = d.byMonth[mk] || {};
     Object.keys(perC).forEach(function(c) {
       tally.excellent += perC[c].excellent || 0;
       tally.met += perC[c].met || 0;
@@ -3071,7 +3077,8 @@ function dashSlaTrendNote() {
       tally.total += perC[c].total || 0;
     });
   });
-  var tallyLine = '<div style="margin-top:6px;">รวมทุกเดือน ' + tally.total + ' งาน — ' +
+  var tallyScopeLabel = DASH_MONTH_SCOPE === 'all' ? 'รวมทุกเดือน' : 'รวมช่วง 3 เดือนนี้';
+  var tallyLine = '<div style="margin-top:6px;">' + tallyScopeLabel + ' ' + tally.total + ' งาน — ' +
     '<span class="dash-trend-flat" style="color:#eab308;font-weight:600;">ดีมาก ' + tally.excellent + ' งาน</span> / ' +
     '<span class="dash-trend-up">ตรงตาม SLA ' + tally.met + ' งาน</span> / ' +
     '<span class="dash-trend-down">เกิน SLA ' + tally.exceeded + ' งาน</span>' +

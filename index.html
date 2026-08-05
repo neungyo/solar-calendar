@@ -469,6 +469,21 @@
   <div class="stats-row" id="slaStatsRow"></div>
 
   <div class="card-box chart-card">
+    <div class="overview-section-title">งานติดตั้งจบภายในกี่วัน</div>
+    <div class="doc-table-toolbar">นับตามเดือนที่ติดตั้งเสร็จ · จำนวนวันนับจากวันนัดติดตั้งถึงวันที่ติดตั้งเสร็จ โดยนับวันแรกเป็นวันที่ 1 (เกณฑ์เดียวกับตาราง SLA ด้านล่าง) · กราฟเทียบ 3 เดือนล่าสุด คือเดือนปัจจุบันกับ 2 เดือนก่อนหน้า</div>
+    <div class="chart-legend" id="durationChartLegend"></div>
+    <div id="durationChartHost"></div>
+    <table class="doc-table" id="durationTable" style="margin-top:14px;">
+      <thead>
+        <tr>
+          <th>ช่วงเวลา</th><th>จบใน 1 วัน</th><th>จบใน 2 วัน</th><th>จบใน 3-5 วัน</th><th>เกิน 5 วัน</th><th>รวม</th>
+        </tr>
+      </thead>
+      <tbody id="durationTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box chart-card">
     <div class="overview-section-title">คะแนนคุณภาพ SLA รายผู้รับเหมา (ใช้พิจารณาการมอบหมายงานครั้งถัดไป)</div>
     <div class="chart-legend">
       <span class="chart-legend-item"><span class="chart-swatch" style="background:#eab308;"></span>ดีมาก</span>
@@ -2206,6 +2221,139 @@ function jobsWithSla() {
   return currentFilteredJobs()
     .map(function(j) { return { job: j, sla: jobSlaInfo(j) }; })
     .filter(function(x) { return x.sla !== null; });
+}
+
+// ===== Install-duration distribution (Sure's request, 2026-08-05) =====
+// "งานที่จบภายใน 1 วัน มีกี่งาน จบ 2 วัน จบ 3-5 วัน เกิน 5 วัน" -- overall plus
+// a three-month comparison. Buckets are fixed and deliberately NOT tied to the
+// SLA tier thresholds: a 4-day job is "3-5 วัน" here whether or not its own
+// SLA window was 3-5 or 5-7, because this section answers "how fast do we
+// actually finish?", not "did we meet the promise?".
+var DURATION_BUCKETS = [
+  { key: 'd1',  label: 'จบใน 1 วัน',   color: '#059669', test: function(d) { return d <= 1; } },
+  { key: 'd2',  label: 'จบใน 2 วัน',   color: '#84cc16', test: function(d) { return d === 2; } },
+  { key: 'd35', label: 'จบใน 3-5 วัน', color: '#f59e0b', test: function(d) { return d >= 3 && d <= 5; } },
+  { key: 'd5p', label: 'เกิน 5 วัน',   color: '#dc2626', test: function(d) { return d > 5; } }
+];
+
+function jobFinishIso_(job) {
+  var sorted = (job.actual_install_dates || []).slice().sort();
+  return job.install_complete_date || (sorted.length ? sorted[sorted.length - 1] : '');
+}
+
+function durationBucketOf_(days) {
+  for (var i = 0; i < DURATION_BUCKETS.length; i++) {
+    if (DURATION_BUCKETS[i].test(days)) return DURATION_BUCKETS[i].key;
+  }
+  return 'd5p';
+}
+
+// Deliberately NOT dashThreeMonthKeys(): that one is previous / current / NEXT,
+// which is right for looking at upcoming survey queues but wrong here -- a
+// future month cannot contain finished work, so it would always render an
+// empty third group. This window looks backward instead.
+function durationThreeMonthKeys() {
+  var base = new Date(TODAY_ISO + 'T00:00:00');
+  var keys = [];
+  for (var i = 2; i >= 0; i--) {
+    var d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    keys.push(d.getFullYear() + '-' + pad(d.getMonth() + 1));
+  }
+  return keys;
+}
+
+function durationDistribution() {
+  var items = jobsWithSla();
+  var blank = function() { return { d1: 0, d2: 0, d35: 0, d5p: 0, total: 0 }; };
+  var all = blank(), byMonth = {};
+  items.forEach(function(x) {
+    var b = durationBucketOf_(x.sla.days);
+    all[b]++; all.total++;
+    var fin = jobFinishIso_(x.job);
+    if (!fin) return;
+    var mk = fin.slice(0, 7);
+    if (!byMonth[mk]) byMonth[mk] = blank();
+    byMonth[mk][b]++; byMonth[mk].total++;
+  });
+  return { all: all, byMonth: byMonth };
+}
+
+function renderDurationChart() {
+  var legend = document.getElementById('durationChartLegend');
+  if (legend) {
+    legend.innerHTML = DURATION_BUCKETS.map(function(b) {
+      return '<span class="chart-legend-item"><span class="chart-swatch" style="background:' + b.color + ';"></span>' + b.label + '</span>';
+    }).join('');
+  }
+  var host = document.getElementById('durationChartHost');
+  if (!host) return;
+  var d = durationDistribution();
+  var months = durationThreeMonthKeys();
+  var maxV = 0;
+  months.forEach(function(mk) {
+    var m = d.byMonth[mk];
+    if (!m) return;
+    DURATION_BUCKETS.forEach(function(b) { if (m[b.key] > maxV) maxV = m[b.key]; });
+  });
+  if (maxV === 0) {
+    host.innerHTML = '<div class="chart-empty">ยังไม่มีงานที่ติดตั้งเสร็จใน 3 เดือนนี้</div>';
+    return;
+  }
+
+  var barW = 34, innerGap = 8, groupGap = 54, chartH = 200, leftPad = 36, topPad = 18, bottomPad = 52;
+  var groupW = DURATION_BUCKETS.length * barW + (DURATION_BUCKETS.length - 1) * innerGap;
+  var width = leftPad + months.length * (groupW + groupGap);
+  var height = topPad + chartH + bottomPad;
+  var o = [];
+  o.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  var divisions = 4;
+  for (var g = 0; g <= divisions; g++) {
+    var gy = topPad + chartH - (chartH * g / divisions);
+    var gv = Math.round(maxV * g / divisions);
+    o.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    o.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + gv + '</text>');
+  }
+  months.forEach(function(mk, gi) {
+    var m = d.byMonth[mk] || { d1: 0, d2: 0, d35: 0, d5p: 0, total: 0 };
+    var gx = leftPad + gi * (groupW + groupGap) + groupGap / 2;
+    DURATION_BUCKETS.forEach(function(b, bi) {
+      var n = m[b.key] || 0;
+      var x = gx + bi * (barW + innerGap);
+      var h = (n / maxV) * chartH;
+      var y = topPad + chartH - h;
+      if (n > 0) {
+        o.push('<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" rx="3" fill="' + b.color + '"><title>' +
+          escHtml(monthLabelFromKey(mk)) + ' - ' + b.label + ': ' + n + ' งาน</title></rect>');
+      }
+      o.push('<text x="' + (x + barW / 2) + '" y="' + (y - 5) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + n + '</text>');
+    });
+    o.push('<text x="' + (gx + groupW / 2) + '" y="' + (topPad + chartH + 18) + '" font-size="11" fill="#374151" text-anchor="middle" font-weight="600">' + escHtml(monthLabelFromKey(mk)) + '</text>');
+    o.push('<text x="' + (gx + groupW / 2) + '" y="' + (topPad + chartH + 34) + '" font-size="10" fill="#6b7280" text-anchor="middle">รวม ' + m.total + ' งาน</text>');
+  });
+  o.push('</svg>');
+  host.innerHTML = o.join('');
+}
+
+function renderDurationTable() {
+  var body = document.getElementById('durationTableBody');
+  if (!body) return;
+  var d = durationDistribution();
+  var months = durationThreeMonthKeys();
+  function row(label, o, emphasise) {
+    o = o || { d1: 0, d2: 0, d35: 0, d5p: 0, total: 0 };
+    var cells = DURATION_BUCKETS.map(function(b) {
+      var n = o[b.key] || 0;
+      var pct = o.total ? Math.round(n * 100 / o.total) : 0;
+      return '<td>' + n +
+        (o.total ? ' <span style="color:var(--muted);font-size:11px;">(' + pct + '%)</span>' : '') +
+        '</td>';
+    }).join('');
+    return '<tr' + (emphasise ? ' style="background:#f7f8fa;"' : '') + '><td' + (emphasise ? ' style="font-weight:700;"' : '') + '>' +
+      escHtml(label) + '</td>' + cells + '<td><b>' + o.total + '</b></td></tr>';
+  }
+  var rows = [row('ภาพรวมทั้งหมด (ทุกเดือน)', d.all, true)];
+  months.forEach(function(mk) { rows.push(row(monthLabelFromKey(mk), d.byMonth[mk], false)); });
+  body.innerHTML = rows.join('');
 }
 
 function renderSlaStats() {
@@ -4065,7 +4213,7 @@ function switchView(view) {
   document.getElementById('dashWrap').style.display = (view === 'dash') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (view === 'sla') { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
+  if (view === 'sla') { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (view === 'alloc') { renderAllocTable(); }
   if (view === 'dash') { renderDashboard(); }
 }
@@ -4074,7 +4222,7 @@ function onFiltersChanged() {
   renderCalendar();
   if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
+  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (document.getElementById('tabAllocBtn').classList.contains('active')) { renderAllocTable(); }
   if (document.getElementById('tabDashBtn').classList.contains('active')) { renderDashboard(); }
 }

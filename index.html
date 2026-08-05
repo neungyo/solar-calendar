@@ -48,6 +48,16 @@
   body.focus-mode .day { min-height:150px; font-size:13px; }
   body.focus-mode .evt { font-size:12px; padding:3px 5px; }
   .month-nav { display:flex; align-items:center; gap:10px; margin-bottom:10px; justify-content:flex-end; }
+  /* Per-month summary chips in the calendar header (Sure's request, 2026-08-05).
+     Sized to sit level with the month label, colour-coded to match the same
+     survey/install/completed palette already used by the event pills below. */
+  .month-summary { display:flex; align-items:center; gap:6px; margin-right:auto; flex-wrap:wrap; }
+  .msum { display:inline-flex; align-items:center; gap:5px; font-size:13px; line-height:1;
+          padding:5px 9px; border-radius:6px; border:1px solid; background:#fff; white-space:nowrap; }
+  .msum b { font-size:15px; font-weight:700; }
+  .msum.survey    { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
+  .msum.install   { border-color:#fcd34d; background:#fffbeb; color:#92400e; }
+  .msum.completed { border-color:#86efac; background:#f0fdf4; color:#166534; }
   .zoom-controls { display:none; align-items:center; gap:8px; margin-bottom:10px; justify-content:flex-end; }
   .zoom-controls button { padding:4px 12px; font-size:14px; }
   #zoomLabel { font-size:12px; color:var(--muted); min-width:42px; text-align:center; }
@@ -187,8 +197,9 @@
   @media print {
     .filter-row, .refresh-row, .status-bar, .modal-overlay, .today-note { display:none !important; }
     .month-nav button { display:none !important; }
-    .month-nav { justify-content:center; margin-bottom:10px; }
+    .month-nav { justify-content:center; margin-bottom:10px; flex-wrap:wrap; }
     .month-nav strong { font-size:18px; }
+    .month-summary { margin-right:0; justify-content:center; width:100%; }
     body { padding:6px; }
     .day { min-height:80px; }
   }
@@ -271,6 +282,7 @@
 </div>
 
 <div class="month-nav" id="monthNavRow">
+  <div class="month-summary" id="monthSummary"></div>
   <button class="secondary" id="prevMonth">‹ เดือนก่อน</button>
   <strong id="monthLabel"></strong>
   <button class="secondary" id="nextMonth">เดือนถัดไป ›</button>
@@ -1080,10 +1092,44 @@ function jobSlaInfo(job) {
   };
 }
 
+// Per-month summary chips shown next to the month label (Sure's request,
+// 2026-08-05). Two deliberate choices worth remembering:
+//  1. It counts UNIQUE JOBS, not calendar events. One install job routinely
+//     occupies several consecutive days (install_actual day 1/2/3...), so
+//     counting events would report far more "งานติดตั้ง" than there really are.
+//  2. It reuses passesFilters(), the exact same predicate the grid cells use,
+//     so the chips can never disagree with the events drawn underneath them
+//     when a contractor/status/search filter is active.
+function renderMonthSummary(y, m) {
+  var el = document.getElementById('monthSummary');
+  if (!el) return;
+  var prefix = y + '-' + pad(m + 1) + '-';
+  var surveyJobs = {}, installJobs = {}, doneJobs = {};
+  (EVENTS || []).forEach(function(e) {
+    if (!e || !e.date || String(e.date).indexOf(prefix) !== 0) return;
+    if (!passesFilters(e)) return;
+    var k = e.job_key || ((e.customer || '') + '|' + (e.job_code || ''));
+    if (e.type === 'survey') { surveyJobs[k] = true; return; }
+    installJobs[k] = true;
+    if (e.status === 'ดำเนินการเสร็จสิ้น') doneJobs[k] = true;
+  });
+  function chip(cls, label, n, tip) {
+    return '<span class="msum ' + cls + '" title="' + tip + '">' + label + ' <b>' + n + '</b></span>';
+  }
+  el.innerHTML =
+    chip('survey', 'สำรวจ', Object.keys(surveyJobs).length,
+      'จำนวนงานที่มีนัดเข้าสำรวจในเดือนนี้ (นับเป็นงาน ไม่ใช่จำนวนวัน)') +
+    chip('install', 'ติดตั้ง', Object.keys(installJobs).length,
+      'จำนวนงานที่มีนัดติดตั้ง/เข้าติดตั้งในเดือนนี้ (นับเป็นงาน ไม่ใช่จำนวนวัน)') +
+    chip('completed', 'เสร็จสิ้น', Object.keys(doneJobs).length,
+      'จำนวนงานติดตั้งในเดือนนี้ที่สถานะเป็น ดำเนินการเสร็จสิ้นแล้ว');
+}
+
 function renderCalendar() {
   dowRow.innerHTML = DOW.map(function(d) { return '<div class="dow">' + d + '</div>'; }).join('');
   var y = cur.getFullYear(), m = cur.getMonth();
   monthLabelEl.textContent = cur.toLocaleDateString('th-TH', {year:'numeric', month:'long'});
+  renderMonthSummary(y, m);
   var first = new Date(y, m, 1);
   // Week starts Monday: JS getDay() is 0=Sun..6=Sat, so shift it to 0=Mon..6=Sun.
   var startDow = (first.getDay() + 6) % 7;

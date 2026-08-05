@@ -62,6 +62,9 @@
   .msum.survey    { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
   .msum.install   { border-color:#fcd34d; background:#fffbeb; color:#92400e; }
   .msum.completed { border-color:#86efac; background:#f0fdf4; color:#166534; }
+  /* "คงเหลือ" = install jobs this month that aren't finished yet. Deliberately
+     slate rather than red -- it's ordinary outstanding work, not a problem. */
+  .msum.remaining { border-color:#cbd5e1; background:#f8fafc; color:#334155; }
   .zoom-controls { display:none; align-items:center; gap:8px; margin-bottom:10px; justify-content:flex-end; }
   .zoom-controls button { padding:4px 12px; font-size:14px; }
   #zoomLabel { font-size:12px; color:var(--muted); min-width:42px; text-align:center; }
@@ -1127,7 +1130,9 @@ function renderMonthSummary(y, m) {
     chip('install', 'ติดตั้ง', Object.keys(installJobs).length,
       'จำนวนงานที่มีนัดติดตั้ง/เข้าติดตั้งในเดือนนี้ (นับเป็นงาน ไม่ใช่จำนวนวัน)') +
     chip('completed', 'เสร็จสิ้น', Object.keys(doneJobs).length,
-      'จำนวนงานติดตั้งในเดือนนี้ที่สถานะเป็น ดำเนินการเสร็จสิ้นแล้ว');
+      'จำนวนงานติดตั้งในเดือนนี้ที่สถานะเป็น ดำเนินการเสร็จสิ้นแล้ว') +
+    chip('remaining', 'คงเหลือ', Object.keys(installJobs).length - Object.keys(doneJobs).length,
+      'งานที่มีวันติดตั้งในเดือนนี้แล้วแต่ยังไม่เสร็จสิ้น (ติดตั้ง − เสร็จสิ้น)');
 }
 
 function renderCalendar() {

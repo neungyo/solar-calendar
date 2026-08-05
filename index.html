@@ -129,6 +129,18 @@
   .stat-card.c-intent { border-top-color:#0d9488; }
   .stat-card .stat-sub { font-size:11px; color:var(--muted); margin-top:2px; }
   .sla-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
+  /* Compiled per-day install log inside the SLA table's "เหตุผล" cell
+     (Sure's request, 2026-08-05). Each logged day is its own line so the cell
+     stays readable when a job ran over several days. */
+  #slaTable td:last-child { max-width:420px; }
+  .sla-log-line { font-size:12px; line-height:1.5; padding:3px 0; }
+  .sla-log-line + .sla-log-line { border-top:1px dashed var(--border); }
+  .sla-log-date { font-weight:600; color:var(--muted); }
+  .sla-log-status { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; font-weight:600; }
+  .sla-log-status.log-ok { background:#f0fdf4; color:#166534; }
+  .sla-log-status.log-pending { background:#fff7ed; color:#9a3412; }
+  .sla-log-by { color:var(--muted); }
+  .sla-log-legacy { font-size:12px; line-height:1.5; color:#92400e; }
   .sla-badge.excellent { background:#fef9c3; color:#854d0e; }
   .sla-badge.met { background:#dcfce7; color:#166534; }
   .sla-badge.exceeded { background:#fee2e2; color:#991b1b; }
@@ -508,7 +520,7 @@
     <table class="doc-table" id="slaTable">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>ผรม.</th><th>อุปกรณ์</th><th>Smart Guard</th><th>เริ่มติดตั้ง</th><th>เสร็จติดตั้ง</th><th>จำนวนวัน</th><th>เกณฑ์ SLA</th><th>ผลลัพธ์</th><th>เหตุผล (ถ้าเกิน SLA)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>ผรม.</th><th>อุปกรณ์</th><th>Smart Guard</th><th>เริ่มติดตั้ง</th><th>เสร็จติดตั้ง</th><th>จำนวนวัน</th><th>เกณฑ์ SLA</th><th>ผลลัพธ์</th><th>เหตุผล</th>
         </tr>
       </thead>
       <tbody id="slaTableBody"></tbody>
@@ -1499,6 +1511,42 @@ function installLogReasonText_(job) {
   return (job && job.site_issues) || '';
 }
 
+// Compiled install-log cell for the SLA table (Sure's request, 2026-08-05).
+// Before, the "เหตุผล" column only ever printed text for jobs that BREACHED
+// SLA -- so the day-by-day notes staff take on every other job were being
+// collected and then shown nowhere in this table, which is exactly the table
+// you'd read when trying to explain why a job went the way it did. Now every
+// row prints its full log.
+// Ordering is oldest-first here (the modal lists newest-first) because when
+// you're reconstructing what happened on site, reading day 1 -> day N in
+// sequence is what makes the story legible.
+// Falls back to the sheet's static site_issues for older jobs that were never
+// logged, so nothing that used to be visible disappears.
+function installLogCellHtml_(job) {
+  var tsApp = job && job.ts_app;
+  var entries = (tsApp && RATINGS_SUMMARY.installLogs && RATINGS_SUMMARY.installLogs.byJob &&
+    RATINGS_SUMMARY.installLogs.byJob[tsApp]) || [];
+  if (entries.length) {
+    var sorted = entries.slice().sort(function(a, b) {
+      return String(a.date || '').localeCompare(String(b.date || ''));
+    });
+    return sorted.map(function(en) {
+      var statusText = String(en.status || '').trim();
+      var statusCls = statusText === 'เสร็จ' ? 'log-ok' : 'log-pending';
+      return '<div class="sla-log-line">' +
+        '<span class="sla-log-date">' + escHtml(en.date || '-') + '</span> ' +
+        '<span class="sla-log-status ' + statusCls + '">' + escHtml(statusText || '-') + '</span> ' +
+        escHtml(en.detail || 'ไม่ระบุรายละเอียด') +
+        (en.recordedBy ? ' <span class="sla-log-by">— ' + escHtml(en.recordedBy) + '</span>' : '') +
+        '</div>';
+    }).join('');
+  }
+  if (job && job.site_issues) {
+    return '<div class="sla-log-legacy">' + escHtml(job.site_issues) + '</div>';
+  }
+  return '<span style="color:var(--muted);">-</span>';
+}
+
 function escHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -2189,7 +2237,7 @@ function renderSlaTable() {
     var start = j.install_appointment || (j.actual_install_dates || []).slice().sort()[0] || '-';
     var sortedActual = (j.actual_install_dates || []).slice().sort();
     var finish = sortedActual.length ? sortedActual[sortedActual.length - 1] : (j.install_complete_date || '-');
-    var reasonCell = s.tier === 'exceeded' ? escHtml(s.reason || 'ไม่ระบุเหตุผล') : '-';
+    var reasonCell = installLogCellHtml_(j);
     return '<tr>' +
       '<td>' + (i + 1) + '</td>' +
       '<td>' + escHtml(tsAppNum) + '</td>' +

@@ -51,7 +51,11 @@
   /* Per-month summary chips in the calendar header (Sure's request, 2026-08-05).
      Sized to sit level with the month label, colour-coded to match the same
      survey/install/completed palette already used by the event pills below. */
-  .month-summary { display:flex; align-items:center; gap:6px; margin-right:auto; flex-wrap:wrap; }
+  /* No margin-right:auto here (Sure, 2026-08-05): with the row set to
+     justify-content:flex-end, leaving it off keeps the chips tucked directly
+     against the "‹ เดือนก่อน" button instead of being pushed to the far left
+     edge of the page, which read as disconnected from the month controls. */
+  .month-summary { display:flex; align-items:center; gap:6px; margin-right:4px; flex-wrap:wrap; }
   .msum { display:inline-flex; align-items:center; gap:5px; font-size:13px; line-height:1;
           padding:5px 9px; border-radius:6px; border:1px solid; background:#fff; white-space:nowrap; }
   .msum b { font-size:15px; font-weight:700; }
@@ -200,6 +204,7 @@
     .month-nav { justify-content:center; margin-bottom:10px; flex-wrap:wrap; }
     .month-nav strong { font-size:18px; }
     .month-summary { margin-right:0; justify-content:center; width:100%; }
+    /* phones: chips get their own centred row above the month label */
     body { padding:6px; }
     .day { min-height:80px; }
   }

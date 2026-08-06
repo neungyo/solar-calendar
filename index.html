@@ -489,6 +489,27 @@
   </div>
 
   <div class="card-box chart-card">
+    <div class="overview-section-title">SLA การส่งเอกสาร Proposal Quotation (TAC) หลังเข้าสำรวจ</div>
+    <div class="doc-table-toolbar">นับ <b>วันทำการ</b> จากวันเข้าสำรวจถึงวันที่ได้รับเอกสาร ไม่นับเสาร์-อาทิตย์และวันหยุดธนาคาร · เกณฑ์ <b>ภายใน 5 วันทำการ</b> · งานที่ยังไม่ได้รับเอกสารและเลยเกณฑ์แล้วจะขึ้นเป็น "เกินกำหนด ยังไม่ได้รับ" เพื่อให้ตามงานได้ทัน</div>
+    <div class="chart-legend">
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#16a34a;"></span>ได้รับภายในเกณฑ์</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#dc2626;"></span>ได้รับล่าช้า</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#f59e0b;"></span>เกินกำหนด ยังไม่ได้รับ</span>
+      <span class="chart-legend-item"><span class="chart-swatch" style="background:#cbd5e1;"></span>รออยู่ ยังไม่เกินเกณฑ์</span>
+    </div>
+    <div id="tacDocChartHost"></div>
+    <div class="doc-table-toolbar" id="tacDocTableCount" style="margin-top:14px;"></div>
+    <table class="doc-table" id="tacDocTable">
+      <thead>
+        <tr>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>ผรม.</th><th>วันที่เข้าสำรวจ</th><th>วันที่ได้รับเอกสาร</th><th>วันทำการ</th><th>ผลลัพธ์</th>
+        </tr>
+      </thead>
+      <tbody id="tacDocTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box chart-card">
     <div class="overview-section-title">คะแนนคุณภาพ SLA รายผู้รับเหมา (ใช้พิจารณาการมอบหมายงานครั้งถัดไป)</div>
     <div class="chart-legend">
       <span class="chart-legend-item"><span class="chart-swatch" style="background:#eab308;"></span>ดีมาก</span>
@@ -2287,6 +2308,182 @@ function jobsWithSla() {
   return currentFilteredJobs()
     .map(function(j) { return { job: j, sla: jobSlaInfo(j) }; })
     .filter(function(x) { return x.sla !== null; });
+}
+
+// ===== Document-turnaround SLA (Sure's request, 2026-08-06) =====
+// Sales complained that the Proposal Quotation (TAC) reaches them too long
+// after the site survey, which stalls closing the sale. The sheet gained a new
+// column "วันที่ได้รับเอกสาร TAC" at Q for this; here we measure survey ->
+// document received and flag anything over the agreed threshold.
+// Counted in BUSINESS days, not calendar days, because the promise was made in
+// working days -- a survey on Friday with the document arriving Monday is one
+// working day, not three, and counting calendar days would unfairly mark it
+// late. Weekends and the Thai bank holidays already listed in THAI_HOLIDAYS
+// are both skipped.
+var TAC_DOC_SLA_DAYS = 5;
+
+function businessDaysBetween_(fromIso, toIso) {
+  if (!fromIso || !toIso || toIso < fromIso) return null;
+  var d = new Date(fromIso + 'T00:00:00');
+  var end = new Date(toIso + 'T00:00:00');
+  var n = 0, guard = 0;
+  while (d < end && guard < 3000) {
+    guard++;
+    d.setDate(d.getDate() + 1);
+    var wd = d.getDay();
+    if (wd === 0 || wd === 6) continue;
+    var iso = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    if (THAI_HOLIDAYS[iso]) continue;
+    n++;
+  }
+  return n;
+}
+
+// tier: met | late | overdue (still missing and already past the threshold) |
+//       waiting (still missing but within the threshold)
+function tacDocSlaInfo(job) {
+  if (!job || !job.survey_date) return null;
+  if (isServiceJob(job)) return null;
+  var received = job.tac_received_date || '';
+  if (received) {
+    var days = businessDaysBetween_(job.survey_date, received);
+    if (days === null) return null;
+    return { tier: days <= TAC_DOC_SLA_DAYS ? 'met' : 'late', days: days, received: received };
+  }
+  var waited = businessDaysBetween_(job.survey_date, TODAY_ISO);
+  if (waited === null) return null;
+  return { tier: waited > TAC_DOC_SLA_DAYS ? 'overdue' : 'waiting', days: waited, received: '' };
+}
+
+var TAC_DOC_TIERS = [
+  { key: 'met',     label: 'ได้รับภายในเกณฑ์',     color: '#16a34a' },
+  { key: 'late',    label: 'ได้รับล่าช้า',          color: '#dc2626' },
+  { key: 'overdue', label: 'เกินกำหนด ยังไม่ได้รับ', color: '#f59e0b' },
+  { key: 'waiting', label: 'รออยู่ ยังไม่เกินเกณฑ์', color: '#cbd5e1' }
+];
+
+// True once anyone has started filling the new column. Until then EVERY
+// surveyed job would be reported as "เกินกำหนด ยังไม่ได้รับ", which is not a
+// finding about the contractors -- it just means the data does not exist yet.
+// So the whole section shows a setup message instead of 70+ false alarms.
+function tacDocTrackingStarted() {
+  return (JOBS || []).some(function(j) { return !!(j && j.tac_received_date); });
+}
+
+function jobsWithTacDocSla() {
+  if (!tacDocTrackingStarted()) return [];
+  return currentFilteredJobs()
+    .map(function(j) { return { job: j, doc: tacDocSlaInfo(j) }; })
+    .filter(function(x) { return x.doc !== null; });
+}
+
+function tacDocByContractor() {
+  var by = {};
+  jobsWithTacDocSla().forEach(function(x) {
+    var c = x.job.contractor || '(ไม่ระบุ)';
+    if (!by[c]) by[c] = { contractor: c, met: 0, late: 0, overdue: 0, waiting: 0, total: 0, sumDays: 0, nDays: 0 };
+    by[c][x.doc.tier]++;
+    by[c].total++;
+    if (x.doc.received) { by[c].sumDays += x.doc.days; by[c].nDays++; }
+  });
+  return Object.keys(by).map(function(k) {
+    var r = by[k];
+    r.avgDays = r.nDays ? Math.round((r.sumDays / r.nDays) * 10) / 10 : null;
+    return r;
+  }).sort(function(a, b) {
+    var la = a.late + a.overdue, lb = b.late + b.overdue;
+    if (la !== lb) return lb - la;
+    return b.total - a.total;
+  });
+}
+
+function renderTacDocChart() {
+  var host = document.getElementById('tacDocChartHost');
+  if (!host) return;
+  if (!tacDocTrackingStarted()) {
+    host.innerHTML = '<div class="chart-empty">ยังไม่ได้เริ่มบันทึกข้อมูล — กรอกคอลัมน์ "วันที่ได้รับเอกสาร TAC" ในชีต แล้วส่วนนี้จะคำนวณให้อัตโนมัติ</div>';
+    return;
+  }
+  var list = tacDocByContractor();
+  if (list.length === 0) {
+    host.innerHTML = '<div class="chart-empty">ยังไม่มีงานที่เข้าเกณฑ์การนับในตัวกรองปัจจุบัน</div>';
+    return;
+  }
+  var maxTotal = 1;
+  list.forEach(function(c) { if (c.total > maxTotal) maxTotal = c.total; });
+  var barW = 46, gap = 26, chartH = 200, leftPad = 36, topPad = 16, bottomPad = 56;
+  var width = leftPad + list.length * (barW + gap);
+  var height = topPad + chartH + bottomPad;
+  var o = [];
+  o.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  for (var g = 0; g <= 4; g++) {
+    var gy = topPad + chartH - (chartH * g / 4);
+    o.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    o.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + Math.round(maxTotal * g / 4) + '</text>');
+  }
+  list.forEach(function(c, i) {
+    var x = leftPad + i * (barW + gap) + gap / 2;
+    var yCursor = topPad + chartH;
+    TAC_DOC_TIERS.forEach(function(t) {
+      var n = c[t.key] || 0;
+      if (n === 0) return;
+      var segH = (n / maxTotal) * chartH;
+      var y = yCursor - segH;
+      o.push('<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + segH + '" rx="3" fill="' + t.color + '"><title>' +
+        escHtml(contractorDisplayName(c.contractor)) + ' - ' + t.label + ': ' + n + '</title></rect>');
+      yCursor = y;
+    });
+    o.push('<text x="' + (x + barW / 2) + '" y="' + (topPad + chartH - (c.total / maxTotal) * chartH - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + c.total + '</text>');
+    o.push('<text x="' + (x + barW / 2) + '" y="' + (topPad + chartH + 16) + '" font-size="10" fill="#374151" text-anchor="middle">' + escHtml(contractorAbbr(c.contractor)) + '</text>');
+    o.push('<text x="' + (x + barW / 2) + '" y="' + (topPad + chartH + 32) + '" font-size="10" fill="#6b7280" text-anchor="middle">' +
+      (c.avgDays === null ? 'ยังไม่มีข้อมูล' : 'เฉลี่ย ' + c.avgDays + ' วัน') + '</text>');
+  });
+  o.push('</svg>');
+  host.innerHTML = o.join('');
+}
+
+function renderTacDocTable() {
+  var body = document.getElementById('tacDocTableBody');
+  var countEl = document.getElementById('tacDocTableCount');
+  if (!body) return;
+  if (!tacDocTrackingStarted()) {
+    if (countEl) countEl.textContent = 'ยังไม่ได้เริ่มบันทึกวันที่ได้รับเอกสาร TAC ในชีต';
+    body.innerHTML = '';
+    return;
+  }
+  var items = jobsWithTacDocSla();
+  // Worst first: overdue and late are what Sure needs to chase, so they lead;
+  // within a tier the longest wait comes first.
+  var rank = { overdue: 0, late: 1, waiting: 2, met: 3 };
+  items.sort(function(a, b) {
+    if (rank[a.doc.tier] !== rank[b.doc.tier]) return rank[a.doc.tier] - rank[b.doc.tier];
+    return (b.doc.days || 0) - (a.doc.days || 0);
+  });
+  var n = { met: 0, late: 0, overdue: 0, waiting: 0 };
+  items.forEach(function(x) { n[x.doc.tier]++; });
+  if (countEl) {
+    countEl.innerHTML = 'ทั้งหมด ' + items.length + ' งาน — ' +
+      '<span style="color:#166534;font-weight:600;">ตรงเกณฑ์ ' + n.met + '</span> / ' +
+      '<span style="color:#991b1b;font-weight:600;">ล่าช้า ' + n.late + '</span> / ' +
+      '<span style="color:#92400e;font-weight:600;">เกินกำหนด ยังไม่ได้รับ ' + n.overdue + '</span> / ' +
+      '<span style="color:var(--muted);">รออยู่ ' + n.waiting + '</span> &nbsp;·&nbsp; เรียงงานที่ต้องตามก่อน';
+  }
+  var labels = {}, colors = {};
+  TAC_DOC_TIERS.forEach(function(t) { labels[t.key] = t.label; colors[t.key] = t.color; });
+  body.innerHTML = items.map(function(x, i) {
+    var j = x.job, d = x.doc;
+    var badge = '<span class="sla-badge" style="background:' + colors[d.tier] + '22;color:' + colors[d.tier] + ';">' + labels[d.tier] + '</span>';
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + escHtml(j.ts_app || j.job_code || '-') + '</td>' +
+      '<td>' + escHtml(j.customer || '-') + '</td>' +
+      '<td>' + escHtml(contractorDisplayName(j.contractor) || '-') + '</td>' +
+      '<td>' + escHtml(j.survey_date || '-') + '</td>' +
+      '<td>' + escHtml(d.received || '-') + '</td>' +
+      '<td>' + (d.days === null ? '-' : d.days + ' วัน') + '</td>' +
+      '<td>' + badge + '</td>' +
+      '</tr>';
+  }).join('');
 }
 
 // ===== Install-duration distribution (Sure's request, 2026-08-05) =====
@@ -4279,7 +4476,7 @@ function switchView(view) {
   document.getElementById('dashWrap').style.display = (view === 'dash') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (view === 'sla') { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
+  if (view === 'sla') { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderTacDocChart(); renderTacDocTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (view === 'alloc') { renderAllocTable(); }
   if (view === 'dash') { renderDashboard(); }
 }
@@ -4288,7 +4485,7 @@ function onFiltersChanged() {
   renderCalendar();
   if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
+  if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderTacDocChart(); renderTacDocTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (document.getElementById('tabAllocBtn').classList.contains('active')) { renderAllocTable(); }
   if (document.getElementById('tabDashBtn').classList.contains('active')) { renderDashboard(); }
 }

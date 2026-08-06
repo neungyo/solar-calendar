@@ -65,10 +65,10 @@
   /* "คงเหลือ" = install jobs this month that aren't finished yet. Deliberately
      slate rather than red -- it's ordinary outstanding work, not a problem. */
   .msum.remaining { border-color:#cbd5e1; background:#f8fafc; color:#334155; }
-  .msum.service { border-color:#a5f3fc; background:#ecfeff; color:#155e75; }
-  .dot.service { background:#0891b2; }
-  .evt.service { background:#ecfeff; color:#155e75; }
-  .stat-card.c-service { border-left:4px solid #0891b2; }
+  .msum.service { border-color:#f9a8d4; background:#fdf2f8; color:#9d174d; }
+  .dot.service { background:#db2777; }
+  .evt.service { background:#fdf2f8; color:#9d174d; }
+  .stat-card.c-service { border-left:4px solid #db2777; }
   .zoom-controls { display:none; align-items:center; gap:8px; margin-bottom:10px; justify-content:flex-end; }
   .zoom-controls button { padding:4px 12px; font-size:14px; }
   #zoomLabel { font-size:12px; color:var(--muted); min-width:42px; text-align:center; }
@@ -1668,7 +1668,7 @@ function renderDocTable() {
 // Sure confirmed more service types are coming, so this is a lookup table:
 // adding one is a single entry here and nothing else in the file changes.
 var SERVICE_STATUSES = {
-  'ล้างแผง': { label: 'ล้างแผง', dot: '#0891b2', bg: '#ecfeff', fg: '#155e75' }
+  'ล้างแผง': { label: 'ล้างแผง', dot: '#db2777', bg: '#fdf2f8', fg: '#9d174d' }
 };
 
 function serviceInfo(status) {

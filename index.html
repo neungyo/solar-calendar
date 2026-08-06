@@ -65,6 +65,10 @@
   /* "คงเหลือ" = install jobs this month that aren't finished yet. Deliberately
      slate rather than red -- it's ordinary outstanding work, not a problem. */
   .msum.remaining { border-color:#cbd5e1; background:#f8fafc; color:#334155; }
+  .msum.service { border-color:#a5f3fc; background:#ecfeff; color:#155e75; }
+  .dot.service { background:#0891b2; }
+  .evt.service { background:#ecfeff; color:#155e75; }
+  .stat-card.c-service { border-left:4px solid #0891b2; }
   .zoom-controls { display:none; align-items:center; gap:8px; margin-bottom:10px; justify-content:flex-end; }
   .zoom-controls button { padding:4px 12px; font-size:14px; }
   #zoomLabel { font-size:12px; color:var(--muted); min-width:42px; text-align:center; }
@@ -282,6 +286,7 @@
 
 <div class="legend">
   <span><span class="dot survey"></span>วันเข้าสำรวจ (Survey)</span>
+  <span id="legendServiceItems"></span>
   <span><span class="dot install"></span>วันเข้าติดตั้ง (Install)</span>
   <span><span class="dot completed"></span>ดำเนินการเสร็จสิ้นแล้ว</span>
   <span><span class="dot changed"></span>มีการเปลี่ยนแปลงจากรอบก่อน</span>
@@ -1152,12 +1157,17 @@ function renderMonthSummary(y, m) {
   var el = document.getElementById('monthSummary');
   if (!el) return;
   var prefix = y + '-' + pad(m + 1) + '-';
-  var surveyJobs = {}, installJobs = {}, doneJobs = {};
+  var surveyJobs = {}, installJobs = {}, doneJobs = {}, serviceJobs = {};
   (EVENTS || []).forEach(function(e) {
     if (!e || !e.date || String(e.date).indexOf(prefix) !== 0) return;
     if (!passesFilters(e)) return;
     var k = e.job_key || ((e.customer || '') + '|' + (e.job_code || ''));
-    if (e.type === 'survey') { surveyJobs[k] = true; return; }
+    if (e.type === 'survey') {
+      // Service visits share the survey date column but are counted separately
+      // so the "สำรวจ" chip stays a true count of survey visits.
+      if (serviceInfo(e.status)) { serviceJobs[k] = true; return; }
+      surveyJobs[k] = true; return;
+    }
     installJobs[k] = true;
     if (e.status === 'ดำเนินการเสร็จสิ้น') doneJobs[k] = true;
   });
@@ -1172,7 +1182,11 @@ function renderMonthSummary(y, m) {
     chip('completed', 'เสร็จสิ้น', Object.keys(doneJobs).length,
       'จำนวนงานติดตั้งในเดือนนี้ที่สถานะเป็น ดำเนินการเสร็จสิ้นแล้ว') +
     chip('remaining', 'คงเหลือ', Object.keys(installJobs).length - Object.keys(doneJobs).length,
-      'งานที่มีวันติดตั้งในเดือนนี้แล้วแต่ยังไม่เสร็จสิ้น (ติดตั้ง − เสร็จสิ้น)');
+      'งานที่มีวันติดตั้งในเดือนนี้แล้วแต่ยังไม่เสร็จสิ้น (ติดตั้ง − เสร็จสิ้น)') +
+    (Object.keys(serviceJobs).length
+      ? chip('service', 'งานบริการ', Object.keys(serviceJobs).length,
+          'งานบริการหลังการติดตั้ง เช่น ล้างแผง — ไม่นับรวมในงานสำรวจและงานติดตั้ง')
+      : '');
 }
 
 function renderCalendar() {
@@ -1205,10 +1219,16 @@ function renderCalendar() {
     var evtHtml = shown.map(function(e) {
       var idx = currentRenderedEvents.length;
       currentRenderedEvents.push(e);
+      // A date in the survey column is only really a survey when the status
+      // says so -- service statuses share that column (see SERVICE_STATUSES).
+      var svc = (e.type === 'survey') ? serviceInfo(e.status) : null;
       var cls = e.type === 'survey' ? 'survey' : 'install';
       var dotCls = cls;
       var changed = jobIsChanged(e);
-      if (e.type !== 'survey') {
+      if (svc) {
+        cls = 'service'; dotCls = 'service';
+        if (changed) { cls = 'changed'; dotCls = 'changed'; }
+      } else if (e.type !== 'survey') {
         if (e.status === 'ดำเนินการเสร็จสิ้น') { cls = 'completed'; dotCls = 'completed'; }
         if (changed) { cls = 'changed'; dotCls = 'changed'; }
       } else if (e.date < TODAY_ISO) {
@@ -1220,9 +1240,13 @@ function renderCalendar() {
       }
       var dayTag = e.type === 'install_actual' ? (' (' + e.day_index + '/' + e.day_total + ')') : '';
       var abbr = contractorAbbr(e.contractor);
-      var label = e.type === 'survey'
-        ? ('สำรวจ ' + abbr + ': ' + (e.customer || ''))
-        : ('ติดตั้ง ' + abbr + dayTag + ': ' + (e.customer || ''));
+      var label = svc
+        ? (svc.label + ' ' + abbr + ': ' + (e.customer || ''))
+        : e.type === 'survey'
+          ? ('สำรวจ ' + abbr + ': ' + (e.customer || ''))
+          : ('ติดตั้ง ' + abbr + dayTag + ': ' + (e.customer || ''));
+      var svcStyle = svc ? ' style="background:' + svc.bg + ';color:' + svc.fg + ';"' : '';
+      var svcDotStyle = svc ? ' style="background:' + svc.dot + ';"' : '';
       var tacHtml = '';
       if (e.type !== 'survey') {
         var tacRaw = e.doc_tac ? String(e.doc_tac).trim() : '';
@@ -1242,7 +1266,7 @@ function renderCalendar() {
           slaHtml = '<span class="sla-dot" title="' + slaTitle + '"></span>';
         }
       }
-      return '<div class="evt ' + cls + '" data-idx="' + idx + '" title="คลิกดูรายละเอียด"><span class="dot ' + dotCls + '"></span>' + label + (changed ? ' 🔄' : '') + tacHtml + slaHtml + '</div>';
+      return '<div class="evt ' + cls + '"' + svcStyle + ' data-idx="' + idx + '" title="คลิกดูรายละเอียด"><span class="dot ' + dotCls + '"' + svcDotStyle + '></span>' + label + (changed ? ' 🔄' : '') + tacHtml + slaHtml + '</div>';
     }).join('');
     var moreHtml = '';
     if (extra > 0) {
@@ -1265,7 +1289,8 @@ function openModalForEvent(e) {
   document.getElementById('mTitle').textContent = e.customer || '(ไม่มีชื่อ)';
   var typeLabel;
   if (e.type === 'survey') {
-    typeLabel = 'วันเข้าสำรวจ — ' + e.date + (e.time ? (' (' + e.time + ')') : '');
+    var svcModal = serviceInfo(e.status);
+    typeLabel = (svcModal ? svcModal.label : 'วันเข้าสำรวจ') + ' — ' + e.date + (e.time ? (' (' + e.time + ')') : '');
   } else if (e.type === 'install_actual') {
     typeLabel = 'วันเข้าติดตั้ง (วันที่ ' + e.day_index + ' จาก ' + e.day_total + ') — ' + e.date;
   } else {
@@ -1631,8 +1656,43 @@ function renderDocTable() {
   }).join('');
 }
 
+// ===== Service-work statuses (Sure's request, 2026-08-05) =====
+// Some rows are not part of the install pipeline at all -- they are follow-up
+// service visits to a system that is already installed. The first one is
+// "ล้างแผง". The sheet has no separate date column for these, so the visit date
+// is entered in "วันที่เข้าสำรวจ" exactly like a survey is; per Sure the STATUS
+// column is what decides which kind of visit a row really is, and only survey
+// and service statuses ever use that date column.
+// Symptom this fixes: a ล้างแผง job showed on the calendar as "สำรวจ ORIGIN:
+// คุณภวนนท์" because the front end assumed every survey-column date was a survey.
+// Sure confirmed more service types are coming, so this is a lookup table:
+// adding one is a single entry here and nothing else in the file changes.
+var SERVICE_STATUSES = {
+  'ล้างแผง': { label: 'ล้างแผง', dot: '#0891b2', bg: '#ecfeff', fg: '#155e75' }
+};
+
+function serviceInfo(status) {
+  var s = String(status == null ? '' : status).trim();
+  return Object.prototype.hasOwnProperty.call(SERVICE_STATUSES, s) ? SERVICE_STATUSES[s] : null;
+}
+
+function isServiceJob(job) { return !!(job && serviceInfo(job.status)); }
+
+function renderServiceLegend() {
+  var host = document.getElementById('legendServiceItems');
+  if (!host) return;
+  host.innerHTML = Object.keys(SERVICE_STATUSES).map(function(k) {
+    var s = SERVICE_STATUSES[k];
+    return '<span><span class="dot" style="background:' + s.dot + ';"></span>' + escHtml(s.label) + ' (งานบริการ)</span>';
+  }).join('');
+}
+
 function jobFullCategory(job) {
   var status = job.status || '';
+  // Checked before everything else: a service visit is not an install job at
+  // any stage, so it must never fall through to the stalled/scheduled logic
+  // below (which would file ล้างแผง under "สำรวจแล้ว รอกำหนดติดตั้ง").
+  if (serviceInfo(status)) return 'service';
   if (status === 'ดำเนินการเสร็จสิ้น') return 'completed';
   // Some jobs get a tentative survey_date filled in as soon as a slot is
   // picked, even before the survey visit actually happens -- so survey_date
@@ -1646,17 +1706,22 @@ function jobFullCategory(job) {
 
 function jobCategory(job) {
   var c = jobFullCategory(job);
-  return c === 'awaiting_survey' ? null : c;
+  return (c === 'awaiting_survey' || c === 'service') ? null : c;
 }
 
 function renderOverviewStats() {
   var jobs = currentFilteredJobs();
   var counts = { awaiting_survey: 0, stalled: 0, scheduled: 0, completed: 0 };
+  var serviceCount = 0;
   jobs.forEach(function(j) {
     var c = jobFullCategory(j);
+    if (c === 'service') { serviceCount++; return; }
     if (counts.hasOwnProperty(c)) counts[c]++;
   });
-  var total = jobs.length;
+  // "งานทั้งหมด" here means the install pipeline, so service visits are held
+  // out of it and shown as their own card instead -- otherwise the four stage
+  // cards would not add up to the total and every percentage would be off.
+  var total = jobs.length - serviceCount;
   var statsHost = document.getElementById('overviewStatsRow');
   if (statsHost) {
     statsHost.innerHTML =
@@ -1664,7 +1729,8 @@ function renderOverviewStats() {
       '<div class="stat-card c-awaiting"><div class="stat-value">' + counts.awaiting_survey + '</div><div class="stat-label">รอสำรวจ</div></div>' +
       '<div class="stat-card c-stalled"><div class="stat-value">' + counts.stalled + '</div><div class="stat-label">สำรวจแล้ว รอกำหนดติดตั้ง</div></div>' +
       '<div class="stat-card c-scheduled"><div class="stat-value">' + counts.scheduled + '</div><div class="stat-label">มีกำหนดติดตั้งแล้ว</div></div>' +
-      '<div class="stat-card c-completed"><div class="stat-value">' + counts.completed + '</div><div class="stat-label">ติดตั้งเสร็จสิ้นแล้ว</div></div>';
+      '<div class="stat-card c-completed"><div class="stat-value">' + counts.completed + '</div><div class="stat-label">ติดตั้งเสร็จสิ้นแล้ว</div></div>' +
+      (serviceCount ? '<div class="stat-card c-service"><div class="stat-value">' + serviceCount + '</div><div class="stat-label">งานบริการ (ไม่นับรวม)</div></div>' : '');
   }
   renderOverviewDonut(counts, total);
 }
@@ -4594,6 +4660,7 @@ function fetchData(isManualClick) {
         'อัปเดตล่าสุด: ' + new Date(LAST_UPDATED_ISO).toLocaleString('th-TH') +
         ' &middot; งานทั้งหมด ' + (data.total_jobs||0) + ' งาน &middot; การเปลี่ยนแปลงตั้งแต่รอบก่อน: ' + (data.changed_jobs||[]).length + ' รายการ';
       renderScopeBadge(data.scope, data.contractor);
+      renderServiceLegend();
       rebuildFilterOptions();
       renderBanner(data.changed_jobs, data.new_jobs);
       renderCalendar();
@@ -4673,6 +4740,7 @@ if (fsBtn) {
 }
 setInterval(function(){ if (LAST_UPDATED_ISO) updateStatusText(false); }, 30000);
 applyZoom();
+renderServiceLegend();
 renderCalendar();
 if (ACCESS_KEY) {
   fetchData(false);

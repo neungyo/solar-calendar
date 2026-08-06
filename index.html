@@ -65,10 +65,10 @@
   /* "คงเหลือ" = install jobs this month that aren't finished yet. Deliberately
      slate rather than red -- it's ordinary outstanding work, not a problem. */
   .msum.remaining { border-color:#cbd5e1; background:#f8fafc; color:#334155; }
-  .msum.service { border-color:#f9a8d4; background:#fdf2f8; color:#9d174d; }
-  .dot.service { background:#db2777; }
-  .evt.service { background:#fdf2f8; color:#9d174d; }
-  .stat-card.c-service { border-left:4px solid #db2777; }
+  .msum.service { border-color:#111827; background:#111827; color:#ffffff; }
+  .dot.service { background:#111827; }
+  .evt.service { background:#111827; color:#ffffff; border:1px solid #111827; }
+  .stat-card.c-service { border-left:4px solid #111827; }
   .zoom-controls { display:none; align-items:center; gap:8px; margin-bottom:10px; justify-content:flex-end; }
   .zoom-controls button { padding:4px 12px; font-size:14px; }
   #zoomLabel { font-size:12px; color:var(--muted); min-width:42px; text-align:center; }
@@ -1267,7 +1267,7 @@ function renderCalendar() {
           ? ('สำรวจ ' + abbr + ': ' + (e.customer || ''))
           : ('ติดตั้ง ' + abbr + dayTag + ': ' + (e.customer || ''));
       var svcStyle = svc ? ' style="background:' + svc.bg + ';color:' + svc.fg + ';"' : '';
-      var svcDotStyle = svc ? ' style="background:' + svc.dot + ';"' : '';
+      var svcDotStyle = svc ? ' style="background:' + (svc.dotOn || svc.dot) + ';"' : '';
       var tacHtml = '';
       if (e.type !== 'survey') {
         var tacRaw = e.doc_tac ? String(e.doc_tac).trim() : '';
@@ -1689,7 +1689,11 @@ function renderDocTable() {
 // Sure confirmed more service types are coming, so this is a lookup table:
 // adding one is a single entry here and nothing else in the file changes.
 var SERVICE_STATUSES = {
-  'ล้างแผง': { label: 'ล้างแผง', dot: '#db2777', bg: '#fdf2f8', fg: '#9d174d' }
+  // Black pill with white text (Sure, 2026-08-06). 'dot' is the swatch colour
+  // used in the legend, which sits on the white page background; 'dotOn' is the
+  // colour the same dot needs INSIDE the pill, where black on black would
+  // vanish. Any future service type can set dotOn the same way.
+  'ล้างแผง': { label: 'ล้างแผง', dot: '#111827', dotOn: '#ffffff', bg: '#111827', fg: '#ffffff' }
 };
 
 function serviceInfo(status) {

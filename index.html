@@ -312,6 +312,7 @@
   <button class="secondary view-tab-btn" id="tabSlaBtn">🎯 SLA ติดตั้ง</button>
   <button class="secondary view-tab-btn" id="tabAllocBtn">🧭 แนะนำ ผรม. งานใหม่</button>
   <button class="secondary view-tab-btn" id="tabDashBtn">📈 Dashboard</button>
+  <button class="secondary view-tab-btn" id="tabProjectBtn">🏗️ Project</button>
 </div>
 
 <div class="month-nav" id="monthNavRow">
@@ -623,6 +624,30 @@
   <div id="dashSections"></div>
 </div>
 
+<div id="projectWrap" style="display:none;">
+  <div class="card-box">
+    <div class="overview-section-title">Project — ปฏิทินติดตามงานโครงการ</div>
+    <div class="doc-table-toolbar">ข้อมูลจากชีต "Progress Project" (งาน B2B / Comply / Pre-Sale) แยกจากงานติดตั้งลูกค้ารายย่อยในแท็บอื่น ใช้ติดตามความคืบหน้าของแต่ละโครงการเรื่อยๆ</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:10px 0 12px;">
+      <div class="month-summary" id="projectSummary"></div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="secondary" id="projectPrevMonth">‹ เดือนก่อน</button>
+        <strong id="projectMonthLabel"></strong>
+        <button class="secondary" id="projectNextMonth">เดือนถัดไป ›</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#64748b;"></span>เริ่มโครงการ</span>
+      <span><span class="dot" style="background:#2563eb;"></span>วันเข้าสำรวจ</span>
+      <span><span class="dot" style="background:#d97706;"></span>วันนัดติดตั้ง</span>
+      <span style="border-left:1px solid var(--border);padding-left:14px;">🔥 = เร่งด่วน &nbsp;·&nbsp; สีเทาจาง/ขีดฆ่า = ยกเลิกโครงการ</span>
+    </div>
+    <div class="calendar-grid" id="projectDowRow"></div>
+    <div class="calendar-grid" id="projectCalGrid"></div>
+    <div id="projectDetailBox" style="display:none;margin-top:14px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;line-height:1.7;"></div>
+  </div>
+</div>
+
 <div id="bannerHost"></div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -709,6 +734,10 @@ var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || localStorage.getI
 
 var JOBS = [];
 var EVENTS = [];
+// "Project" tab (Sure's request, 2026-08-07): tracks the separate
+// "Progress Project" sheet tab. Populated from data.projects in fetchData()
+// below, same as JOBS/EVENTS come from data.jobs/data.events.
+var PROJECTS = [];
 var ALL_CONTRACTORS = [];
 var CHART_PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#c026d3','#65a30d','#ea580c','#0d9488','#9333ea','#facc15','#f43f5e','#0ea5e9'];
 var CONTRACTOR_COLOR_MAP = {};
@@ -4471,6 +4500,156 @@ function dashExportPdf() {
   setTimeout(function() { try { w.focus(); w.print(); } catch (e) {} }, 600);
 }
 
+// ===== Project tab (Sure's request, 2026-08-07) =====
+// Separate mini-calendar over the "Progress Project" sheet tab (B2B/Comply/
+// Pre-Sale pipeline). Deliberately NOT wired to the top filter row (ผรม./
+// ประเภทงาน/สถานะ/คำค้น) -- those filters are built around JOBS' fields,
+// which don't line up with PROJECTS' fields, so mixing them in would filter
+// silently wrong. Keeps its own month cursor instead of sharing CUR_Y/CUR_M
+// with the main calendar so switching tabs never jumps the user's place.
+var PROJECT_KIND_LABEL = { start: 'เริ่มโครงการ', survey: 'สำรวจ', install: 'นัดติดตั้ง' };
+var PROJECT_KIND_DOT = { start: '#64748b', survey: '#2563eb', install: '#d97706' };
+var PROJECT_KIND_BG = { start: '#f1f5f9', survey: '#eff6ff', install: '#fffbeb' };
+var PROJECT_KIND_FG = { start: '#334155', survey: '#1e3a8a', install: '#92400e' };
+var projectCur = { y: TODAY.getFullYear(), m: TODAY.getMonth() + 1 };
+
+function buildProjectEvents_() {
+  var evs = [];
+  (PROJECTS || []).forEach(function(p, idx) {
+    if (p.start) evs.push({ date: p.start, kind: 'start', p: p, idx: idx });
+    if (p.survey) evs.push({ date: p.survey, kind: 'survey', p: p, idx: idx });
+    if (p.install) evs.push({ date: p.install, kind: 'install', p: p, idx: idx });
+  });
+  return evs;
+}
+
+function renderProjectSummary_(monthEvents) {
+  var counts = { total: 0, ongoing: 0, urgent: 0, done: 0, cancelled: 0 };
+  var seen = {};
+  monthEvents.forEach(function(e) {
+    if (seen[e.idx]) return;
+    seen[e.idx] = true;
+    counts.total++;
+    if (e.p.pstatus === 'เร่งด่วน') counts.urgent++;
+    else if (e.p.pstatus === 'ดำเนินการแล้วเสร็จ') counts.done++;
+    else if (e.p.pstatus === 'ยกเลิกโครงการ') counts.cancelled++;
+    else counts.ongoing++;
+  });
+  var defs = [
+    { k: 'total', label: 'ทั้งหมด', cls: 'survey' },
+    { k: 'ongoing', label: 'กำลังดำเนินการ', cls: 'install' },
+    { k: 'urgent', label: 'เร่งด่วน', style: 'border-color:#fca5a5;background:#fef2f2;color:#991b1b;' },
+    { k: 'done', label: 'เสร็จสิ้น', cls: 'completed' },
+    { k: 'cancelled', label: 'ยกเลิก', cls: 'remaining' }
+  ];
+  var host = document.getElementById('projectSummary');
+  if (!host) return;
+  host.innerHTML = defs.map(function(d) {
+    var attrs = d.cls ? ' class="msum ' + d.cls + '"' : (' class="msum" style="' + d.style + '"');
+    return '<span' + attrs + '>' + escHtml(d.label) + ' <b>' + counts[d.k] + '</b></span>';
+  }).join('');
+}
+
+function renderProjectDetail_(p) {
+  var box = document.getElementById('projectDetailBox');
+  if (!box) return;
+  box.style.display = 'block';
+  var typeTag = { 'Project': 'โครงการ', 'Comply': 'Comply', 'Pre-Sale': 'Pre-Sale' }[p.type] || (p.type || '-');
+  box.innerHTML =
+    '<div style="font-weight:700;margin-bottom:4px;">' + escHtml(p.detail || '-') + '</div>' +
+    '<div>ลูกค้า: ' + escHtml(p.customer || '-') + ' &nbsp;·&nbsp; ประเภท: ' + escHtml(typeTag) +
+    ' &nbsp;·&nbsp; สถานะโครงการ: ' + escHtml(p.pstatus || '-') + '</div>' +
+    '<div>ผรม.: ' + escHtml(p.contractor || '-') + ' &nbsp;·&nbsp; เริ่มโครงการ: ' + (p.start || '-') +
+    ' &nbsp;·&nbsp; สำรวจ: ' + (p.survey || '-') + ' &nbsp;·&nbsp; นัดติดตั้ง: ' + (p.install || '-') + '</div>';
+}
+
+function renderProjectTab() {
+  var dowRowEl = document.getElementById('projectDowRow');
+  var gridEl = document.getElementById('projectCalGrid');
+  var labelEl = document.getElementById('projectMonthLabel');
+  if (!dowRowEl || !gridEl || !labelEl) return;
+
+  if (!dowRowEl.childElementCount) {
+    DOW.forEach(function(d) {
+      var el = document.createElement('div');
+      el.className = 'dow';
+      el.textContent = d;
+      dowRowEl.appendChild(el);
+    });
+  }
+
+  var PROJECT_THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+    'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  var y = projectCur.y, m = projectCur.m;
+  labelEl.textContent = PROJECT_THAI_MONTHS[m - 1] + ' ' + (y + 543);
+
+  var monthKey = y + '-' + pad(m);
+  var allEvents = buildProjectEvents_();
+  var monthEvents = allEvents.filter(function(e) { return e.date.slice(0, 7) === monthKey; });
+  renderProjectSummary_(monthEvents);
+
+  var firstOfMonth = new Date(y, m - 1, 1);
+  var startOffset = (firstOfMonth.getDay() + 6) % 7;
+  var daysInMonth = new Date(y, m, 0).getDate();
+  var gridStart = new Date(y, m - 1, 1 - startOffset);
+  var totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+
+  gridEl.innerHTML = '';
+  for (var i = 0; i < totalCells; i++) {
+    var d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    var dateIso = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    var inMonth = (d.getMonth() + 1 === m);
+    var dow = (d.getDay() + 6) % 7;
+    var isHoliday = !!THAI_HOLIDAYS[dateIso];
+
+    var cell = document.createElement('div');
+    cell.className = 'day' + (inMonth ? '' : ' other-month') + (((dow === 5 || dow === 6) && !isHoliday) ? ' weekend' : '') + (isHoliday ? ' holiday' : '') + (dateIso === TODAY_ISO ? ' today' : '');
+    var num = document.createElement('div');
+    num.className = 'day-num';
+    num.textContent = d.getDate();
+    cell.appendChild(num);
+    if (isHoliday) {
+      var hn = document.createElement('div');
+      hn.className = 'day-holiday-name';
+      hn.textContent = THAI_HOLIDAYS[dateIso];
+      cell.appendChild(hn);
+    }
+
+    var dayEvs = monthEvents.filter(function(e) { return e.date === dateIso; });
+    dayEvs.forEach(function(e) {
+      var urgent = e.p.pstatus === 'เร่งด่วน';
+      var cancelled = e.p.pstatus === 'ยกเลิกโครงการ';
+      var pill = document.createElement('div');
+      pill.style.cssText = 'border-radius:4px;padding:2px 4px;margin-bottom:2px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;background:' +
+        (cancelled ? '#f1f5f9' : PROJECT_KIND_BG[e.kind]) + ';color:' + (cancelled ? '#94a3b8' : PROJECT_KIND_FG[e.kind]) + ';' +
+        (urgent ? 'border-left:3px solid #dc2626;' : '') + (cancelled ? 'text-decoration:line-through;' : '');
+      var dotSpan = document.createElement('span');
+      dotSpan.style.cssText = 'flex-shrink:0;display:inline-block;width:7px;height:7px;border-radius:50%;background:' + (cancelled ? '#94a3b8' : PROJECT_KIND_DOT[e.kind]) + ';';
+      pill.appendChild(dotSpan);
+      var txt = document.createElement('span');
+      var label = (e.p.customer || e.p.detail || '');
+      txt.textContent = (urgent ? '🔥 ' : '') + PROJECT_KIND_LABEL[e.kind] + ': ' + label.slice(0, 18);
+      pill.appendChild(txt);
+      pill.title = 'คลิกดูรายละเอียด';
+      pill.onclick = function() { renderProjectDetail_(e.p); };
+      cell.appendChild(pill);
+    });
+    gridEl.appendChild(cell);
+  }
+}
+
+document.getElementById('projectPrevMonth').onclick = function() {
+  projectCur.m--; if (projectCur.m < 1) { projectCur.m = 12; projectCur.y--; }
+  document.getElementById('projectDetailBox').style.display = 'none';
+  renderProjectTab();
+};
+document.getElementById('projectNextMonth').onclick = function() {
+  projectCur.m++; if (projectCur.m > 12) { projectCur.m = 1; projectCur.y++; }
+  document.getElementById('projectDetailBox').style.display = 'none';
+  renderProjectTab();
+};
+
 function switchView(view) {
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
@@ -4478,6 +4657,7 @@ function switchView(view) {
   document.getElementById('tabSlaBtn').classList.toggle('active', view === 'sla');
   document.getElementById('tabAllocBtn').classList.toggle('active', view === 'alloc');
   document.getElementById('tabDashBtn').classList.toggle('active', view === 'dash');
+  document.getElementById('tabProjectBtn').classList.toggle('active', view === 'project');
   document.getElementById('calendarWrap').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('monthNavRow').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('zoomControls').style.display = (view === 'calendar') ? '' : 'none';
@@ -4486,11 +4666,13 @@ function switchView(view) {
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   document.getElementById('allocWrap').style.display = (view === 'alloc') ? '' : 'none';
   document.getElementById('dashWrap').style.display = (view === 'dash') ? '' : 'none';
+  document.getElementById('projectWrap').style.display = (view === 'project') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (view === 'sla') { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderTacDocChart(); renderTacDocTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (view === 'alloc') { renderAllocTable(); }
   if (view === 'dash') { renderDashboard(); }
+  if (view === 'project') { renderProjectTab(); }
 }
 
 function onFiltersChanged() {
@@ -4502,6 +4684,7 @@ function onFiltersChanged() {
   if (document.getElementById('tabDashBtn').classList.contains('active')) { renderDashboard(); }
 }
 
+document.getElementById('tabProjectBtn').onclick = function() { switchView('project'); };
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
 document.getElementById('tabDocBtn').onclick = function() { switchView('doc'); };
 document.getElementById('tabOverviewBtn').onclick = function() { switchView('overview'); };
@@ -4863,6 +5046,7 @@ function fetchData(isManualClick) {
       if (data.error) throw new Error(data.error);
       JOBS = data.jobs || [];
       EVENTS = data.events || [];
+      PROJECTS = data.projects || [];
       rebuildContractorColorMap();
       LAST_UPDATED_ISO = data.last_updated;
       document.getElementById('subLine2').innerHTML =
@@ -4875,6 +5059,7 @@ function fetchData(isManualClick) {
       renderCalendar();
       if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
+      if (document.getElementById('tabProjectBtn').classList.contains('active')) { renderProjectTab(); }
       updateStatusText(false);
       if (statusEl) statusEl.textContent = isManualClick ? '✓ อัปเดตข้อมูลล่าสุดเรียบร้อย' : '';
       if (statusEl && isManualClick) setTimeout(function(){ statusEl.textContent=''; }, 5000);

@@ -151,6 +151,7 @@
   .sla-log-status { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; font-weight:600; }
   .sla-log-status.log-ok { background:#f0fdf4; color:#166534; }
   .sla-log-status.log-pending { background:#fff7ed; color:#9a3412; }
+  .sla-log-status.log-note { background:#eff6ff; color:#1e40af; }
   .sla-log-by { color:var(--muted); }
   .sla-log-legacy { font-size:12px; line-height:1.5; color:#92400e; }
   .sla-badge.excellent { background:#fef9c3; color:#854d0e; }
@@ -688,6 +689,8 @@
           <select id="mLogStatus" style="width:100%;box-sizing:border-box;">
             <option value="เสร็จ">เสร็จ</option>
             <option value="ไม่เสร็จ">ไม่เสร็จ</option>
+            <option value="ลูกค้าติดต่อแจ้งปัญหา">ลูกค้าติดต่อแจ้งปัญหา</option>
+            <option value="ลูกค้าติดต่อสอบถาม">ลูกค้าติดต่อสอบถาม</option>
           </select>
         </div>
       </div>
@@ -715,6 +718,8 @@
             <option value="สามารถติดตั้งได้">สามารถติดตั้งได้</option>
             <option value="ไม่สามารถติดตั้งได้">ไม่สามารถติดตั้งได้</option>
             <option value="ต้องสำรวจเพิ่มเติม">ต้องสำรวจเพิ่มเติม</option>
+            <option value="ลูกค้าติดต่อแจ้งปัญหา">ลูกค้าติดต่อแจ้งปัญหา</option>
+            <option value="ลูกค้าติดต่อสอบถาม">ลูกค้าติดต่อสอบถาม</option>
           </select>
         </div>
       </div>
@@ -1480,6 +1485,27 @@ function openModalForEvent(e) {
   document.getElementById('modalOverlay').classList.add('open');
 }
 
+// Shared color/class scheme for both the install day log status and the
+// survey day log result (Sure's request, 2026-08-20): besides the original
+// finished/not-finished (install) or can-install/cannot-install (survey)
+// outcomes, staff can now also log a day where what actually happened was a
+// customer phone call -- either a complaint/issue report or a general
+// inquiry -- instead of physical progress. Used by both the modal entry
+// lists below and the SLA doc table (installLogCellHtml_()).
+function logStatusColor_(val) {
+  if (val === 'เสร็จ' || val === 'สามารถติดตั้งได้') return '#16a34a';
+  if (val === 'ไม่เสร็จ' || val === 'ไม่สามารถติดตั้งได้') return '#dc2626';
+  if (val === 'ต้องสำรวจเพิ่มเติม') return '#d97706';
+  if (val === 'ลูกค้าติดต่อแจ้งปัญหา') return '#ea580c';
+  if (val === 'ลูกค้าติดต่อสอบถาม') return '#2563eb';
+  return '#6b7280';
+}
+function logStatusClass_(val) {
+  if (val === 'เสร็จ' || val === 'สามารถติดตั้งได้') return 'log-ok';
+  if (val === 'ลูกค้าติดต่อแจ้งปัญหา' || val === 'ลูกค้าติดต่อสอบถาม') return 'log-note';
+  return 'log-pending';
+}
+
 // Install day log (Sure's request, 2026-07-20): internal staff (หนึ่งโย่ว/
 // ฟิล/ฟลุ๊ค/เอก only, not contractors/customers) record per-day progress
 // notes during a job's install phase -- what happened that day, finished or
@@ -1497,7 +1523,7 @@ function renderInstallLogList(job) {
     return;
   }
   host.innerHTML = entries.map(function(en) {
-    var statusColor = en.status === 'เสร็จ' ? '#16a34a' : '#dc2626';
+    var statusColor = logStatusColor_(en.status);
     return '<div style="border-bottom:1px solid var(--border);padding:6px 0;">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
         '<div><b>' + escHtml(en.date) + '</b> — <span style="color:' + statusColor + ';font-weight:600;">' + escHtml(en.status) + '</span></div>' +
@@ -1674,7 +1700,7 @@ function renderSurveyLogList(job) {
     return;
   }
   host.innerHTML = entries.map(function(en) {
-    var resultColor = en.result === 'สามารถติดตั้งได้' ? '#16a34a' : (en.result === 'ไม่สามารถติดตั้งได้' ? '#dc2626' : '#d97706');
+    var resultColor = logStatusColor_(en.result);
     return '<div style="border-bottom:1px solid var(--border);padding:6px 0;">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
         '<div><b>' + escHtml(en.date) + '</b> — <span style="color:' + resultColor + ';font-weight:600;">' + escHtml(en.result) + '</span></div>' +
@@ -1861,7 +1887,7 @@ function installLogCellHtml_(job) {
     });
     return sorted.map(function(en) {
       var statusText = String(en.status || '').trim();
-      var statusCls = statusText === 'เสร็จ' ? 'log-ok' : 'log-pending';
+      var statusCls = logStatusClass_(statusText);
       return '<div class="sla-log-line">' +
         '<span class="sla-log-date">' + escHtml(en.date || '-') + '</span> ' +
         '<span class="sla-log-status ' + statusCls + '">' + escHtml(statusText || '-') + '</span> ' +

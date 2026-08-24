@@ -1608,19 +1608,34 @@ function buildCopyText_() {
       lines.push((state[it.key] ? '[x] ' : '[ ] ') + it.title);
     });
     lines.push('');
-    lines.push(checklistRemarkText_(currentChecklistJob, pct));
+    lines.push('Remark: ' + checklistRemarkText_(currentChecklistJob, pct));
     lines.push('');
-    lines.push('ความคืบหน้าอยู่ที่ ' + pct + '%');
+    lines.push('สถานะความคืบหน้างานติดตั้งอยู่ที่ ' + pct + '%');
+    lines.push('วันที่แจ้ง ' + thaiDateToday_());
+    lines.push('Professional Technical Service.');
   }
   return lines.join('\n');
+}
+
+// Today's date in Thai (Sure's request, 2026-08-25): the "วันที่แจ้ง" line
+// is always the date the text is COPIED, not any log entry's date -- a
+// small local month array is used here rather than reaching for THAI /
+// PROJECT_THAI_MONTHS elsewhere in this file, since those are declared
+// inside other functions and not safely reachable from here.
+function thaiDateToday_() {
+  var THAI_MONTHS_FULL_ = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+  var d = new Date();
+  return d.getDate() + ' ' + THAI_MONTHS_FULL_[d.getMonth()] + ' ' + (d.getFullYear() + 543);
 }
 
 // Remark line for the copy-to-clipboard text (Sure's request, 2026-08-25):
 // pulls from the SAME daily install log used in the modal below (already
 // newest-first per buildInstallLogSummary_ on the server) rather than a
 // separate data source, so there's only one place staff ever type notes.
-// - Checklist not yet 100%: show the most recent log entry, whatever it
-//   says, dated.
+// Returns just the note text (no date/time -- Sure's request, 2026-08-25).
+// - Checklist not yet 100%: show the most recent log entry's text, whatever
+//   it says.
 // - Checklist at 100%: specifically look for an entry logged as "เสร็จ" (the
 //   completion note) instead of just the latest one, since the latest entry
 //   after completion could be an unrelated customer-contact note. If no
@@ -1634,16 +1649,14 @@ function checklistRemarkText_(job, pct) {
     for (var i = 0; i < entries.length; i++) {
       if (entries[i].status === 'เสร็จ') { doneEntry = entries[i]; break; }
     }
-    if (doneEntry) {
-      return 'Remark (' + doneEntry.date + '): ' + (doneEntry.detail || 'เสร็จ');
-    }
-    return 'Remark: งานครบ 100% แล้ว แต่ยังไม่มีบันทึกความคืบหน้าที่ระบุสถานะ "เสร็จ" กรุณาเพิ่มบันทึกยืนยันการปิดงาน';
+    if (doneEntry) return doneEntry.detail || 'เสร็จ';
+    return 'งานครบ 100% แล้ว แต่ยังไม่มีบันทึกความคืบหน้าที่ระบุสถานะ "เสร็จ" กรุณาเพิ่มบันทึกยืนยันการปิดงาน';
   }
   if (entries.length) {
     var latest = entries[0];
-    return 'Remark (' + latest.date + '): ' + (latest.detail || latest.status || '-');
+    return latest.detail || latest.status || '-';
   }
-  return 'Remark: ยังไม่มีบันทึกความคืบหน้า';
+  return 'ยังไม่มีบันทึกความคืบหน้า';
 }
 
 function legacyCopyText_(text, cb) {

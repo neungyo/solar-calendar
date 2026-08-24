@@ -165,6 +165,8 @@
   .score-btn.selected { background:#dcfce7; border-color:#16a34a; color:#166534; font-weight:700; }
   .csat-score-btn { flex:1; padding:6px 0; border:1px solid var(--border); border-radius:6px; background:#fff; color:#111827; cursor:pointer; font-size:13px; text-align:center; }
   .csat-score-btn.selected { background:#dbeafe; border-color:#2563eb; color:#1e3a8a; font-weight:700; }
+  .survey-csat-score-btn { flex:1; padding:6px 0; border:1px solid var(--border); border-radius:6px; background:#fff; color:#111827; cursor:pointer; font-size:13px; text-align:center; }
+  .survey-csat-score-btn.selected { background:#fef3c7; border-color:#d97706; color:#92400e; font-weight:700; }
   .rating-crit-label { font-size:14px; font-weight:600; }
   .rating-crit-hint { font-size:12px; color:var(--muted); margin:2px 0 6px; }
   .stat-value { font-size:28px; font-weight:700; color:var(--text); line-height:1.2; }
@@ -459,7 +461,7 @@
     <table class="doc-table" id="overviewTableStalled">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableStalledBody"></tbody>
@@ -472,7 +474,7 @@
     <table class="doc-table" id="overviewTableScheduled">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableScheduledBody"></tbody>
@@ -485,7 +487,7 @@
     <table class="doc-table" id="overviewTableCompleted">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableCompletedBody"></tbody>
@@ -780,7 +782,7 @@
 
 <div class="modal-overlay" id="csatModalOverlay">
   <div class="modal-box" style="width:480px;">
-    <h2 id="csatModalTitle">แบบสอบถามความพึงพอใจลูกค้า</h2>
+    <h2 id="csatModalTitle">แบบสอบถามความพึงพอใจลูกค้า (งานติดตั้ง)</h2>
     <div id="csatModalSub" style="font-size:13px;color:var(--muted);margin:-8px 0 14px;"></div>
     <div id="csatCriteriaHost"></div>
     <div style="margin-top:4px;">
@@ -795,6 +797,27 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
       <button class="secondary" id="csatModalClose">ยกเลิก</button>
       <button id="csatModalSubmit">บันทึกแบบสอบถาม</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="surveyCsatModalOverlay">
+  <div class="modal-box" style="width:480px;">
+    <h2 id="surveyCsatModalTitle">แบบสอบถามความพึงพอใจลูกค้า (งานสำรวจ)</h2>
+    <div id="surveyCsatModalSub" style="font-size:13px;color:var(--muted);margin:-8px 0 14px;"></div>
+    <div id="surveyCsatCriteriaHost"></div>
+    <div style="margin-top:4px;">
+      <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">ชื่อผู้โทรสำรวจ *</label>
+      <input type="text" id="surveyCsatCallerName" placeholder="ชื่อผู้โทรสำรวจ" style="width:100%;">
+    </div>
+    <div style="margin-top:10px;">
+      <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">หมายเหตุ (ถ้ามี)</label>
+      <input type="text" id="surveyCsatNote" placeholder="หมายเหตุเพิ่มเติม" style="width:100%;">
+    </div>
+    <div id="surveyCsatModalError" style="color:var(--red);font-size:12px;margin-top:8px;display:none;"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
+      <button class="secondary" id="surveyCsatModalClose">ยกเลิก</button>
+      <button id="surveyCsatModalSubmit">บันทึกแบบสอบถาม</button>
     </div>
   </div>
 </div>
@@ -868,7 +891,7 @@ var RATINGS_CRITERIA = [
   { key: 'testing', label: 'ทดสอบระบบก่อนส่งมอบ (Testing & Commissioning)', hint: 'ตรวจสอบแรงดัน ขั้วสาย การสื่อสาร Monitoring และทดสอบการทำงานครบทุกฟังก์ชัน' },
   { key: 'handover', label: 'ส่งมอบพร้อมเอกสาร (Documentation & Handover)', hint: 'ถ่ายรูป Before/After, ส่งรายงานติดตั้ง และอธิบายการใช้งานให้ลูกค้า' }
 ];
-var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} }, checklist: { byJob: {} }, csat: { byJob: {} } };
+var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} }, checklist: { byJob: {} }, csat: { install: { byJob: {} }, survey: { byJob: {} } } };
 var currentRatingJob = null;
 var currentRatingScores = {};
 var currentLogJob = null;
@@ -878,6 +901,8 @@ var currentEditingSurveyLogRow = null;
 var currentChecklistJob = null;
 var currentCsatJob = null;
 var currentCsatScores = {};
+var currentSurveyCsatJob = null;
+var currentSurveyCsatScores = {};
 
 // Customer Satisfaction survey (Sure's request, 2026-08-24): staff call the
 // customer after install and score 6 fixed questions 1-5 each. Multiple
@@ -890,6 +915,21 @@ var CSAT_CRITERIA = [
   { key: 'q4', label: 'หลังติดตั้ง เจ้าหน้าที่อธิบายการใช้งานระบบและแอปพลิเคชันจนคุณสามารถใช้งานได้อย่างมั่นใจเพียงใด' },
   { key: 'q5', label: 'โดยรวมแล้ว คุณพึงพอใจกับบริการจำหน่ายและติดตั้งระบบโซลาร์เซลล์ของซินเน็คเพียงใด' },
   { key: 'q6', label: 'คุณมีแนวโน้มที่จะแนะนำบริการติดตั้งโซลาร์เซลล์ของซินเน็คให้เพื่อนหรือคนรู้จักมากน้อยเพียงใด' }
+];
+
+// Survey-phase Customer Satisfaction (Sure's request, 2026-08-24): a second,
+// shorter questionnaire (5 questions) asked after the SURVEY site visit,
+// before install. Stored in the same "Customer Satisfaction" sheet tab as
+// the install one above, distinguished by a ประเภทแบบสอบถาม column on the
+// backend -- unlike the install version, this one is available on every job
+// in the Overview table regardless of category, since by the time a job
+// appears there at all its survey has already happened.
+var SURVEY_CSAT_CRITERIA = [
+  { key: 'q1', label: 'ท่านพึงพอใจกับการให้บริการของเจ้าหน้าที่ในการสำรวจหน้างานมากน้อยเพียงใด' },
+  { key: 'q2', label: 'เจ้าหน้าที่ให้ข้อมูลและคำแนะนำเกี่ยวกับการติดตั้งโซลาร์เซลล์ได้ชัดเจนและเข้าใจง่ายเพียงใด' },
+  { key: 'q3', label: 'ท่านพึงพอใจกับแนวทางการออกแบบและรูปแบบการติดตั้งที่เจ้าหน้าที่แนะนำมากน้อยเพียงใด' },
+  { key: 'q4', label: 'หลังจากการสำรวจหน้างาน ท่านมีความมั่นใจในมาตรฐานและความปลอดภัยของการติดตั้งมากน้อยเพียงใด' },
+  { key: 'q5', label: 'โดยรวม ท่านพึงพอใจกับการให้บริการในขั้นตอนการสำรวจหน้างานมากน้อยเพียงใด' }
 ];
 
 // Installation progress checklist (Sure's request, 2026-08-24): a fixed set
@@ -1023,6 +1063,35 @@ function openCsatModal(jobKey) {
     errEl.style.display = '';
   }
   document.getElementById('csatModalOverlay').classList.add('open');
+}
+
+function openSurveyCsatModal(jobKey) {
+  var job = jobByKey(jobKey);
+  if (!job) return;
+  // No status/category gate here -- every job that appears in the Overview
+  // table (stalled/scheduled/completed) has already had its survey visit.
+  currentSurveyCsatJob = job;
+  currentSurveyCsatScores = {};
+  document.getElementById('surveyCsatModalSub').textContent =
+    (job.ts_app || job.job_code || '-') + ' · ' + (job.customer || '') + ' · ' + (contractorDisplayName(job.contractor) || '-');
+  var host = document.getElementById('surveyCsatCriteriaHost');
+  host.innerHTML = SURVEY_CSAT_CRITERIA.map(function(cr) {
+    return '<div style="margin-bottom:10px;">' +
+      '<div class="rating-crit-label">' + escHtml(cr.label) + '</div>' +
+      '<div class="score-btn-row" data-survey-csat-crit="' + cr.key + '">' +
+        [1, 2, 3, 4, 5].map(function(n) { return '<button type="button" class="survey-csat-score-btn" data-val="' + n + '">' + n + '</button>'; }).join('') +
+      '</div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('surveyCsatCallerName').value = '';
+  document.getElementById('surveyCsatNote').value = '';
+  var errEl = document.getElementById('surveyCsatModalError');
+  errEl.style.display = 'none';
+  if (!ratingsConfigured()) {
+    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึกแบบสอบถาม (RATINGS_WEBAPP_URL) -- บันทึกได้แต่จะไม่สำเร็จจนกว่าจะตั้งค่าเสร็จ';
+    errEl.style.display = '';
+  }
+  document.getElementById('surveyCsatModalOverlay').classList.add('open');
 }
 
 function jobByKey(key) {
@@ -2467,7 +2536,7 @@ function renderOverviewRatingCell(j, cat) {
 
 function renderOverviewCsatCell(j, cat) {
   var csatKey = j.ts_app || j.job_code || j._key || '';
-  var csatInfo = RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat.byJob && RATINGS_SUMMARY.csat.byJob[csatKey];
+  var csatInfo = RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat.install && RATINGS_SUMMARY.csat.install.byJob && RATINGS_SUMMARY.csat.install.byJob[csatKey];
   if (cat !== 'completed') {
     return '<span class="rating-badge none" title="สำรวจความพึงพอใจได้เมื่อติดตั้งเสร็จสิ้นแล้ว">รอติดตั้งเสร็จ</span>';
   }
@@ -2475,6 +2544,16 @@ function renderOverviewCsatCell(j, cat) {
     ? '<span class="rating-badge">' + csatInfo.avg + '/5 (' + csatInfo.count + ' ครั้ง)</span>'
     : '<span class="rating-badge none">ยังไม่มีคะแนน</span>';
   html += '<button type="button" class="secondary csat-rate-btn" data-csat-key="' + escHtml(j._key) + '">บันทึกแบบสอบถาม</button>';
+  return html;
+}
+
+function renderOverviewSurveyCsatCell(j, cat) {
+  var csatKey = j.ts_app || j.job_code || j._key || '';
+  var csatInfo = RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat.survey && RATINGS_SUMMARY.csat.survey.byJob && RATINGS_SUMMARY.csat.survey.byJob[csatKey];
+  var html = csatInfo
+    ? '<span class="rating-badge">' + csatInfo.avg + '/5 (' + csatInfo.count + ' ครั้ง)</span>'
+    : '<span class="rating-badge none">ยังไม่มีคะแนน</span>';
+  html += '<button type="button" class="secondary survey-csat-rate-btn" data-survey-csat-key="' + escHtml(j._key) + '">บันทึกแบบสอบถาม</button>';
   return html;
 }
 
@@ -2519,6 +2598,7 @@ function renderOverviewRow(j, i, cat) {
     '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
     '<td><span class="ov-badge ' + cat + '">' + escHtml(OVERVIEW_STATUS_LABELS[cat]) + '</span></td>' +
     '<td>' + renderOverviewRatingCell(j, cat) + '</td>' +
+    '<td>' + renderOverviewSurveyCsatCell(j, cat) + '</td>' +
     '<td>' + renderOverviewCsatCell(j, cat) + '</td>' +
     '<td style="text-align:center;">' + renderDocStatusCell(j.proposal_tac_name, j.proposal_tac_link) + '</td>' +
     '<td style="text-align:center;">' + renderDocStatusCell(j.fat_ts_name, j.fat_ts_link) + '</td>' +
@@ -5439,6 +5519,21 @@ document.addEventListener('click', function(ev) {
     Array.prototype.forEach.call(csatRow.querySelectorAll('.csat-score-btn'), function(b) {
       b.classList.toggle('selected', b === csatScoreBtn);
     });
+    return;
+  }
+  var surveyCsatRateBtn = ev.target.closest('.survey-csat-rate-btn');
+  if (surveyCsatRateBtn) {
+    openSurveyCsatModal(surveyCsatRateBtn.getAttribute('data-survey-csat-key'));
+    return;
+  }
+  var surveyCsatScoreBtn = ev.target.closest('.survey-csat-score-btn');
+  if (surveyCsatScoreBtn) {
+    var surveyCsatRow = surveyCsatScoreBtn.closest('.score-btn-row');
+    var surveyCsatCrit = surveyCsatRow.getAttribute('data-survey-csat-crit');
+    currentSurveyCsatScores[surveyCsatCrit] = parseInt(surveyCsatScoreBtn.getAttribute('data-val'), 10);
+    Array.prototype.forEach.call(surveyCsatRow.querySelectorAll('.survey-csat-score-btn'), function(b) {
+      b.classList.toggle('selected', b === surveyCsatScoreBtn);
+    });
   }
 });
 document.getElementById('ratingModalClose').onclick = function() {
@@ -5555,6 +5650,69 @@ document.getElementById('csatModalSubmit').onclick = function() {
     submitBtn.textContent = 'บันทึกแบบสอบถาม';
     if (res && res.success) {
       document.getElementById('csatModalOverlay').classList.remove('open');
+      fetchRatingsSummary();
+    } else {
+      errEl.textContent = 'บันทึกไม่สำเร็จ: ' + ((res && res.error) || 'unknown error');
+      errEl.style.display = '';
+    }
+  }).catch(function(err) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'บันทึกแบบสอบถาม';
+    errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+    errEl.style.display = '';
+  });
+};
+
+document.getElementById('surveyCsatModalClose').onclick = function() {
+  document.getElementById('surveyCsatModalOverlay').classList.remove('open');
+};
+document.getElementById('surveyCsatModalOverlay').addEventListener('click', function(ev) {
+  if (ev.target === document.getElementById('surveyCsatModalOverlay')) {
+    document.getElementById('surveyCsatModalOverlay').classList.remove('open');
+  }
+});
+document.getElementById('surveyCsatModalSubmit').onclick = function() {
+  var errEl = document.getElementById('surveyCsatModalError');
+  var caller = document.getElementById('surveyCsatCallerName').value.trim();
+  if (!caller) {
+    errEl.textContent = 'กรุณาใส่ชื่อผู้โทรสำรวจ';
+    errEl.style.display = '';
+    return;
+  }
+  var missing = SURVEY_CSAT_CRITERIA.filter(function(cr) { return !currentSurveyCsatScores[cr.key]; });
+  if (missing.length) {
+    errEl.textContent = 'กรุณาให้คะแนนครบทุกข้อ';
+    errEl.style.display = '';
+    return;
+  }
+  if (!ratingsConfigured()) {
+    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึกแบบสอบถาม (RATINGS_WEBAPP_URL)';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  var payload = {
+    key: RATINGS_ACCESS_KEY,
+    type: 'survey_csat_submit',
+    ts_app: (currentSurveyCsatJob.ts_app || currentSurveyCsatJob.job_code || currentSurveyCsatJob._key || ''),
+    customer: currentSurveyCsatJob.customer || '',
+    contractor: currentSurveyCsatJob.contractor || '',
+    caller: caller,
+    note: document.getElementById('surveyCsatNote').value.trim(),
+    scores: currentSurveyCsatScores
+  };
+  var submitBtn = document.getElementById('surveyCsatModalSubmit');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'กำลังบันทึก...';
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'บันทึกแบบสอบถาม';
+    if (res && res.success) {
+      document.getElementById('surveyCsatModalOverlay').classList.remove('open');
       fetchRatingsSummary();
     } else {
       errEl.textContent = 'บันทึกไม่สำเร็จ: ' + ((res && res.error) || 'unknown error');

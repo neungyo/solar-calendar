@@ -676,6 +676,21 @@
     <div class="modal-row"><div class="k">สถานะ:</div><div class="v" id="mStatus"></div></div>
     <div class="modal-row" id="mTacRow"><div class="k">เลขขนานไฟ:</div><div class="v" id="mTac"></div></div>
     <div class="modal-row" id="mSlaRow" style="display:none;"><div class="k">SLA ติดตั้ง:</div><div class="v" id="mSla"></div></div>
+    <div class="modal-row" id="mChecklistRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+      <div class="k" style="margin-bottom:8px;font-weight:600;">Installation progress checklist:</div>
+      <div style="margin-bottom:8px;max-width:220px;">
+        <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:3px;">ชื่อผู้ตรวจสอบ</label>
+        <input type="text" id="checklistRecordedBy" placeholder="ชื่อผู้ตรวจสอบ" style="width:100%;box-sizing:border-box;">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div style="flex:1;height:10px;background:var(--bg);border-radius:6px;overflow:hidden;">
+          <div id="checklistBar" style="height:100%;width:0%;background:#16a34a;border-radius:6px;transition:width .2s;"></div>
+        </div>
+        <span id="checklistPct" style="font-size:13px;font-weight:700;min-width:74px;text-align:right;">0% เสร็จ</span>
+      </div>
+      <div id="checklistItems" style="display:flex;flex-direction:column;gap:8px;font-size:13px;"></div>
+      <div id="checklistError" style="color:var(--red);font-size:12px;margin-top:6px;display:none;"></div>
+    </div>
     <div class="modal-row" id="mInstallLogRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
       <div class="k" style="margin-bottom:8px;font-weight:600;">บันทึกความคืบหน้ารายวัน (ทีมงานภายในเท่านั้น):</div>
       <div id="mInstallLogList" style="font-size:12px;margin-bottom:10px;"></div>
@@ -827,13 +842,56 @@ var RATINGS_CRITERIA = [
   { key: 'testing', label: 'ทดสอบระบบก่อนส่งมอบ (Testing & Commissioning)', hint: 'ตรวจสอบแรงดัน ขั้วสาย การสื่อสาร Monitoring และทดสอบการทำงานครบทุกฟังก์ชัน' },
   { key: 'handover', label: 'ส่งมอบพร้อมเอกสาร (Documentation & Handover)', hint: 'ถ่ายรูป Before/After, ส่งรายงานติดตั้ง และอธิบายการใช้งานให้ลูกค้า' }
 ];
-var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} } };
+var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} }, checklist: { byJob: {} } };
 var currentRatingJob = null;
 var currentRatingScores = {};
 var currentLogJob = null;
 var currentEditingLogRow = null;
 var currentSurveyLogJob = null;
 var currentEditingSurveyLogRow = null;
+var currentChecklistJob = null;
+
+// Installation progress checklist (Sure's request, 2026-08-24): a fixed set
+// of 10 install phases, each worth a weight that sums to 100 for a "base"
+// job. Four phases (panel/inverter/ac_wiring/commissioning) carry an extra
+// bonus weight that only counts if the job's equipment includes the
+// relevant option (Optimizer / Smart Guard) -- detected from the job's
+// equipment text, not chosen manually by staff. The "battery" phase is
+// itself entirely conditional: it's only shown at all for jobs that
+// actually have a Battery. The single progress bar shown to staff is always
+// (checked weight so far) / (max weight applicable to THIS job) * 100, so it
+// reaches exactly 100% however many of the optional phases apply.
+var CHECKLIST_ITEMS = [
+  { key: 'site_prep', title: 'Site preparation and safety setup', detail: 'ตรวจสอบหน้างาน เตรียมอุปกรณ์เซฟตี้ และกั้นพื้นที่ทำงาน', weight: 5 },
+  { key: 'roof_survey', title: 'Roof survey and layout marking', detail: 'สำรวจโครงสร้างหลังคา และมาร์คจุดติดตั้งราง', weight: 8 },
+  { key: 'mounting', title: 'Mounting rail and bracket', detail: 'ติดตั้งขาจับและรางยึดแผงโซลาร์', weight: 14 },
+  { key: 'panel', title: 'Panel installation', detail: 'ติดตั้งแผงโซลาร์เซลล์บนราง พร้อม Optimizer ต่อแผง/สตริงถ้ามี', weight: 14, bonus: 3, bonusKeyword: 'optimizer' },
+  { key: 'dc_cabling', title: 'DC cabling, combiner box and grounding', detail: 'เดินสาย DC รวมสายเข้าตู้ Combiner และต่อกราวด์แผง/โครงสร้าง', weight: 12 },
+  { key: 'inverter', title: 'Inverter installation', detail: 'ติดตั้ง Inverter Huawei/Sigenergy พร้อมกล่อง Smart Guard ถ้ามี', weight: 10, bonus: 2, bonusKeyword: 'smartguard' },
+  { key: 'ac_wiring', title: 'AC wiring and MDB connection', detail: 'เดินสาย AC เชื่อมต่อตู้ MDB และแยกวงจร Backup Load ถ้ามี Smart Guard', weight: 12, bonus: 3, bonusKeyword: 'smartguard' },
+  { key: 'battery', title: 'Battery / backup system', detail: 'ติดตั้งและเดินสาย Battery ตั้งค่าโหมด Backup', weight: 8, bonus: 5, bonusKeyword: 'battery', requiresKeyword: 'battery' },
+  { key: 'commissioning', title: 'Commissioning, testing and customer training', detail: 'เปิดระบบ เชื่อมแอป FusionSolar/Sigen ทดสอบการทำงาน และสอนลูกค้าใช้งานระบบก่อนออกจากไซต์', weight: 12, bonus: 2, bonusKeyword: 'any' },
+  { key: 'cleanup', title: 'Site cleanup and documentation handover', detail: 'ทำความสะอาดหน้างาน จัดเก็บอุปกรณ์ ส่งมอบเอกสาร/ใบตรวจรับงาน', weight: 5 }
+];
+
+function checklistEquipmentFlags_(job) {
+  var eq = (job && job.equipment) || '';
+  var lower = eq.toLowerCase();
+  var hasBattery = lower.indexOf('battery') !== -1 || eq.indexOf('แบตเตอรี่') !== -1;
+  var hasOptimizer = lower.indexOf('optimizer') !== -1;
+  var hasSmartGuard = lower.indexOf('smart guard') !== -1 || lower.indexOf('smartguard') !== -1;
+  return { battery: hasBattery, optimizer: hasOptimizer, smartguard: hasSmartGuard, any: hasBattery || hasOptimizer || hasSmartGuard };
+}
+
+function checklistApplicableItems_(job) {
+  var flags = checklistEquipmentFlags_(job);
+  return CHECKLIST_ITEMS.filter(function(it) {
+    return it.requiresKeyword ? !!flags[it.requiresKeyword] : true;
+  }).map(function(it) {
+    var bonusApplies = !!(it.bonus && flags[it.bonusKeyword]);
+    return { key: it.key, title: it.title, detail: it.detail, weight: it.weight + (bonusApplies ? it.bonus : 0) };
+  });
+}
 
 function ratingsConfigured() {
   return RATINGS_WEBAPP_URL && RATINGS_WEBAPP_URL.indexOf('REPLACE_WITH') !== 0;
@@ -1423,6 +1481,9 @@ function openModalForEvent(e) {
     if (tacRow) tacRow.style.display = 'none';
     if (mInstallLogRow) mInstallLogRow.style.display = 'none';
     currentLogJob = null;
+    var mChecklistRowSurvey = document.getElementById('mChecklistRow');
+    if (mChecklistRowSurvey) mChecklistRowSurvey.style.display = 'none';
+    currentChecklistJob = null;
     if (mSurveyLogRow && mJob) {
       mSurveyLogRow.style.display = 'flex';
       currentSurveyLogJob = mJob;
@@ -1481,6 +1542,15 @@ function openModalForEvent(e) {
       mInstallLogRow.style.display = 'none';
       currentLogJob = null;
     }
+    var mChecklistRow = document.getElementById('mChecklistRow');
+    if (mChecklistRow && mJob) {
+      mChecklistRow.style.display = 'flex';
+      currentChecklistJob = mJob;
+      renderChecklist(mJob);
+    } else if (mChecklistRow) {
+      mChecklistRow.style.display = 'none';
+      currentChecklistJob = null;
+    }
   }
   document.getElementById('modalOverlay').classList.add('open');
 }
@@ -1504,6 +1574,106 @@ function logStatusClass_(val) {
   if (val === 'เสร็จ' || val === 'สามารถติดตั้งได้') return 'log-ok';
   if (val === 'ลูกค้าติดต่อแจ้งปัญหา' || val === 'ลูกค้าติดต่อสอบถาม') return 'log-note';
   return 'log-pending';
+}
+
+// Installation progress checklist rendering (Sure's request, 2026-08-24).
+// Unlike the daily logs below (an append-only history), this checklist is a
+// single CURRENT state per job -- checking a box saves immediately (no
+// submit button), and the server upserts (finds the job's existing row in
+// "Install Checklist" and updates it, or creates one if this is the first
+// check for that job).
+function renderChecklist(job) {
+  var host = document.getElementById('checklistItems');
+  if (!host) return;
+  var items = checklistApplicableItems_(job);
+  var state = (RATINGS_SUMMARY.checklist && RATINGS_SUMMARY.checklist.byJob && RATINGS_SUMMARY.checklist.byJob[job.ts_app]) || {};
+  var recordedByEl = document.getElementById('checklistRecordedBy');
+  if (recordedByEl) recordedByEl.value = state.updatedBy || '';
+  var errEl = document.getElementById('checklistError');
+  if (errEl) errEl.style.display = 'none';
+  host.innerHTML = '';
+  items.forEach(function(it) {
+    var row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '10px';
+    row.style.alignItems = 'flex-start';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!state[it.key];
+    cb.style.marginTop = '3px';
+    cb.addEventListener('change', function() { toggleChecklistItem(it.key, cb.checked, cb); });
+    var label = document.createElement('div');
+    label.innerHTML = '<div style="font-weight:600;">' + escHtml(it.title) + '</div>' +
+      '<div style="color:var(--muted);font-size:12px;margin-top:2px;">' + escHtml(it.detail) + '</div>';
+    row.appendChild(cb);
+    row.appendChild(label);
+    host.appendChild(row);
+  });
+  updateChecklistBar(items, state);
+}
+
+function updateChecklistBar(items, state) {
+  var max = 0, got = 0;
+  items.forEach(function(it) { max += it.weight; if (state[it.key]) got += it.weight; });
+  var pct = max > 0 ? Math.round((got / max) * 100) : 0;
+  var bar = document.getElementById('checklistBar');
+  var pctEl = document.getElementById('checklistPct');
+  if (bar) bar.style.width = pct + '%';
+  if (pctEl) pctEl.textContent = pct + '% เสร็จ';
+}
+
+function toggleChecklistItem(key, checked, cbEl) {
+  if (!currentChecklistJob) return;
+  var job = currentChecklistJob;
+  var errEl = document.getElementById('checklistError');
+  var recordedByEl = document.getElementById('checklistRecordedBy');
+  var recordedBy = recordedByEl ? recordedByEl.value.trim() : '';
+  if (!recordedBy) {
+    if (cbEl) cbEl.checked = !checked;
+    if (errEl) { errEl.textContent = 'กรุณากรอกชื่อผู้ตรวจสอบก่อนติ๊กช่อง'; errEl.style.display = ''; }
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+  if (!RATINGS_SUMMARY.checklist) RATINGS_SUMMARY.checklist = { byJob: {} };
+  if (!RATINGS_SUMMARY.checklist.byJob[job.ts_app]) RATINGS_SUMMARY.checklist.byJob[job.ts_app] = {};
+  var state = RATINGS_SUMMARY.checklist.byJob[job.ts_app];
+  var prev = !!state[key];
+  state[key] = checked;
+  state.updatedBy = recordedBy;
+  var items = checklistApplicableItems_(job);
+  updateChecklistBar(items, state);
+  if (!ratingsConfigured()) {
+    state[key] = prev;
+    if (cbEl) cbEl.checked = prev;
+    updateChecklistBar(items, state);
+    if (errEl) { errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึก (RATINGS_WEBAPP_URL)'; errEl.style.display = ''; }
+    return;
+  }
+  var payload = {
+    key: RATINGS_ACCESS_KEY, type: 'checklist_update',
+    ts_app: job.ts_app, customer: job.customer, contractor: job.contractor,
+    item: key, checked: checked, updatedBy: recordedBy
+  };
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.success) {
+        state[key] = prev;
+        if (cbEl) cbEl.checked = prev;
+        updateChecklistBar(items, state);
+        if (errEl) { errEl.textContent = (data && data.error) || 'บันทึกไม่สำเร็จ'; errEl.style.display = ''; }
+      }
+    })
+    .catch(function() {
+      state[key] = prev;
+      if (cbEl) cbEl.checked = prev;
+      updateChecklistBar(items, state);
+      if (errEl) { errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'; errEl.style.display = ''; }
+    });
 }
 
 // Install day log (Sure's request, 2026-07-20): internal staff (หนึ่งโย่ว/

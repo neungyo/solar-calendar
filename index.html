@@ -676,6 +676,9 @@
     <div class="modal-row"><div class="k">สถานะ:</div><div class="v" id="mStatus"></div></div>
     <div class="modal-row" id="mTacRow"><div class="k">เลขขนานไฟ:</div><div class="v" id="mTac"></div></div>
     <div class="modal-row" id="mSlaRow" style="display:none;"><div class="k">SLA ติดตั้ง:</div><div class="v" id="mSla"></div></div>
+    <div class="modal-row" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+      <button class="secondary" id="mCopyBtn" style="width:100%;">📋 คัดลอกข้อมูล</button>
+    </div>
     <div class="modal-row" id="mChecklistRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
       <div class="k" style="margin-bottom:8px;font-weight:600;">Installation progress checklist:</div>
       <div style="margin-bottom:8px;max-width:220px;">
@@ -1575,6 +1578,73 @@ function logStatusClass_(val) {
   if (val === 'ลูกค้าติดต่อแจ้งปัญหา' || val === 'ลูกค้าติดต่อสอบถาม') return 'log-note';
   return 'log-pending';
 }
+
+// Copy-to-clipboard button (Sure's request, 2026-08-25): staff doing a
+// site inspection can grab customer/job/contact info plus the current
+// checklist state as one paste-ready block (e.g. to send over LINE), rather
+// than retyping it. Reads straight from the modal's own DOM text so the
+// copied values always match exactly what's on screen.
+function buildCopyText_() {
+  var lines = [];
+  lines.push('ชื่อลูกค้า: ' + (document.getElementById('mTitle').textContent || '-'));
+  lines.push('ประเภทงาน: ' + (document.getElementById('mType').textContent || '-'));
+  lines.push('ผรม.: ' + (document.getElementById('mContractor').textContent || '-'));
+  lines.push('อุปกรณ์: ' + (document.getElementById('mEquipment').textContent || '-'));
+  lines.push('ที่อยู่: ' + (document.getElementById('mAddress').textContent || '-'));
+  lines.push('เบอร์ติดต่อ: ' + (document.getElementById('mPhone').textContent || '-'));
+  lines.push('อีเมล: ' + (document.getElementById('mEmail').textContent || '-'));
+
+  var checklistRow = document.getElementById('mChecklistRow');
+  if (checklistRow && checklistRow.style.display !== 'none' && currentChecklistJob) {
+    var items = checklistApplicableItems_(currentChecklistJob);
+    var state = (RATINGS_SUMMARY.checklist && RATINGS_SUMMARY.checklist.byJob &&
+      RATINGS_SUMMARY.checklist.byJob[currentChecklistJob.ts_app]) || {};
+    var max = 0, got = 0;
+    items.forEach(function(it) { max += it.weight; if (state[it.key]) got += it.weight; });
+    var pct = max > 0 ? Math.round((got / max) * 100) : 0;
+    lines.push('');
+    lines.push('Installation Progress Checklist (' + pct + '% เสร็จ)');
+    items.forEach(function(it) {
+      lines.push((state[it.key] ? '[x] ' : '[ ] ') + it.title);
+    });
+  }
+  return lines.join('\n');
+}
+
+function legacyCopyText_(text, cb) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    cb(ok);
+  } catch (e) {
+    cb(false);
+  }
+}
+
+function copyModalText() {
+  var text = buildCopyText_();
+  var btn = document.getElementById('mCopyBtn');
+  var original = '📋 คัดลอกข้อมูล';
+  function done(ok) {
+    if (!btn) return;
+    btn.textContent = ok ? '✓ คัดลอกแล้ว' : 'คัดลอกไม่สำเร็จ ลองใหม่';
+    setTimeout(function() { btn.textContent = original; }, 1500);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() { done(true); }).catch(function() { legacyCopyText_(text, done); });
+  } else {
+    legacyCopyText_(text, done);
+  }
+}
+var mCopyBtnEl = document.getElementById('mCopyBtn');
+if (mCopyBtnEl) mCopyBtnEl.onclick = copyModalText;
 
 // Installation progress checklist rendering (Sure's request, 2026-08-24).
 // Unlike the daily logs below (an append-only history), this checklist is a

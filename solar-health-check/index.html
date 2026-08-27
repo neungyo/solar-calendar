@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SYNNEX Solar Health Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#10222B;
+    --ink-soft:#3D5560;
+    --panel:#EEF2F1;
+    --surface:#FFFFFF;
+    --line:#DDE4E2;
+    --amber:#F2A93B;
+    --teal:#1B7A6E;
+    --pass:#2F8F5B;
+    --warn:#E0932F;
+    --fail:#C24C3D;
+    --pass-bg:#E7F4EC;
+    --warn-bg:#FCF1E1;
+    --fail-bg:#FBEAE7;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--panel);color:var(--ink);font-family:'Inter',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+
+  /* ---- layout shell ---- */
+  .app{display:flex;min-height:100vh;}
+  .rail{
+    width:250px;flex-shrink:0;background:var(--ink);color:#CFE0DC;
+    padding:22px 14px 22px;position:sticky;top:0;height:100vh;overflow-y:auto;
+  }
+  .rail-brand{display:flex;align-items:center;gap:10px;padding:0 8px 18px;border-bottom:1px solid rgba(255,255,255,0.12);margin-bottom:14px;}
+  .rail-brand .mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--amber),#C97C1E);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;color:var(--ink);font-size:14px;}
+  .rail-brand .txt{line-height:1.15;}
+  .rail-brand .txt b{font-family:'Space Grotesk';font-size:13.5px;color:#fff;display:block;}
+  .rail-brand .txt span{font-size:10.5px;color:#9FB6B0;letter-spacing:.03em;}
+
+  .navlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+  .navlist li{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:#B9CBC6;transition:background .15s,color .15s;}
+  .navlist li:hover{background:rgba(255,255,255,0.06);color:#fff;}
+  .navlist li.active{background:rgba(242,169,59,0.14);color:#fff;}
+  .navlist li.active .num{background:var(--amber);color:var(--ink);}
+  .navlist .num{
+    width:20px;height:20px;flex-shrink:0;border-radius:5px;background:rgba(255,255,255,0.08);
+    display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono';font-size:10px;color:#9FB6B0;
+  }
+  .navlist .status-dot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:#4A5F5A;flex-shrink:0;}
+  .navlist .status-dot.done{background:var(--pass);}
+  .navlist .status-dot.issue{background:var(--fail);}
+
+  /* ---- top bar ---- */
+  .main{flex:1;min-width:0;}
+  .topbar{
+    position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);
+    padding:14px 28px;display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+  }
+  .topbar .id-block{margin-right:auto;}
+  .topbar .id-block .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);}
+  .topbar .id-block .val{font-family:'Space Grotesk';font-weight:600;font-size:15px;}
+  .gauge-wrap{display:flex;align-items:center;gap:12px;}
+  .gauge-score{font-family:'Space Grotesk';font-weight:700;font-size:22px;}
+  .gauge-status{
+    font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;letter-spacing:.02em;
+  }
+
+  /* ---- content ---- */
+  .content{padding:26px 28px 80px;max-width:880px;}
+  .section{display:none;}
+  .section.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .sec-head{margin-bottom:20px;}
+  .sec-eyebrow{font-family:'IBM Plex Mono';font-size:11px;color:var(--teal);letter-spacing:.06em;}
+  .sec-title{font-family:'Space Grotesk';font-size:23px;font-weight:700;margin:2px 0 6px;}
+  .sec-sub{font-size:13px;color:var(--ink-soft);line-height:1.5;max-width:60ch;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+  .card h4{font-family:'Space Grotesk';font-size:14.5px;margin:0 0 14px;display:flex;align-items:center;gap:8px;}
+  .card h4 .swatch{width:6px;height:16px;border-radius:3px;background:var(--teal);}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  @media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+  .field label{display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:5px;font-weight:600;}
+  .field input,.field select,.field textarea{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;font-family:'Inter';
+    background:#FBFCFC;color:var(--ink);
+  }
+  .field input.mono,.field textarea.mono{font-family:'IBM Plex Mono';}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+  .field textarea{resize:vertical;min-height:64px;}
+
+  /* pass/fail inspection row */
+  .insp-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);}
+  .insp-row:last-child{border-bottom:none;}
+  .insp-name{flex:1;font-size:13.5px;font-weight:500;}
+  .seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;flex-shrink:0;}
+  .seg button{
+    border:none;background:var(--surface);padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;
+    color:var(--ink-soft);font-family:'Inter';border-right:1px solid var(--line);
+  }
+  .seg button:last-child{border-right:none;}
+  .seg button[data-v="pass"].active{background:var(--pass-bg);color:var(--pass);}
+  .seg button[data-v="fail"].active{background:var(--fail-bg);color:var(--fail);}
+  .seg button[data-v="na"].active{background:#EEF0EF;color:var(--ink-soft);}
+  .photo-btn{
+    width:34px;height:34px;border-radius:7px;border:1px dashed var(--line);background:#FBFCFC;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;color:var(--ink-soft);
+  }
+  .photo-btn.has-photo{border-style:solid;border-color:var(--teal);color:var(--teal);}
+  .remark-toggle{font-size:11px;color:var(--teal);cursor:pointer;flex-shrink:0;text-decoration:underline;text-underline-offset:2px;}
+
+  /* recommendation levels */
+  .rec-level{border-left:3px solid var(--line);padding:4px 0 4px 14px;margin-bottom:14px;}
+  .rec-level.immediate{border-color:var(--fail);}
+  .rec-level.improve{border-color:var(--warn);}
+  .rec-level.future{border-color:var(--teal);}
+  .rec-level h5{margin:0 0 3px;font-family:'Space Grotesk';font-size:13.5px;}
+  .rec-level p{margin:0 0 8px;font-size:12px;color:var(--ink-soft);}
+
+  .btn-row{display:flex;justify-content:space-between;margin-top:24px;}
+  .btn{
+    font-family:'Inter';font-weight:600;font-size:13px;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;
+  }
+  .btn.primary{background:var(--ink);color:#fff;}
+  .btn.ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line);}
+  .btn.primary:hover{background:#1c3540;}
+
+  .weight-note{font-size:11px;color:var(--ink-soft);background:#FBFCFC;border:1px dashed var(--line);padding:10px 12px;border-radius:8px;margin-top:4px;}
+
+  .placeholder-note{font-size:12px;color:var(--ink-soft);background:#FBFCFC;border:1px dashed var(--line);border-radius:8px;padding:12px 14px;}
+
+  .field-th{display:block;font-weight:400;font-size:10.5px;color:#8FA39D;margin-top:2px;letter-spacing:0;}
+  .insp-name .insp-th{font-weight:400;font-size:11px;color:var(--ink-soft);margin-top:2px;line-height:1.4;}
+
+  .topbar-actions{display:flex;gap:8px;}
+  .tb-btn{
+    display:flex;align-items:center;gap:6px;font-family:'Inter';font-weight:600;font-size:12.5px;
+    padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--ink);
+  }
+  .tb-btn.primary{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  /* ---- report preview ---- */
+  .report-view{display:none;}
+  body.report-mode .app{display:none;}
+  body.report-mode .report-view{display:block;}
+  .report-shell{max-width:840px;margin:0 auto;padding:30px 20px 90px;}
+  .report-toolbar{
+    position:sticky;top:0;background:var(--panel);padding:14px 0;display:flex;justify-content:space-between;
+    align-items:center;margin-bottom:18px;z-index:5;
+  }
+  .report-doc{background:#fff;border:1px solid var(--line);border-radius:12px;padding:40px 44px;box-shadow:0 1px 3px rgba(16,34,43,0.06);}
+  .rep-cover{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:26px;}
+  .rep-brand{display:flex;align-items:center;gap:10px;}
+  .rep-brand .mark{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--amber),#C97C1E);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;color:var(--ink);}
+  .rep-brand b{font-family:'Space Grotesk';font-size:15px;display:block;}
+  .rep-brand span{font-size:10.5px;color:var(--ink-soft);}
+  .rep-id{text-align:right;font-family:'IBM Plex Mono';font-size:11px;color:var(--ink-soft);}
+  .rep-title{font-family:'Space Grotesk';font-size:26px;font-weight:700;margin:0 0 4px;}
+  .rep-sub{font-size:12.5px;color:var(--ink-soft);margin-bottom:26px;}
+
+  .rep-score-block{display:flex;align-items:center;gap:22px;background:var(--panel);border-radius:12px;padding:20px 24px;margin-bottom:26px;}
+  .rep-score-circle{width:84px;height:84px;border-radius:50%;background:conic-gradient(var(--pass) 0% 92%, #E4E9E8 92% 100%);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .rep-score-circle .inner{width:66px;height:66px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .rep-score-circle .inner b{font-family:'Space Grotesk';font-size:20px;}
+  .rep-score-circle .inner span{font-size:8.5px;color:var(--ink-soft);}
+  .rep-score-text b{font-family:'Space Grotesk';font-size:15px;}
+  .rep-score-text p{font-size:12px;color:var(--ink-soft);margin:4px 0 0;line-height:1.5;}
+  .rep-pill{display:inline-block;font-size:10.5px;font-weight:700;color:#fff;background:var(--pass);padding:3px 10px;border-radius:99px;margin-left:8px;vertical-align:middle;}
+
+  .rep-section{margin-bottom:24px;page-break-inside:avoid;}
+  .rep-section h3{font-family:'Space Grotesk';font-size:14.5px;border-left:3px solid var(--teal);padding-left:10px;margin:0 0 10px;}
+  .rep-cat-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+  .rep-cat-row:last-child{border-bottom:none;}
+  .rep-cat-row .name{flex:1;font-weight:600;}
+  .rep-cat-row .bar-wrap{flex:2;height:6px;background:#E4E9E8;border-radius:99px;overflow:hidden;}
+  .rep-cat-row .bar{height:100%;border-radius:99px;background:var(--pass);}
+  .rep-cat-row .pct{font-family:'IBM Plex Mono';font-size:11px;color:var(--ink-soft);width:36px;text-align:right;}
+
+  .rep-photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .rep-photo-grid div{aspect-ratio:1;background:var(--panel);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#B7C4C0;}
+
+  .rep-reco{border-left:3px solid var(--line);padding:2px 0 2px 12px;margin-bottom:10px;font-size:12.5px;}
+  .rep-reco.immediate{border-color:var(--fail);}
+  .rep-reco.improve{border-color:var(--warn);}
+  .rep-reco.future{border-color:var(--teal);}
+  .rep-reco b{display:block;font-family:'Space Grotesk';font-size:12.5px;}
+
+  .rep-quote{background:var(--panel);border-radius:8px;padding:14px 16px;font-size:12.5px;color:var(--ink-soft);font-style:italic;margin-top:8px;}
+
+  .rep-sign{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px;}
+  .rep-sign div{border-top:1px solid var(--line);padding-top:8px;font-size:11.5px;color:var(--ink-soft);}
+  .rep-sign div b{display:block;color:var(--ink);font-size:12.5px;margin-bottom:2px;}
+
+  .rep-footer{display:flex;justify-content:space-between;align-items:center;margin-top:30px;padding-top:16px;border-top:1px solid var(--line);}
+  .rep-qr{width:54px;height:54px;background:var(--panel);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink-soft);text-align:center;}
+  .rep-footer .note{font-size:10.5px;color:var(--ink-soft);max-width:60ch;}
+
+  @media print{
+    .no-print{display:none !important;}
+    .report-shell{padding:0;max-width:none;}
+    .report-doc{border:none;box-shadow:none;border-radius:0;padding:0;}
+    body{background:#fff;}
+  }
+
+  .kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  @media(max-width:640px){.kpi-strip{grid-template-columns:repeat(2,1fr);}}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;}
+  .kpi .k-lbl{font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;}
+  .kpi .k-val{font-family:'Space Grotesk';font-size:19px;font-weight:700;margin-top:3px;}
+  .kpi .k-sub{font-size:11px;color:var(--teal);margin-top:2px;}
+
+  ::selection{background:var(--amber);color:var(--ink);}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT RAIL -->
+  <nav class="rail">
+    <div class="rail-brand">
+      <div class="mark">S</div>
+      <div class="txt"><b>Solar Health Check</b><span>SYNNEX · Installation & Maintenance</span></div>
+    </div>
+    <ul class="navlist" id="navlist"></ul>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="id-block">
+        <div class="lbl">Inspection ID</div>
+        <div class="val mono" id="topId">SHC-2026-0000</div>
+      </div>
+      <div class="gauge-wrap">
+        <svg width="46" height="46" viewBox="0 0 46 46">
+          <circle cx="23" cy="23" r="19" fill="none" stroke="#E4E9E8" stroke-width="5"/>
+          <circle id="gaugeArc" cx="23" cy="23" r="19" fill="none" stroke="#2F8F5B" stroke-width="5"
+                  stroke-linecap="round" stroke-dasharray="119.4" stroke-dashoffset="0"
+                  transform="rotate(-90 23 23)"/>
+        </svg>
+        <div>
+          <div class="gauge-score" id="gaugeScore">—</div>
+          <div class="gauge-status" id="gaugeStatus">Not started</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="tb-btn primary" onclick="openReport()">📄 ดูตัวอย่าง PDF Report</button>
+      </div>
+    </div>
+
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<!-- ================= REPORT PREVIEW (customer-facing PDF layout) ================= -->
+<div class="report-view" id="reportView">
+  <div class="report-shell">
+    <div class="report-toolbar no-print">
+      <button class="tb-btn" onclick="closeReport()">← กลับไปกรอกข้อมูล</button>
+      <button class="tb-btn primary" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
+    </div>
+
+    <div class="report-doc" id="reportDoc"></div>
+  </div>
+</div>
+
+<script>
+/* ---------------- data model ---------------- */
+const sections = [
+  {id:"cover", num:"01", title:"Cover / Site Information", eyebrow:"เริ่มต้น"},
+  {id:"summary", num:"02", title:"Executive Summary", eyebrow:"สรุปผล"},
+  {id:"sysinfo", num:"03", title:"System Information", eyebrow:"ข้อมูลระบบ"},
+  {id:"fusion", num:"04", title:"FusionSolar Performance", eyebrow:"ตรวจจากแดชบอร์ด", weight:25},
+  {id:"pv", num:"05", title:"PV / Physical Inspection", eyebrow:"ตรวจหน้างาน", weight:15},
+  {id:"inverter", num:"06", title:"Inverter Inspection", eyebrow:"ตรวจหน้างาน", weight:15},
+  {id:"battery", num:"07", title:"Battery Inspection", eyebrow:"ตรวจหน้างาน", weight:15},
+  {id:"electrical", num:"08", title:"Electrical & Safety", eyebrow:"ตรวจหน้างาน", weight:30},
+  {id:"advanced", num:"09", title:"Advanced Testing", eyebrow:"เฉพาะเมื่อจำเป็น"},
+  {id:"photo", num:"10", title:"Photo Report", eyebrow:"หลักฐานภาพ"},
+  {id:"assess", num:"11", title:"Engineer Assessment", eyebrow:"ความเห็นวิศวกร"},
+  {id:"reco", num:"12", title:"Recommendation", eyebrow:"ข้อเสนอแนะ"},
+  {id:"history", num:"13", title:"Maintenance History", eyebrow:"ประวัติย้อนหลัง"},
+  {id:"ack", num:"14", title:"Customer Acknowledgement", eyebrow:"ปิดงาน"},
+];
+
+// item = string (already Thai) OR {en, th} where th is a short Thai gloss + explanation
+const inspItems = {
+  pv: {
+    "PV Module": ["สภาพแผง", "คราบสกปรก", "เงาบัง", "รอยแตกร้าว", "Hotspot ที่มองเห็นได้", "สภาพ Junction Box", "สภาพ Connector"],
+    "Structure": ["โครงสร้าง", "สนิม", "จุดยึด", "ความแข็งแรง", "การกัดกร่อน"],
+    "DC Cable": ["สภาพสาย", "Connector", "Cable Management", "รอยไหม้"],
+  },
+  inverter: {
+    "Inverter": [
+      {en:"Operating Status", th:"สถานะการทำงาน — ตรวจว่าอินเวอร์เตอร์ทำงานปกติ ไม่มีข้อความแจ้งเตือนค้างอยู่"},
+      {en:"Alarm / Error", th:"สัญญาณเตือน/ข้อผิดพลาด — ตรวจ error code ที่ค้างอยู่บนจอเครื่องหรือแอป"},
+      {en:"Temperature", th:"อุณหภูมิเครื่อง — ตรวจว่าไม่ร้อนผิดปกติ ระบายความร้อนได้ดี"},
+      {en:"Ventilation / Dust", th:"ช่องระบายอากาศ/ฝุ่น — ตรวจไม่ให้มีฝุ่นอุดตันช่องลม"},
+      {en:"Physical Damage", th:"ความเสียหายทางกายภาพ — รอยแตก บุบ หรือความเสียหายจากภายนอก"},
+      {en:"AC Connection", th:"จุดต่อสายไฟฝั่ง AC — ตรวจความแน่นและสภาพขั้วต่อ"},
+      {en:"DC Connection", th:"จุดต่อสายไฟฝั่ง DC — ตรวจความแน่นและสภาพขั้วต่อ"},
+      {en:"Grounding", th:"ระบบสายดิน — ตรวจการต่อลงดินให้ถูกต้องตามมาตรฐาน"},
+      {en:"SPD", th:"อุปกรณ์ป้องกันไฟกระชาก — ตรวจสภาพและอายุการใช้งาน"},
+      {en:"Breaker", th:"เบรกเกอร์ — ตรวจสภาพและการทำงานของเบรกเกอร์"},
+      {en:"Communication", th:"การสื่อสารสัญญาณ — ตรวจว่าส่งข้อมูลขึ้นระบบมอนิเตอร์ได้ปกติ"},
+    ],
+  },
+  battery: {
+    "Battery": [
+      {en:"Operating Status", th:"สถานะการทำงาน — ตรวจว่าแบตเตอรี่ทำงานปกติ"},
+      {en:"Charge / Discharge Behavior", th:"พฤติกรรมการชาร์จ/คายประจุ — ดูรูปแบบจาก FusionSolar ไม่ใช่แค่ดูว่ายังติดอยู่หรือไม่"},
+      {en:"Alarm", th:"สัญญาณเตือน — ตรวจ error/alarm ที่ค้างอยู่"},
+      {en:"Temperature", th:"อุณหภูมิแบตเตอรี่ — ตรวจไม่ให้ร้อนผิดปกติ"},
+      {en:"Battery Module Status", th:"สถานะแต่ละโมดูลแบตเตอรี่ — ตรวจว่าทุกโมดูลทำงานปกติ ไม่มีตัวใดผิดปกติ"},
+      {en:"Communication", th:"การสื่อสารสัญญาณ — ตรวจว่าส่งข้อมูลขึ้นระบบมอนิเตอร์ได้ปกติ"},
+      {en:"Installation Condition", th:"สภาพการติดตั้ง — ตรวจตำแหน่ง การยึด และสภาพแวดล้อมรอบเครื่อง"},
+    ],
+  },
+  electrical: {
+    "Electrical & Safety": [
+      {en:"Main Breaker", th:"เมนเบรกเกอร์ — ตรวจสภาพและขนาดให้เหมาะสมกับระบบ"},
+      {en:"AC Breaker", th:"เบรกเกอร์ฝั่ง AC — ตรวจสภาพการทำงาน"},
+      {en:"DC Protection", th:"อุปกรณ์ป้องกันฝั่ง DC — ตรวจฟิวส์/เบรกเกอร์ DC"},
+      {en:"SPD", th:"อุปกรณ์ป้องกันไฟกระชาก — ตรวจสภาพและอายุการใช้งาน"},
+      {en:"RCBO", th:"เครื่องตัดไฟรั่ว — ตรวจการทำงานป้องกันไฟดูด/ไฟรั่ว"},
+      {en:"Grounding", th:"ระบบสายดิน — ตรวจการต่อลงดินให้ถูกต้อง"},
+      {en:"Cable / Terminal", th:"สายไฟและจุดต่อ — ตรวจความแน่นและไม่มีรอยไหม้"},
+      {en:"Signs of Overheating", th:"ร่องรอยความร้อนสูงผิดปกติ — สังเกตคราบไหม้หรือกลิ่นไหม้"},
+      {en:"Signs of Burning", th:"ร่องรอยไฟไหม้ — ตรวจจุดที่มีรอยดำ/ไหม้"},
+      {en:"Electrical Cabinet", th:"ตู้ไฟ — ตรวจความสะอาด ความเรียบร้อย ไม่มีสัตว์/แมลงเข้า"},
+      {en:"Labeling", th:"ป้ายกำกับวงจร — ตรวจว่ามีป้ายระบุวงจรชัดเจนครบถ้วน"},
+    ],
+  }
+};
+
+const state = { scores: {} }; // section.id -> {pass, fail, na, total}
+
+/* ---------------- render nav ---------------- */
+const navlist = document.getElementById("navlist");
+sections.forEach((s, i) => {
+  const li = document.createElement("li");
+  li.dataset.id = s.id;
+  li.innerHTML = `<span class="num">${s.num}</span><span>${s.title}</span><span class="status-dot" id="dot-${s.id}"></span>`;
+  li.onclick = () => showSection(s.id);
+  navlist.appendChild(li);
+  if (i === 0) li.classList.add("active");
+});
+
+/* ---------------- render sections ---------------- */
+const content = document.getElementById("content");
+
+// fields: array of [englishLabel, thaiGloss]
+function fieldsGrid(fields, cols=3){
+  const cls = cols===2?"grid2":"grid3";
+  return `<div class="${cls}">` + fields.map(f=>{
+    const en = Array.isArray(f) ? f[0] : f;
+    const th = Array.isArray(f) ? f[1] : "";
+    return `<div class="field"><label>${en}${th?`<span class="field-th">${th}</span>`:""}</label><input type="text" placeholder="—"></div>`;
+  }).join("") + `</div>`;
+}
+
+function inspTable(sectionId, groups){
+  let html = "";
+  for(const [groupName, items] of Object.entries(groups)){
+    html += `<div class="card"><h4><span class="swatch"></span>${groupName}</h4>`;
+    items.forEach((item, idx)=>{
+      const rid = `${sectionId}-${groupName}-${idx}`.replace(/\s/g,'');
+      const isObj = typeof item === "object";
+      const nameHtml = isObj
+        ? `${item.en}<div class="insp-th">${item.th}</div>`
+        : `${item}`;
+      html += `
+      <div class="insp-row" data-rid="${rid}" data-sec="${sectionId}">
+        <div class="insp-name">${nameHtml}</div>
+        <span class="remark-toggle" onclick="toggleRemark('${rid}')">+ Remark</span>
+        <div class="photo-btn" onclick="this.classList.toggle('has-photo')" title="แนบรูป">📷</div>
+        <div class="seg">
+          <button data-v="pass" onclick="setInsp('${rid}','${sectionId}',this,'pass')">Pass</button>
+          <button data-v="fail" onclick="setInsp('${rid}','${sectionId}',this,'fail')">Fail</button>
+          <button data-v="na" onclick="setInsp('${rid}','${sectionId}',this,'na')">N/A</button>
+        </div>
+      </div>
+      <div class="field" id="remark-${rid}" style="display:none;margin:6px 0 4px;"><textarea placeholder="รายละเอียด / หมายเหตุ..." style="min-height:44px;"></textarea></div>
+      `;
+    });
+    html += `</div>`;
+  }
+  return html;
+}
+
+function toggleRemark(rid){
+  const el = document.getElementById(`remark-${rid}`);
+  el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+function setInsp(rid, sectionId, btn, val){
+  const row = btn.closest(".insp-row");
+  row.querySelectorAll(".seg button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  row.dataset.value = val;
+  recomputeSection(sectionId);
+  recomputeGlobalScore();
+}
+
+function recomputeSection(sectionId){
+  const rows = document.querySelectorAll(`.insp-row[data-sec="${sectionId}"]`);
+  let pass=0, fail=0, na=0, total=rows.length;
+  rows.forEach(r=>{
+    if(r.dataset.value==="pass") pass++;
+    else if(r.dataset.value==="fail") fail++;
+    else if(r.dataset.value==="na") na++;
+  });
+  state.scores[sectionId] = {pass, fail, na, total};
+  const dot = document.getElementById(`dot-${sectionId}`);
+  if(dot){
+    dot.classList.remove("done","issue");
+    if(fail>0) dot.classList.add("issue");
+    else if(pass+na===total && total>0) dot.classList.add("done");
+  }
+}
+
+function recomputeGlobalScore(){
+  let weightedSum = 0, weightUsed = 0;
+  sections.forEach(s=>{
+    if(!s.weight) return;
+    const sc = state.scores[s.id];
+    if(!sc || sc.total===0) return;
+    const scoreable = sc.pass + sc.fail; // N/A excluded from denominator
+    if(scoreable===0) return;
+    const pct = sc.pass/scoreable;
+    weightedSum += pct * s.weight;
+    weightUsed += s.weight;
+  });
+  const scoreEl = document.getElementById("gaugeScore");
+  const statusEl = document.getElementById("gaugeStatus");
+  const arc = document.getElementById("gaugeArc");
+  if(weightUsed===0){
+    scoreEl.textContent="—"; statusEl.textContent="Not started";
+    statusEl.style.color="#8A9B96"; statusEl.style.background="#EEF0EF";
+    arc.setAttribute("stroke-dashoffset", 119.4);
+    return;
+  }
+  const score = Math.round((weightedSum/weightUsed)*100);
+  scoreEl.textContent = score;
+  let status, color, bg;
+  if(score>=90){status="Excellent";color="#2F8F5B";bg="#E7F4EC";}
+  else if(score>=75){status="Good";color="#4C9F70";bg="#E7F4EC";}
+  else if(score>=60){status="Monitor";color="#E0932F";bg="#FCF1E1";}
+  else if(score>=40){status="Attention";color="#E0752F";bg="#FCEAE1";}
+  else {status="Critical";color="#C24C3D";bg="#FBEAE7";}
+  statusEl.textContent = status;
+  statusEl.style.color = color;
+  statusEl.style.background = bg;
+  arc.setAttribute("stroke", color);
+  const circumference = 119.4;
+  arc.setAttribute("stroke-dashoffset", circumference * (1 - score/100));
+}
+
+function sectionHTML(s){
+  let body = "";
+  if(s.id==="cover"){
+    body = `<div class="card"><h4><span class="swatch"></span>ข้อมูลไซต์งาน</h4>
+      ${fieldsGrid([["Customer Name","ชื่อลูกค้า"],["Site","ไซต์งาน / ที่ตั้ง"],["Inspection Date","วันที่เข้าตรวจ"]])}
+      <div style="height:12px"></div>
+      ${fieldsGrid([["Engineer","วิศวกรผู้ตรวจ"],["Inspection ID","รหัสอ้างอิงงานตรวจ"],["System Age","อายุการใช้งานระบบ"]])}
+      <div style="height:12px"></div>
+      ${fieldsGrid([["PV Capacity (kWp)","กำลังผลิตติดตั้ง"],["Inverter Model","รุ่นอินเวอร์เตอร์"],["Battery Model / Capacity","รุ่น/ความจุแบตเตอรี่"]])}
+    </div>`;
+  }
+  else if(s.id==="summary"){
+    body = `
+    <div class="kpi-strip">
+      <div class="kpi"><div class="k-lbl">Health Score</div><div class="k-val" id="sumScore">—</div><div class="k-sub" id="sumStatus">รอผลตรวจ</div></div>
+      <div class="kpi"><div class="k-lbl">FusionSolar</div><div class="k-val">25%</div><div class="k-sub">Weight</div></div>
+      <div class="kpi"><div class="k-lbl">Physical + Elec</div><div class="k-val">60%</div><div class="k-sub">Weight</div></div>
+      <div class="kpi"><div class="k-lbl">Inverter/Battery</div><div class="k-val">30%</div><div class="k-sub">Weight</div></div>
+    </div>
+    <div class="card"><h4><span class="swatch"></span>Key Findings</h4>
+      <div class="field"><textarea placeholder="สรุปประเด็นสำคัญ 3–5 บรรทัด..."></textarea></div>
+    </div>
+    <div class="card"><h4><span class="swatch"></span>เกณฑ์น้ำหนักคะแนน (ปรับได้)</h4>
+      <div class="grid3">
+        <div class="field"><label>FusionSolar Performance</label><input class="mono" value="25%"></div>
+        <div class="field"><label>PV / Physical</label><input class="mono" value="15%"></div>
+        <div class="field"><label>Inverter</label><input class="mono" value="15%"></div>
+      </div>
+      <div style="height:12px"></div>
+      <div class="grid2">
+        <div class="field"><label>Battery</label><input class="mono" value="15%"></div>
+        <div class="field"><label>Electrical & Safety</label><input class="mono" value="30%"></div>
+      </div>
+      <div class="weight-note">คะแนนคำนวณจากสัดส่วน Pass ต่อจำนวนหัวข้อที่ตรวจจริง (ไม่รวม N/A) คูณน้ำหนักของแต่ละหมวด — อัปเดตอัตโนมัติที่มุมขวาบนขณะกรอกหมวด 04–08</div>
+    </div>`;
+  }
+  else if(s.id==="sysinfo"){
+    body = `<div class="card"><h4><span class="swatch"></span>Inverter</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์"],["Phase","ระบบไฟ (เฟส)"],["Inverter Rating","พิกัดกำลังอินเวอร์เตอร์"]])}<div style="height:12px"></div>${fieldsGrid([["Firmware","เวอร์ชันเฟิร์มแวร์"],["Serial Number","หมายเลขเครื่อง"],["Installation Date","วันที่ติดตั้ง"]])}</div>
+    <div class="card"><h4><span class="swatch"></span>Battery & Communication</h4>${fieldsGrid([["Battery Model","รุ่นแบตเตอรี่"],["Capacity","ความจุ"],["Smart Power Sensor","เซนเซอร์วัดพลังงาน"]])}<div style="height:12px"></div>${fieldsGrid([["Communication Method","ช่องทางสื่อสารระบบ"],["Monitoring Account","บัญชีระบบมอนิเตอร์"],["Warranty Expiry","วันหมดประกัน"]])}</div>`;
+  }
+  else if(s.id==="fusion"){
+    body = `<div class="card"><h4><span class="swatch"></span>Yield & Generation</h4>${fieldsGrid([["Daily Yield (kWh)","พลังงานผลิตรายวัน"],["Monthly Yield (kWh)","พลังงานผลิตรายเดือน"],["Annual Yield (kWh)","พลังงานผลิตรายปี"]])}<div style="height:12px"></div>${fieldsGrid([["Total Yield (kWh)","พลังงานผลิตสะสมทั้งหมด"],["Self Consumption (%)","สัดส่วนใช้เองในบ้าน"],["Performance Trend","แนวโน้มประสิทธิภาพ"]])}</div>
+    <div class="card"><h4><span class="swatch"></span>Grid & Battery Behaviour</h4>${fieldsGrid([["Grid Import (kWh)","พลังงานซื้อจากการไฟฟ้า"],["Grid Export (kWh)","พลังงานขายเข้าระบบ"],["Battery SOC (%)","ระดับประจุแบตเตอรี่"]])}<div style="height:12px"></div><div class="field"><label>Alarm History<span class="field-th">ประวัติการแจ้งเตือนย้อนหลัง</span></label><textarea placeholder="รายการ Alarm ย้อนหลัง..."></textarea></div></div>
+    <div class="card"><h4><span class="swatch"></span>Screenshot แนบจาก FusionSolar</h4>
+      <div class="photo-btn" style="width:100%;height:80px;border-radius:8px;" onclick="this.classList.toggle('has-photo')">📷 แตะเพื่อแนบภาพหน้าจอ</div>
+    </div>`;
+  }
+  else if(s.id==="pv") body = inspTable("pv", inspItems.pv);
+  else if(s.id==="inverter") body = inspTable("inverter", inspItems.inverter);
+  else if(s.id==="battery") body = inspTable("battery", inspItems.battery);
+  else if(s.id==="electrical"){
+    body = inspTable("electrical", inspItems.electrical);
+    body += `<div class="card"><h4><span class="swatch"></span>Measurement <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(ถ้ามีการวัดค่าจริง)</span></h4>${fieldsGrid([["Measurement","รายการที่วัด"],["Value","ค่าที่วัดได้"],["Unit","หน่วยวัด"]])}<div style="height:12px"></div>${fieldsGrid([["Instrument","เครื่องมือที่ใช้วัด"],["Result","ผลสรุป"],["Pass/Fail","ผ่าน/ไม่ผ่าน"]])}</div>`;
+  }
+  else if(s.id==="advanced"){
+    body = `<div class="placeholder-note">หลักการ: ถ้า FusionSolar และ Visual Inspection (หมวด 04–08) ไม่พบความผิดปกติ ไม่จำเป็นต้องทำ Advanced Test ทุก String — เปิดหมวดนี้เฉพาะเมื่อพบ Fail หรือมีความเสี่ยงที่ต้องยืนยันเชิงตัวเลข</div>
+    <div class="card" style="margin-top:14px"><h4><span class="swatch"></span>I-V Curve Test</h4>${fieldsGrid([["Instrument","เครื่องมือทดสอบ"],["String","สายสตริงที่ทดสอบ"],["Voc","แรงดันวงจรเปิด"]])}<div style="height:12px"></div>${fieldsGrid([["Isc","กระแสลัดวงจร"],["Vmp","แรงดันจุดพลังงานสูงสุด"],["Imp","กระแสจุดพลังงานสูงสุด"]])}<div style="height:12px"></div>${fieldsGrid([["Pmax","กำลังไฟฟ้าสูงสุด"],["STC Correction","ค่าปรับแก้ตามมาตรฐาน STC"],["Result","ผลสรุป"]])}
+      <div style="height:12px"></div>
+      <div class="photo-btn" style="width:100%;height:70px;border-radius:8px;" onclick="this.classList.toggle('has-photo')">📈 แนบ I-V Curve Graph</div>
+    </div>
+    <div class="placeholder-note" style="margin-top:14px">รองรับในอนาคต: Thermal Imaging · Insulation Resistance · Grounding Measurement · Torque Check</div>`;
+  }
+  else if(s.id==="photo"){
+    body = `<div class="card"><h4><span class="swatch"></span>Photo Evidence ตามหมวด</h4>
+    ${["Inverter","Battery","Electrical Cabinet","PV Module / Structure"].map(cat=>`
+      <div class="insp-row">
+        <div class="photo-btn" onclick="this.classList.toggle('has-photo')">📷</div>
+        <div class="insp-name">${cat}</div>
+        <input type="text" placeholder="Finding / Recommendation สั้นๆ" style="flex:2;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;">
+      </div>
+    `).join("")}
+    </div>`;
+  }
+  else if(s.id==="assess"){
+    body = `<div class="card"><h4><span class="swatch"></span>Finding</h4><div class="field"><textarea placeholder="พบอะไรจากการตรวจ..."></textarea></div></div>
+    <div class="card"><h4><span class="swatch"></span>Observation</h4><div class="field"><textarea placeholder="สิ่งที่สังเกตเห็นแต่ยังไม่เป็นปัญหา..."></textarea></div></div>
+    <div class="card"><h4><span class="swatch"></span>Risk</h4><div class="field"><textarea placeholder="ความเสี่ยงที่อาจเกิดขึ้น..."></textarea></div></div>
+    <div class="card"><h4><span class="swatch"></span>Recommendation</h4><div class="field"><textarea placeholder="ควรดำเนินการอะไรต่อ..."></textarea></div></div>
+    <div class="placeholder-note">หลักภาษา: ไม่ขายของเกินจริง — ถ้าไม่จำเป็นต้องเปลี่ยนอุปกรณ์ ให้ระบุว่า "ระบบยังสามารถใช้งานต่อได้ตามปกติ ไม่พบประเด็นที่จำเป็นต้องเปลี่ยนอุปกรณ์ในขณะนี้"</div>`;
+  }
+  else if(s.id==="reco"){
+    body = `
+    <div class="rec-level immediate"><h5>Immediate Action</h5><p>ควรแก้ทันที — มีผลต่อความปลอดภัยหรือการทำงานของระบบ</p><textarea placeholder="รายการที่ต้องแก้ทันที..." style="width:100%;min-height:60px;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:13px;"></textarea></div>
+    <div class="rec-level improve"><h5>Recommended Improvement</h5><p>ควรปรับปรุง — ยังใช้งานได้ แต่ควรวางแผนแก้ไข</p><textarea placeholder="รายการที่ควรปรับปรุง..." style="width:100%;min-height:60px;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:13px;"></textarea></div>
+    <div class="rec-level future"><h5>Future Opportunity</h5><p>พิจารณาในอนาคต — Battery Expansion / EV Charger / Energy Management</p><textarea placeholder="โอกาสต่อยอดในอนาคต..." style="width:100%;min-height:60px;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:13px;"></textarea></div>`;
+  }
+  else if(s.id==="history"){
+    body = `<div class="card"><h4><span class="swatch"></span>ประวัติการตรวจย้อนหลัง</h4>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+      <thead><tr style="text-align:left;color:var(--ink-soft);border-bottom:1px solid var(--line);">
+        <th style="padding:8px 6px;">วันที่ตรวจ</th><th style="padding:8px 6px;">Health Score</th><th style="padding:8px 6px;">เทียบครั้งก่อน</th><th style="padding:8px 6px;">หมายเหตุ</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--line);"><td class="mono" style="padding:9px 6px;">27 Aug 2026</td><td class="mono" style="padding:9px 6px;">92</td><td style="padding:9px 6px;color:var(--pass);">ดีขึ้น</td><td style="padding:9px 6px;color:var(--ink-soft);">—</td></tr>
+        <tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">ครั้งถัดไปจะแสดงที่นี่หลัง Save</td></tr>
+      </tbody>
+    </table>
+    </div>`;
+  }
+  else if(s.id==="ack"){
+    body = `<div class="card"><h4><span class="swatch"></span>รับทราบผลการตรวจ</h4>${fieldsGrid([["Customer Name","ชื่อลูกค้า"],["Engineer","วิศวกรผู้ตรวจ"],["Date","วันที่"]])}
+    <div style="height:14px"></div>
+    <div class="field"><label>Signature</label>
+      <div style="border:1px dashed var(--line);border-radius:8px;height:90px;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-size:12px;">แตะเพื่อเซ็นชื่อดิจิทัล</div>
+    </div>
+    </div>
+    <div class="placeholder-note">เมื่อกด Generate Report จะออก PDF พร้อม QR Code สำหรับดู Online Report ในอนาคต</div>`;
+  }
+
+  return `
+  <div class="sec-head">
+    <div class="sec-eyebrow mono">${s.num} — ${s.eyebrow}</div>
+    <div class="sec-title">${s.title}</div>
+  </div>
+  ${body}
+  <div class="btn-row">
+    <button class="btn ghost" onclick="stepSection(-1)">← ย้อนกลับ</button>
+    <button class="btn primary" onclick="stepSection(1)">บันทึกและถัดไป →</button>
+  </div>
+  `;
+}
+
+sections.forEach(s=>{
+  const div = document.createElement("div");
+  div.className = "section";
+  div.id = "sec-" + s.id;
+  div.innerHTML = sectionHTML(s);
+  content.appendChild(div);
+});
+
+function showSection(id){
+  document.querySelectorAll(".section").forEach(el=>el.classList.remove("active"));
+  document.getElementById("sec-"+id).classList.add("active");
+  document.querySelectorAll(".navlist li").forEach(li=>li.classList.toggle("active", li.dataset.id===id));
+  window.scrollTo({top:0, behavior:"instant"});
+}
+
+function stepSection(dir){
+  const idx = sections.findIndex(s=>document.getElementById("sec-"+s.id).classList.contains("active"));
+  const next = sections[idx+dir];
+  if(next) showSection(next.id);
+}
+
+showSection("cover");
+recomputeGlobalScore();
+
+/* ---------------- report preview (customer-facing PDF layout) ----------------
+   หมายเหตุ: ตัวอย่างนี้ใช้ข้อมูลจำลองเพื่อโชว์ "รูปแบบ" ของ Report ที่จะออกมา
+   เมื่อต่อระบบบันทึกข้อมูลจริงแล้ว ส่วนนี้จะดึงค่าจากฟอร์มที่กรอกจริงแทน
+------------------------------------------------------------------------------ */
+function renderReportPreview(){
+  const doc = document.getElementById("reportDoc");
+  doc.innerHTML = `
+    <div class="rep-cover">
+      <div class="rep-brand">
+        <div class="mark">S</div>
+        <div><b>SYNNEX Solar Health Check</b><span>Installation & Maintenance Service</span></div>
+      </div>
+      <div class="rep-id">Inspection ID<br><b style="color:var(--ink);font-size:12.5px;">SHC-2026-0142</b><br>27 Aug 2026</div>
+    </div>
+
+    <div class="rep-title">รายงานตรวจสุขภาพระบบโซลาร์</div>
+    <div class="rep-sub">Solar System Health Check Report — ลูกค้า: คุณสมชาย ใจดี · ไซต์: บ้านเลขที่ 88/12 ประชาอุทิศ, กรุงเทพฯ · Huawei SUN2000 10kW + LUNA2000</div>
+
+    <div class="rep-score-block">
+      <div class="rep-score-circle"><div class="inner"><b>92</b><span>/ 100</span></div></div>
+      <div class="rep-score-text">
+        <b>Excellent<span class="rep-pill">ดีเยี่ยม</span></b>
+        <p>ระบบทำงานได้ตามปกติทุกส่วน ไม่พบประเด็นด้านความปลอดภัยหรือประสิทธิภาพที่ต้องดำเนินการเร่งด่วน — เหมาะสำหรับใช้งานต่อเนื่องและตรวจติดตามตามรอบปกติ</p>
+      </div>
+    </div>
+
+    <div class="rep-section">
+      <h3>ผลตรวจแยกตามหมวด · Category Results</h3>
+      ${[
+        ["FusionSolar Performance","ประสิทธิภาพจากระบบมอนิเตอร์",96],
+        ["PV / Physical Inspection","สภาพแผงและโครงสร้าง",100],
+        ["Inverter Inspection","ตรวจอินเวอร์เตอร์",90],
+        ["Battery Inspection","ตรวจแบตเตอรี่",95],
+        ["Electrical & Safety","ระบบไฟฟ้าและความปลอดภัย",85],
+      ].map(([en,th,pct])=>`
+        <div class="rep-cat-row">
+          <div class="name">${en}<div style="font-weight:400;color:var(--ink-soft);font-size:11px;">${th}</div></div>
+          <div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${pct>=90?'#2F8F5B':pct>=75?'#4C9F70':'#E0932F'}"></div></div>
+          <div class="pct">${pct}%</div>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="rep-section">
+      <h3>หลักฐานภาพประกอบ · Photo Evidence</h3>
+      <div class="rep-photo-grid">
+        <div>📷</div><div>📷</div><div>📷</div><div>📷</div>
+      </div>
+    </div>
+
+    <div class="rep-section">
+      <h3>ข้อเสนอแนะ · Recommendation</h3>
+      <div class="rep-reco immediate"><b>Immediate Action — ควรแก้ทันที</b>ไม่พบรายการที่ต้องดำเนินการเร่งด่วนในรอบตรวจนี้</div>
+      <div class="rep-reco improve"><b>Recommended Improvement — ควรปรับปรุง</b>ทำความสะอาดตู้ไฟและตรวจสอบป้ายกำกับวงจรให้ครบถ้วนในรอบถัดไป</div>
+      <div class="rep-reco future"><b>Future Opportunity — พิจารณาในอนาคต</b>ลูกค้าสามารถพิจารณาขยายขนาดแบตเตอรี่เพิ่มเติมเพื่อเพิ่มสัดส่วนการใช้ไฟฟ้าเองในช่วงกลางคืน</div>
+      <div class="rep-quote">"ระบบยังสามารถใช้งานต่อได้ตามปกติ ไม่พบประเด็นที่จำเป็นต้องเปลี่ยนอุปกรณ์ในขณะนี้" — ความเห็นวิศวกรผู้ตรวจ</div>
+    </div>
+
+    <div class="rep-sign">
+      <div><b>วิศวกรผู้ตรวจ · Engineer</b>ลงชื่อ ______________________<br>วันที่: 27 Aug 2026</div>
+      <div><b>รับทราบโดยลูกค้า · Customer Acknowledgement</b>ลงชื่อ ______________________<br>วันที่: 27 Aug 2026</div>
+    </div>
+
+    <div class="rep-footer">
+      <div class="note">รายงานนี้จัดทำโดยทีม Installation & Maintenance Service, SYNNEX (Thailand) — สแกน QR เพื่อดูรายงานฉบับออนไลน์และประวัติการตรวจย้อนหลัง</div>
+      <div class="rep-qr">QR<br>CODE</div>
+    </div>
+  `;
+}
+
+function openReport(){
+  renderReportPreview();
+  document.body.classList.add("report-mode");
+  window.scrollTo({top:0,behavior:"instant"});
+}
+function closeReport(){
+  document.body.classList.remove("report-mode");
+}
+</script>
+</body>
+</html>

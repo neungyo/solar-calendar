@@ -28,7 +28,29 @@
   .mono{font-family:'IBM Plex Mono',monospace;}
   .display{font-family:'Space Grotesk',sans-serif;}
 
-  .app{display:flex;min-height:100vh;}
+  .app{display:none;min-height:100vh;}
+  body.view-form .app{display:flex;}
+  body.report-mode .app{display:none;}
+
+  .dashboard-view{display:none;}
+  body.view-dashboard .dashboard-view{display:block;}
+  body.report-mode .dashboard-view{display:none;}
+  .dash-shell{max-width:1040px;margin:0 auto;padding:36px 24px 80px;}
+  .dash-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;}
+  .dash-header .brand-row{display:flex;align-items:center;gap:12px;}
+  .dash-header .brand-row .mark{width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,var(--amber),#C97C1E);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;color:var(--ink);font-size:16px;}
+  .dash-header .brand-row b{font-family:'Space Grotesk';font-size:19px;display:block;}
+  .dash-header .brand-row span{font-size:12px;color:var(--ink-soft);}
+  .dash-kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px;}
+  @media(max-width:640px){.dash-kpi-strip{grid-template-columns:repeat(2,1fr);}}
+  .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
+  .site-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;gap:14px;align-items:center;cursor:pointer;transition:border-color .15s;}
+  .site-card:hover{border-color:var(--teal);}
+  .site-score{width:48px;height:48px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:16px;}
+  .site-info{min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .site-info b{font-family:'Space Grotesk';font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .site-info span{font-size:11.5px;color:var(--ink-soft);}
+  .site-date{font-family:'IBM Plex Mono';}
   .rail{
     width:250px;flex-shrink:0;background:var(--ink);color:#CFE0DC;
     padding:22px 14px 22px;position:sticky;top:0;height:100vh;overflow-y:auto;
@@ -232,7 +254,23 @@
   ::selection{background:var(--amber);color:var(--ink);}
 </style>
 </head>
-<body>
+<body class="view-dashboard">
+
+<!-- ================= HOME / DASHBOARD ================= -->
+<div class="dashboard-view" id="dashboardView">
+  <div class="dash-shell">
+    <div class="dash-header">
+      <div class="brand-row">
+        <div class="mark">S</div>
+        <div><b>Solar Health Check</b><span>SYNNEX · Installation & Maintenance — ไซต์ทั้งหมด</span></div>
+      </div>
+      <button class="tb-btn primary" onclick="newSite()">+ สร้างไซต์ใหม่</button>
+    </div>
+    <div class="dash-kpi-strip" id="dashKpis"></div>
+    <div class="dash-grid" id="dashGrid"><div class="placeholder-note">กำลังโหลด...</div></div>
+  </div>
+</div>
+
 <div class="app">
 
   <nav class="rail">
@@ -263,6 +301,7 @@
       </div>
       <div class="topbar-actions">
         <span id="saveStatus" style="font-size:11px;color:var(--ink-soft);align-self:center;"></span>
+        <button class="tb-btn" onclick="showView('dashboard')">← หน้าหลัก</button>
         <button class="tb-btn" onclick="saveInspection()">💾 บันทึกข้อมูล</button>
         <button class="tb-btn primary" onclick="openReport()">📄 ดูตัวอย่าง PDF Report</button>
       </div>
@@ -290,7 +329,7 @@
    2. เอา URL ที่ได้ (ลงท้ายด้วย /exec) มาใส่แทนค่าด้านล่างนี้
    3. TOOL_NAME ต้องตรงกับ key ใน TOOLS object ของ Code.gs (ค่าเริ่มต้น: solarHealthCheck)
 ========================================================= */
-const API_URL = "https://script.google.com/macros/s/AKfycbzJjq1DTFyDL5UMex0_dLOYb2BqR79anP6woh2eTA3XZODdSLx0BOPXmSLhEEb5vXTX/exec"; // เช่น https://script.google.com/macros/s/AKfycb.../exec
+const API_URL = "PUT_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"; // เช่น https://script.google.com/macros/s/AKfycb.../exec
 const TOOL_NAME = "solarHealthCheck";
 const backendReady = () => API_URL && API_URL.startsWith("http");
 
@@ -303,7 +342,7 @@ const formData = {
 };
 const photos = {};        // key -> dataURL   (photo report + fusion screenshot)
 const inspPhotos = {};    // rid -> dataURL   (photo attached inline in checklist rows)
-let measurements = [
+const defaultMeasurements = [
   {name:"แรงดันไฟฟ้า AC (Voltage AC)", value:"", unit:"V", ref:"220V ±10% (1P) / 380V ±10% (3P)"},
   {name:"กระแสไฟฟ้า AC (Current AC)", value:"", unit:"A", ref:"ไม่เกินพิกัด Inverter"},
   {name:"แรงดันวงจรเปิด DC (Voc)", value:"", unit:"V", ref:"ตาม Datasheet ของแผง"},
@@ -313,6 +352,7 @@ let measurements = [
   {name:"ความถี่ไฟฟ้า (Frequency)", value:"", unit:"Hz", ref:"50 Hz ±1%"},
   {name:"อุณหภูมิจุดต่อสาย", value:"", unit:"°C", ref:"≤ 60°C หรือไม่เกิน +15°C จากอุณหภูมิแวดล้อม"},
 ];
+let measurements = defaultMeasurements.map(m=>({...m}));
 let measResults = {}; // index -> pass/fail/na
 
 const photoReportCats = [
@@ -726,7 +766,85 @@ function stepSection(dir){
 }
 showSection("cover");
 recomputeGlobalScore();
-loadHistory();
+showView("dashboard");
+
+/* =========================================================
+   VIEW ROUTING — Dashboard (รวมทุกไซต์) ↔ Form (กรอกข้อมูลไซต์เดียว)
+========================================================= */
+function showView(name){
+  document.body.classList.remove("view-dashboard","view-form");
+  document.body.classList.add("view-"+name);
+  if(name==="dashboard") loadDashboard();
+  if(name==="form") loadHistory();
+  window.scrollTo({top:0,behavior:"instant"});
+}
+
+function resetFormState(){
+  formData.cover={}; formData.sysinfo={}; formData.fusion={}; formData.assess={}; formData.reco={}; formData.ack={}; formData.history={};
+  measurements = defaultMeasurements.map(m=>({...m}));
+  measResults = {};
+  Object.keys(photos).forEach(k=>delete photos[k]);
+  Object.keys(inspPhotos).forEach(k=>delete inspPhotos[k]);
+  Object.keys(photoNotes).forEach(k=>delete photoNotes[k]);
+  state.scores = {};
+  sections.forEach(s=>{ document.getElementById("sec-"+s.id).innerHTML = sectionHTML(s); });
+  document.querySelectorAll("[data-bind]").forEach(el=>el.value="");
+  recomputeGlobalScore();
+  syncCrossLinks();
+  setSaveStatus("");
+}
+function newSite(){
+  resetFormState();
+  showSection("cover");
+  showView("form");
+}
+function openSite(id){
+  loadInspection(id).then(()=>showView("form"));
+}
+
+async function loadDashboard(){
+  const grid = document.getElementById("dashGrid");
+  const kpis = document.getElementById("dashKpis");
+  if(!backendReady()){
+    grid.innerHTML = `<div class="placeholder-note">ยังไม่ได้ตั้งค่า API_URL ในโค้ด — เชื่อม backend ก่อนเพื่อดูรายการไซต์ทั้งหมด</div>`;
+    kpis.innerHTML = "";
+    return;
+  }
+  grid.innerHTML = `<div class="placeholder-note">กำลังโหลดรายการไซต์...</div>`;
+  try{
+    const r = await apiGet({tool:TOOL_NAME, action:"list"});
+    if(!r.ok || !r.records.length){
+      grid.innerHTML = `<div class="placeholder-note">ยังไม่มีไซต์ที่บันทึกไว้ — กด "+ สร้างไซต์ใหม่" เพื่อเริ่มไซต์แรก</div>`;
+      kpis.innerHTML = "";
+      return;
+    }
+    const bySite = {};
+    r.records.forEach(rec=>{
+      const key = rec.site || rec.customerName || "ไม่ระบุชื่อไซต์";
+      if(!bySite[key] || new Date(rec.timestamp) > new Date(bySite[key].timestamp)) bySite[key] = {...rec, name:key};
+    });
+    const sites = Object.values(bySite).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+    const scores = sites.map(s=>parseInt(s.score)).filter(n=>!isNaN(n));
+    const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : "—";
+    const attention = sites.filter(s=>!isNaN(parseInt(s.score)) && parseInt(s.score)<60).length;
+    kpis.innerHTML = `
+      <div class="kpi"><div class="k-lbl">ไซต์ทั้งหมด</div><div class="k-val">${sites.length}</div></div>
+      <div class="kpi"><div class="k-lbl">คะแนนเฉลี่ย</div><div class="k-val">${avg}</div></div>
+      <div class="kpi"><div class="k-lbl">ควรติดตาม (ต่ำกว่า 60)</div><div class="k-val" style="color:var(--fail)">${attention}</div></div>
+      <div class="kpi"><div class="k-lbl">บันทึกล่าสุด</div><div class="k-val" style="font-size:14px;">${new Date(sites[0].timestamp).toLocaleDateString('th-TH')}</div></div>
+    `;
+    grid.innerHTML = sites.map(s=>{
+      const score = parseInt(s.score);
+      const color = isNaN(score) ? "#8A9B96" : score>=90?"#2F8F5B":score>=75?"#4C9F70":score>=60?"#E0932F":"#C24C3D";
+      return `<div class="site-card" onclick="openSite('${s.id}')">
+        <div class="site-score" style="background:${color}22;color:${color};">${isNaN(score)?"—":score}</div>
+        <div class="site-info"><b>${s.name}</b><span>${s.customerName||"ไม่ระบุลูกค้า"}</span><span class="site-date">${new Date(s.timestamp).toLocaleDateString('th-TH')}</span></div>
+      </div>`;
+    }).join("");
+  } catch(err){
+    grid.innerHTML = `<div class="placeholder-note">โหลดรายการไซต์ไม่สำเร็จ: ${err.message}</div>`;
+  }
+}
 
 /* =========================================================
    REPORT PREVIEW — ดึงข้อมูลจริงจาก formData / measurements / photos
@@ -769,7 +887,10 @@ function renderReportPages(){
 
   const photoGrid = photoReportCats.map(cat=>{
     const url = photos[cat.key];
-    return `<figure><div class="ph" style="${url?`background-image:url(${url});`:''}">${url?'':'📷'}</div><figcaption>${cat.th}</figcaption></figure>`;
+    const inner = url
+      ? `<img src="${url}" alt="${cat.en}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.parentElement.textContent='📷 โหลดรูปไม่สำเร็จ'; this.remove();">`
+      : `📷`;
+    return `<figure><div class="ph">${inner}</div><figcaption>${cat.th}</figcaption></figure>`;
   }).join("");
 
   document.getElementById("reportPages").innerHTML = `
@@ -856,16 +977,17 @@ async function apiGet(params){
 
 // อัปโหลดรูปทั้งหมดที่ยังเป็น dataURL (ยังไม่เคยขึ้น Drive) แล้วแทนที่ด้วย URL จริง
 async function uploadPendingPhotos(){
+  const siteName = formData.cover.site || formData.cover.customerName || "Unsorted";
   const jobs = [];
   Object.keys(photos).forEach(key=>{
     if(photos[key] && photos[key].startsWith("data:")){
-      jobs.push(apiPost({tool:TOOL_NAME, action:"uploadPhoto", filename:key+".jpg", base64:photos[key]})
+      jobs.push(apiPost({tool:TOOL_NAME, action:"uploadPhoto", filename:key+".jpg", base64:photos[key], site:siteName})
         .then(r=>{ if(r.ok) photos[key] = r.url; }));
     }
   });
   Object.keys(inspPhotos).forEach(key=>{
     if(inspPhotos[key] && inspPhotos[key].startsWith("data:")){
-      jobs.push(apiPost({tool:TOOL_NAME, action:"uploadPhoto", filename:key.replace(":","_")+".jpg", base64:inspPhotos[key]})
+      jobs.push(apiPost({tool:TOOL_NAME, action:"uploadPhoto", filename:key.replace(":","_")+".jpg", base64:inspPhotos[key], site:siteName})
         .then(r=>{ if(r.ok) inspPhotos[key] = r.url; }));
     }
   });
@@ -918,11 +1040,14 @@ async function loadHistory(){
   box.innerHTML = `<tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">กำลังโหลด...</td></tr>`;
   try{
     const r = await apiGet({tool:TOOL_NAME, action:"list"});
-    if(!r.ok || !r.records.length){
-      box.innerHTML = `<tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">ยังไม่มีประวัติการตรวจที่บันทึกไว้</td></tr>`;
+    let records = r.ok ? r.records : [];
+    const currentSite = formData.cover.site;
+    if(currentSite) records = records.filter(rec=>rec.site === currentSite);
+    if(!records.length){
+      box.innerHTML = `<tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">ยังไม่มีประวัติการตรวจของไซต์นี้</td></tr>`;
       return;
     }
-    box.innerHTML = r.records.map(rec=>`
+    box.innerHTML = records.map(rec=>`
       <tr style="cursor:pointer;" onclick="loadInspection('${rec.id}')">
         <td class="mono" style="padding:9px 6px;">${new Date(rec.timestamp).toLocaleDateString('th-TH')}</td>
         <td class="mono" style="padding:9px 6px;">${rec.score||"—"}</td>
@@ -946,16 +1071,28 @@ async function loadInspection(id){
     Object.assign(formData.ack, d.ack||{});
     if(d.measurements) measurements = d.measurements;
     if(d.measResults) measResults = d.measResults;
+    if(d.insp) state.scores = d.insp;
     if(d.photos) Object.assign(photos, d.photos);
     if(d.inspPhotos) Object.assign(inspPhotos, d.inspPhotos);
-    // เติมค่ากลับเข้าช่อง input ที่มี data-bind ตรงกับ field ที่โหลดมา
+    if(d.photoNotes) Object.assign(photoNotes, d.photoNotes);
+    // rebuild ทุกหมวดใหม่ด้วยข้อมูลที่โหลดมา (measurements, ฯลฯ) แล้วเติมค่ากลับเข้าช่อง input
+    sections.forEach(s=>{ document.getElementById("sec-"+s.id).innerHTML = sectionHTML(s); });
     document.querySelectorAll("[data-bind]").forEach(el=>{
       const [g,k] = el.dataset.bind.split(".");
       if(formData[g] && formData[g][k] !== undefined) el.value = formData[g][k];
     });
-    rerenderSection("electrical");
+    // แสดงรูปที่เคยอัปโหลดไว้กลับเข้าปุ่มถ่ายรูปแต่ละจุด
+    Object.keys(photos).forEach(key=>{
+      const thumb = document.getElementById("thumb-"+key);
+      if(thumb && photos[key]){ thumb.style.backgroundImage = `url(${photos[key]})`; thumb.textContent=""; thumb.classList.add("has-photo"); }
+    });
+    Object.keys(inspPhotos).forEach(key=>{
+      const thumb = document.getElementById("thumb-"+key);
+      if(thumb && inspPhotos[key]){ thumb.style.backgroundImage = `url(${inspPhotos[key]})`; thumb.textContent=""; thumb.classList.add("has-photo"); }
+    });
     syncCrossLinks();
-    setSaveStatus("✓ โหลดข้อมูล ID " + id + " แล้ว");
+    recomputeGlobalScore();
+    setSaveStatus("✓ โหลดข้อมูล ID " + id + " แล้ว (หมายเหตุ: คะแนนรวมและรูปโหลดกลับมาแล้ว แต่สถานะ Pass/Fail รายข้อในเช็คลิสต์ยังต้องกดใหม่)");
     showSection("cover");
   } catch(err){
     setSaveStatus("เกิดข้อผิดพลาด: " + err.message, true);

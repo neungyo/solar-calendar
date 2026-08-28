@@ -188,6 +188,14 @@
   .photo-choice-inner{background:#fff;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;width:100%;max-width:340px;}
   .photo-choice-inner .tb-btn{width:100%;justify-content:center;padding:12px;font-size:14px;}
 
+  .camera-modal{display:none;position:fixed;inset:0;background:#000;z-index:70;flex-direction:column;}
+  .camera-modal.open{display:flex;}
+  .camera-modal video{flex:1;width:100%;height:100%;object-fit:cover;background:#000;}
+  .camera-actions{display:flex;align-items:center;justify-content:space-between;padding:18px 26px;background:#000;gap:16px;}
+  .camera-actions .tb-btn{background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.3);flex:0 0 auto;}
+  .cam-shutter{width:62px;height:62px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.5);cursor:pointer;flex-shrink:0;}
+  .camera-hint{color:#fff;opacity:.7;font-size:11px;text-align:center;padding:8px 0 2px;}
+
   .rec-level{border-left:3px solid var(--line);padding:4px 0 4px 14px;margin-bottom:14px;}
   .rec-level.immediate{border-color:var(--fail);}
   .rec-level.improve{border-color:var(--warn);}
@@ -405,6 +413,16 @@
     <button class="tb-btn primary" onclick="choosePhotoSource('camera')">📷 ถ่ายภาพ</button>
     <button class="tb-btn" onclick="choosePhotoSource('gallery')">🖼️ เลือกจากคลังภาพ</button>
     <button class="tb-btn" onclick="closePhotoChoice()">ยกเลิก</button>
+  </div>
+</div>
+
+<div class="camera-modal" id="cameraModal">
+  <video id="cameraVideo" autoplay playsinline muted></video>
+  <div class="camera-hint" id="cameraHint">กำลังเปิดกล้อง...</div>
+  <div class="camera-actions">
+    <button class="tb-btn" onclick="closeCameraModal()">ยกเลิก</button>
+    <button class="cam-shutter" onclick="captureCameraPhoto()" aria-label="ถ่ายภาพ"></button>
+    <div style="width:70px"></div>
   </div>
 </div>
 
@@ -649,7 +667,55 @@ function choosePhotoSource(source){
   if(!pendingPhotoKey) return;
   const key = pendingPhotoKey;
   closePhotoChoice();
-  document.getElementById(source==="camera" ? "filecam-"+key : "file-"+key).click();
+  if(source==="camera"){
+    openCamera(key);
+  } else {
+    document.getElementById("file-"+key).click();
+  }
+}
+
+/* ---------------- in-page camera (getUserMedia) — เชื่อถือได้กว่า input capture บนมือถือ/เดสก์ท็อป ---------------- */
+let cameraStream = null;
+let pendingCameraKey = null;
+async function openCamera(key){
+  pendingCameraKey = key;
+  const modal = document.getElementById("cameraModal");
+  const hint = document.getElementById("cameraHint");
+  modal.classList.add("open");
+  hint.textContent = "กำลังเปิดกล้อง...";
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    cameraStream = stream;
+    const video = document.getElementById("cameraVideo");
+    video.srcObject = stream;
+    await video.play();
+    hint.textContent = "";
+  } catch(err){
+    // เปิดกล้องไม่ได้ (ไม่อนุญาต/ไม่มีกล้อง/เบราว์เซอร์ไม่รองรับ) — สลับไปใช้ input capture แบบเดิมแทน
+    closeCameraModal();
+    const fallback = document.getElementById("filecam-"+key);
+    if(fallback) fallback.click();
+  }
+}
+function closeCameraModal(){
+  document.getElementById("cameraModal").classList.remove("open");
+  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+  pendingCameraKey = null;
+}
+function captureCameraPhoto(){
+  const key = pendingCameraKey;
+  if(!key) return;
+  const video = document.getElementById("cameraVideo");
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+  closeCameraModal();
+  if(key.startsWith("insp:")) inspPhotos[key] = dataUrl; else photos[key] = dataUrl;
+  const thumb = document.getElementById("thumb-"+key);
+  if(thumb){ thumb.style.backgroundImage = `url(${dataUrl})`; thumb.textContent = ""; thumb.classList.add("has-photo"); }
+  if(currentLightboxKey===key) document.getElementById("lightboxImg").src = dataUrl;
 }
 function openLightbox(key){
   const url = key.startsWith("insp:") ? inspPhotos[key] : photos[key];

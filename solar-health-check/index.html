@@ -289,6 +289,10 @@
   .rep-photo-grid figure{margin:0;}
   .rep-photo-grid .ph{aspect-ratio:1;background:var(--panel);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#B7C4C0;background-size:cover;background-position:center;}
   .rep-photo-grid figcaption{font-size:10px;color:var(--ink-soft);margin-top:4px;text-align:center;}
+  .rep-fail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .rep-fail-grid figure{margin:0;}
+  .rep-fail-grid figcaption{font-size:10px;color:var(--ink-soft);margin-top:4px;line-height:1.4;}
+  .rep-fail-grid figcaption b{display:block;color:var(--fail);font-size:10.5px;}
 
   .rep-reco{border-left:3px solid var(--line);padding:2px 0 2px 12px;margin-bottom:10px;font-size:12.5px;}
   .rep-reco.immediate{border-color:var(--fail);}
@@ -792,14 +796,17 @@ function handlePhotoUpload(e, key){
 }
 
 /* ---------------- inspection checklist table ---------------- */
-function inspTable(sectionId, groups){
+let ridMeta = {}; // rid -> {name, section} — ใช้สำหรับดึงรายการ Fail มาแสดงใน Report
+function inspTable(sectionId, groups, sectionTitle){
   let html = "";
   for(const [groupName, items] of Object.entries(groups)){
     html += `<div class="card"><h4><span class="swatch"></span>${groupName}</h4>`;
     items.forEach((item, idx)=>{
       const rid = `${sectionId}-${groupName}-${idx}`.replace(/\s/g,'');
       const isObj = typeof item === "object";
+      const displayName = isObj ? item.en : item;
       const nameHtml = isObj ? `${item.en}<div class="insp-th">${item.th}</div>` : `${item}`;
+      ridMeta[rid] = { name: displayName, section: sectionTitle || sectionId };
       const savedVal = inspResults[rid] || "";
       const savedRemark = inspRemarks[rid] || "";
       html += `
@@ -870,6 +877,23 @@ function setInsp(rid, sectionId, btn, val){
   inspResults[rid] = val;
   recomputeSection(sectionId);
   recomputeGlobalScore();
+  // ข้อที่ตี Fail ต้องมีรูปประกอบ — เด้งเมนูถ่ายรูป/แนบรูปให้ทันทีถ้ายังไม่มี
+  if(val === "fail" && !inspPhotos["insp:"+rid]){
+    openPhotoChoice("insp:"+rid);
+  }
+}
+/* ---------------- รายการ Fail ทั้งหมด — ใช้ทั้งใน Report และตรวจก่อนบันทึก/ออก PDF ---------------- */
+function getFailItems(){
+  return Object.entries(inspResults).filter(([rid,val])=>val==="fail").map(([rid])=>({
+    rid,
+    name: (ridMeta[rid] && ridMeta[rid].name) || rid,
+    section: (ridMeta[rid] && ridMeta[rid].section) || "",
+    photo: inspPhotos["insp:"+rid] || null,
+    remark: inspRemarks[rid] || "",
+  }));
+}
+function getMissingFailPhotos(){
+  return getFailItems().filter(f => !f.photo);
 }
 function recomputeAllChecklists(){
   ["pv","inverter","battery","electrical"].forEach(id=>recomputeSection(id));
@@ -1047,11 +1071,11 @@ function sectionHTML(s){
       ${photoBtn("fusionScreenshot", true)}
     </div>`;
   }
-  else if(s.id==="pv") body = inspTable("pv", inspItems.pv);
-  else if(s.id==="inverter") body = inspTable("inverter", inspItems.inverter);
-  else if(s.id==="battery") body = inspTable("battery", inspItems.battery);
+  else if(s.id==="pv") body = inspTable("pv", inspItems.pv, "PV / Physical Inspection");
+  else if(s.id==="inverter") body = inspTable("inverter", inspItems.inverter, "Inverter Inspection");
+  else if(s.id==="battery") body = inspTable("battery", inspItems.battery, "Battery Inspection");
   else if(s.id==="electrical"){
-    body = inspTable("electrical", inspItems.electrical) + renderMeasTable();
+    body = inspTable("electrical", inspItems.electrical, "Electrical & Safety") + renderMeasTable();
   }
   else if(s.id==="advanced"){
     body = `<div class="placeholder-note">หลักการ: ถ้า FusionSolar และ Visual Inspection (หมวด 04–08) ไม่พบความผิดปกติ ไม่จำเป็นต้องทำ Advanced Test ทุก String — เปิดหมวดนี้เฉพาะเมื่อพบ Fail หรือมีความเสี่ยงที่ต้องยืนยันเชิงตัวเลข</div>
@@ -1346,8 +1370,18 @@ function renderReportPages(){
     return `<figure><div class="ph">${inner}</div><figcaption>${cat.th}</figcaption></figure>`;
   }).join("");
 
+  const failItems = getFailItems();
+  const failGrid = failItems.map(f=>{
+    const inner = f.photo
+      ? `<img src="${f.photo}" alt="${f.name}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.parentElement.textContent='📷 โหลดรูปไม่สำเร็จ'; this.remove();">`
+      : `📷`;
+    return `<figure><div class="ph">${inner}</div><figcaption><b>${f.name}</b>${f.section?` · ${f.section}`:""}${f.remark?` — ${f.remark}`:""}</figcaption></figure>`;
+  }).join("");
+  const failSection = failItems.length ? `
+      <div class="rep-section"><h3>รายการที่ไม่ผ่าน (Fail) พร้อมรูปประกอบ · Fail Items</h3><div class="rep-fail-grid">${failGrid}</div></div>` : "";
+
   document.getElementById("reportPages").innerHTML = `
-    <!-- PAGE 1 : Cover + Score + Category -->
+    <!-- PAGE 1 : Cover + Score + Category + Fail items -->
     <div class="rep-page">
       <div class="rep-page-label no-print">หน้า 1 / 3 — Cover & Summary</div>
       <div class="rep-cover">
@@ -1361,7 +1395,7 @@ function renderReportPages(){
         <div class="rep-score-text"><b>${status}<span class="rep-pill" style="background:${statusColor}">${status}</span></b>
         <p>${c.keyFindings || 'ยังไม่ได้กรอกสรุปประเด็นสำคัญในหมวด Executive Summary'}</p></div>
       </div>
-      <div class="rep-section"><h3>ผลตรวจแยกตามหมวด · Category Results</h3>${catRows}</div>
+      <div class="rep-section"><h3>ผลตรวจแยกตามหมวด · Category Results</h3>${catRows}</div>${failSection}
     </div>
 
     <!-- PAGE 2 : Measurement + Photo evidence -->
@@ -1412,6 +1446,11 @@ function setPdfStatus(msg, isError){
   el.style.color = isError ? "var(--fail)" : "var(--teal)";
 }
 async function saveAsPDF(){
+  const missing = getMissingFailPhotos();
+  if(missing.length){
+    setPdfStatus(`⚠️ มีข้อ Fail ที่ยังไม่มีรูปแนบ ${missing.length} ข้อ — แนบรูปให้ครบก่อนสร้าง PDF: ${missing.map(m=>m.name).join(", ")}`, true);
+    return;
+  }
   const btn = document.getElementById("savePdfBtn");
   btn.disabled = true;
   setPdfStatus("กำลังสร้างไฟล์ PDF...");
@@ -1433,9 +1472,9 @@ async function saveAsPDF(){
     }
     const c = formData.cover;
     const jobNo = sanitizeFilename(c.tsJobNo) || "TSJOB";
-    const site = sanitizeFilename(c.site || c.customerName) || "Site";
+    const customer = sanitizeFilename(c.customerName || c.site) || "Customer";
     const dateStr = sanitizeFilename(c.inspectionDate || new Date().toISOString().slice(0,10));
-    pdf.save(`${jobNo}_${site}_${dateStr}.pdf`);
+    pdf.save(`${jobNo}_${customer}_${dateStr}.pdf`);
     setPdfStatus("✓ บันทึก PDF แล้ว");
   } catch(err){
     setPdfStatus("สร้าง PDF ไม่สำเร็จ: " + err.message, true);
@@ -1492,6 +1531,11 @@ async function uploadPendingPhotos(){
 async function saveInspection(){
   if(!backendReady()){
     setSaveStatus("⚠️ ยังไม่ได้ตั้งค่า API_URL — ดูขั้นตอน Deploy Apps Script", true);
+    return;
+  }
+  const missing = getMissingFailPhotos();
+  if(missing.length){
+    setSaveStatus(`⚠️ ต้องแนบรูปสำหรับข้อที่ Fail ก่อนบันทึก (ขาด ${missing.length} ข้อ): ${missing.map(m=>m.name).join(", ")}`, true);
     return;
   }
   setSaveStatus("กำลังอัปโหลดรูป...");

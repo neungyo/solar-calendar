@@ -343,17 +343,35 @@ const formData = {
 const photos = {};        // key -> dataURL   (photo report + fusion screenshot)
 const inspPhotos = {};    // rid -> dataURL   (photo attached inline in checklist rows)
 const defaultMeasurements = [
-  {name:"แรงดันไฟฟ้า AC (Voltage AC)", value:"", unit:"V", ref:"220V ±10% (1P) / 380V ±10% (3P)"},
-  {name:"กระแสไฟฟ้า AC (Current AC)", value:"", unit:"A", ref:"ไม่เกินพิกัด Inverter"},
-  {name:"แรงดันวงจรเปิด DC (Voc)", value:"", unit:"V", ref:"ตาม Datasheet ของแผง"},
-  {name:"กระแสลัดวงจร DC (Isc)", value:"", unit:"A", ref:"ตาม Datasheet ของแผง"},
+  {name:"แรงดันไฟฟ้า AC L1-N", value:"", unit:"V", ref:"220V ±10%"},
+  {name:"แรงดันไฟฟ้า AC L2-N", value:"", unit:"V", ref:"220V ±10% (เฉพาะระบบ 3 เฟส)"},
+  {name:"แรงดันไฟฟ้า AC L3-N", value:"", unit:"V", ref:"220V ±10% (เฉพาะระบบ 3 เฟส)"},
+  {name:"แรงดันไฟฟ้า AC L1-L2", value:"", unit:"V", ref:"380V ±10% (เฉพาะระบบ 3 เฟส)"},
+  {name:"แรงดันไฟฟ้า AC L2-L3", value:"", unit:"V", ref:"380V ±10% (เฉพาะระบบ 3 เฟส)"},
+  {name:"แรงดันไฟฟ้า AC L3-L1", value:"", unit:"V", ref:"380V ±10% (เฉพาะระบบ 3 เฟส)"},
+  {name:"กระแสไฟฟ้า AC L1", value:"", unit:"A", ref:"ไม่เกินพิกัด Inverter"},
+  {name:"กระแสไฟฟ้า AC L2", value:"", unit:"A", ref:"ไม่เกินพิกัด Inverter (เฉพาะระบบ 3 เฟส)"},
+  {name:"กระแสไฟฟ้า AC L3", value:"", unit:"A", ref:"ไม่เกินพิกัด Inverter (เฉพาะระบบ 3 เฟส)"},
+  {name:"แรงดันวงจรเปิด DC (Voc) String 1", value:"", unit:"V", ref:"ตาม Datasheet ของแผง"},
+  {name:"แรงดันวงจรเปิด DC (Voc) String 2", value:"", unit:"V", ref:"ตาม Datasheet ของแผง"},
+  {name:"แรงดันวงจรเปิด DC (Voc) String 3", value:"", unit:"V", ref:"ตาม Datasheet ของแผง"},
+  {name:"แรงดันวงจรเปิด DC (Voc) String 4", value:"", unit:"V", ref:"ตาม Datasheet ของแผง"},
+  {name:"กระแสการทำงาน DC String 1", value:"", unit:"A", ref:"ไม่เกิน Isc ตาม Datasheet ของแผง"},
+  {name:"กระแสการทำงาน DC String 2", value:"", unit:"A", ref:"ไม่เกิน Isc ตาม Datasheet ของแผง"},
+  {name:"กระแสการทำงาน DC String 3", value:"", unit:"A", ref:"ไม่เกิน Isc ตาม Datasheet ของแผง"},
+  {name:"กระแสการทำงาน DC String 4", value:"", unit:"A", ref:"ไม่เกิน Isc ตาม Datasheet ของแผง"},
+  {name:"ค่าความต้านทานฉนวน (Insulation) String 1", value:"", unit:"MΩ", ref:"≥ 1 MΩ"},
+  {name:"ค่าความต้านทานฉนวน (Insulation) String 2", value:"", unit:"MΩ", ref:"≥ 1 MΩ"},
+  {name:"ค่าความต้านทานฉนวน (Insulation) String 3", value:"", unit:"MΩ", ref:"≥ 1 MΩ"},
+  {name:"ค่าความต้านทานฉนวน (Insulation) String 4", value:"", unit:"MΩ", ref:"≥ 1 MΩ"},
   {name:"ค่าความต้านทานสายดิน", value:"", unit:"Ω", ref:"≤ 5 Ω"},
-  {name:"ค่าความต้านทานฉนวน (Insulation)", value:"", unit:"MΩ", ref:"≥ 1 MΩ"},
-  {name:"ความถี่ไฟฟ้า (Frequency)", value:"", unit:"Hz", ref:"50 Hz ±1%"},
-  {name:"อุณหภูมิจุดต่อสาย", value:"", unit:"°C", ref:"≤ 60°C หรือไม่เกิน +15°C จากอุณหภูมิแวดล้อม"},
+  {name:"อุณหภูมิ ชุดอุปกรณ์ความปลอดภัย (SPD/RCBO)", value:"", unit:"°C", ref:"≤ 60°C หรือไม่เกิน +15°C จากอุณหภูมิแวดล้อม"},
+  {name:"อุณหภูมิ เบรกเกอร์ฝั่ง AC", value:"", unit:"°C", ref:"≤ 60°C หรือไม่เกิน +15°C จากอุณหภูมิแวดล้อม"},
+  {name:"อุณหภูมิ เบรกเกอร์ฝั่ง DC", value:"", unit:"°C", ref:"≤ 60°C หรือไม่เกิน +15°C จากอุณหภูมิแวดล้อม"},
 ];
 let measurements = defaultMeasurements.map(m=>({...m}));
 let measResults = {};
+let extraEquipment = []; // อุปกรณ์เพิ่มเติมที่ไม่ได้อยู่ในหมวดหลัก เช่น รุ่นเฉพาะไซต์
 let inspResults = {};   // rid -> "pass"/"fail"/"na"  (จำสถานะรายข้อของหมวด 05-08)
 let inspRemarks = {};   // rid -> ข้อความ remark ของแต่ละข้อ // index -> pass/fail/na
 
@@ -472,12 +490,13 @@ document.addEventListener("input", (e)=>{
   const [group, key] = path.split(".");
   if(!formData[group]) formData[group] = {};
   formData[group][key] = el.value;
+  // ฟิลด์ที่ผูก data-bind เดียวกัน (เช่น Inverter Model ใน Cover กับ System Info) อัปเดตพร้อมกันแบบสด
+  document.querySelectorAll(`[data-bind="${path}"]`).forEach(other=>{ if(other!==el) other.value = el.value; });
   syncCrossLinks();
 });
 
 function syncCrossLinks(){
-  const id = formData.cover.inspectionId;
-  document.getElementById("topId").textContent = id ? "SHC-2026-" + String(id).padStart(4,"0").slice(-4) : "SHC-2026-0000";
+  document.getElementById("topId").textContent = formData.cover.inspectionId || "SHC-2026-0000";
 }
 
 /* ---------------- photo upload (works everywhere) ---------------- */
@@ -637,6 +656,30 @@ function rerenderSection(id){
   document.getElementById("sec-"+id).innerHTML = sectionHTML(s);
 }
 
+/* ---------------- extra equipment (System Information, extensible) ---------------- */
+function renderExtraEquipmentTable(){
+  let rows = extraEquipment.map((eq,i)=>`
+    <tr>
+      <td><input value="${eq.name}" oninput="extraEquipment[${i}].name=this.value" placeholder="ชื่ออุปกรณ์"></td>
+      <td><input value="${eq.model}" oninput="extraEquipment[${i}].model=this.value" placeholder="รุ่น / Model"></td>
+      <td><input class="mono" value="${eq.serial}" oninput="extraEquipment[${i}].serial=this.value" placeholder="Serial Number"></td>
+      <td><button class="meas-del" onclick="removeExtraEquip(${i})" title="ลบแถว">×</button></td>
+    </tr>
+  `).join("");
+  return `
+  <div class="card"><h4><span class="swatch"></span>อุปกรณ์เพิ่มเติม <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(เพิ่มได้อิสระ เช่นอุปกรณ์รุ่นพิเศษหรือเฉพาะไซต์ที่ไม่อยู่ในหมวดด้านบน)</span></h4>
+    <div style="overflow-x:auto;">
+    <table class="meas-table">
+      <thead><tr><th style="width:34%">ชื่ออุปกรณ์</th><th style="width:33%">รุ่น / Model</th><th style="width:28%">Serial Number</th><th style="width:5%"></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+    <button class="btn ghost small meas-add" onclick="addExtraEquip()">+ เพิ่มอุปกรณ์</button>
+  </div>`;
+}
+function addExtraEquip(){ extraEquipment.push({name:"",model:"",serial:""}); rerenderSection("sysinfo"); }
+function removeExtraEquip(i){ extraEquipment.splice(i,1); rerenderSection("sysinfo"); }
+
 /* ---------------- section content builders ---------------- */
 function sectionHTML(s){
   let body = "";
@@ -644,9 +687,13 @@ function sectionHTML(s){
     body = `<div class="card"><h4><span class="swatch"></span>ข้อมูลไซต์งาน</h4>
       ${fieldsGrid([["Customer Name","ชื่อลูกค้า",{bind:"cover.customerName"}],["Site","ไซต์งาน / ที่ตั้ง",{bind:"cover.site"}],["Inspection Date","วันที่เข้าตรวจ",{bind:"cover.inspectionDate",type:"date"}]])}
       <div style="height:12px"></div>
-      ${fieldsGrid([["Engineer","วิศวกรผู้ตรวจ",{bind:"cover.engineer"}],["Inspection ID","รหัสอ้างอิงงานตรวจ",{bind:"cover.inspectionId"}],["System Age","อายุการใช้งานระบบ",{bind:"cover.systemAge"}]])}
+      ${fieldsGrid([["Engineer","วิศวกรผู้ตรวจ",{bind:"cover.engineer"}],["Inspection ID","รหัสอ้างอิง (สร้างอัตโนมัติ)",{bind:"cover.inspectionId"}],["TS JOB No.","เลขงาน TS",{bind:"cover.tsJobNo"}]])}
       <div style="height:12px"></div>
-      ${fieldsGrid([["PV Capacity (kWp)","กำลังผลิตติดตั้ง",{bind:"cover.pvCapacity"}],["Inverter Model","รุ่นอินเวอร์เตอร์",{bind:"cover.inverterModel"}],["Battery Model / Capacity","รุ่น/ความจุแบตเตอรี่",{bind:"cover.batteryModel"}]])}
+      ${fieldsGrid([["System Age","อายุการใช้งานระบบ",{bind:"cover.systemAge"}],["PV Capacity (kWp)","กำลังผลิตติดตั้ง",{bind:"cover.pvCapacity"}],["Inverter Model","รุ่นอินเวอร์เตอร์",{bind:"cover.inverterModel"}]])}
+      <div style="height:12px"></div>
+      ${fieldsGrid([["Battery Model / Capacity","รุ่น/ความจุแบตเตอรี่",{bind:"cover.batteryModel"}]],2)}
+      <div style="height:12px"></div>
+      <div class="field"><label>Remark<span class="field-th">หมายเหตุเพิ่มเติมเกี่ยวกับไซต์นี้</span></label><textarea placeholder="บันทึกเพิ่มเติม..." data-bind="cover.remark"></textarea></div>
     </div>`;
   }
   else if(s.id==="summary"){
@@ -669,8 +716,14 @@ function sectionHTML(s){
     </div>`;
   }
   else if(s.id==="sysinfo"){
-    body = `<div class="card"><h4><span class="swatch"></span>Inverter</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์"],["Phase","ระบบไฟ (เฟส)"],["Inverter Rating","พิกัดกำลังอินเวอร์เตอร์"]])}<div style="height:12px"></div>${fieldsGrid([["Firmware","เวอร์ชันเฟิร์มแวร์"],["Serial Number","หมายเลขเครื่อง"],["Installation Date","วันที่ติดตั้ง",{type:"date"}]])}</div>
-    <div class="card"><h4><span class="swatch"></span>Battery & Communication</h4>${fieldsGrid([["Battery Model","รุ่นแบตเตอรี่"],["Capacity","ความจุ"],["Smart Power Sensor","เซนเซอร์วัดพลังงาน"]])}<div style="height:12px"></div>${fieldsGrid([["Communication Method","ช่องทางสื่อสารระบบ"],["Monitoring Account","บัญชีระบบมอนิเตอร์"],["Warranty Expiry","วันหมดประกัน",{type:"date"}]])}</div>`;
+    body = `<div class="card"><h4><span class="swatch"></span>Inverter</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์",{bind:"cover.inverterModel"}],["Phase","ระบบไฟ (เฟส)"],["Inverter Rating","พิกัดกำลังอินเวอร์เตอร์"]])}<div style="height:12px"></div>${fieldsGrid([["Firmware","เวอร์ชันเฟิร์มแวร์"],["Serial Number","หมายเลขเครื่อง"],["Installation Date","วันที่ติดตั้ง",{type:"date"}]])}<div class="weight-note">ช่อง Model ผูกกับ Inverter Model ในหน้า Cover — กรอกที่ไหนก็อัปเดตอีกที่ให้อัตโนมัติ</div></div>
+    <div class="card"><h4><span class="swatch"></span>Battery & Communication</h4>${fieldsGrid([["Battery Model","รุ่นแบตเตอรี่",{bind:"cover.batteryModel"}],["Capacity","ความจุ"],["Smart Power Sensor","เซนเซอร์วัดพลังงาน"]])}<div style="height:12px"></div>${fieldsGrid([["Communication Method","ช่องทางสื่อสารระบบ"],["Monitoring Account","บัญชีระบบมอนิเตอร์"],["Warranty Expiry","วันหมดประกัน",{type:"date"}]])}</div>
+    <div class="card"><h4><span class="swatch"></span>PV / Modules</h4>${fieldsGrid([["PV Capacity (kWp)","กำลังผลิตติดตั้ง",{bind:"cover.pvCapacity"}],["Module Model","รุ่นแผง"],["Quantity","จำนวนแผง"]])}</div>
+    <div class="card"><h4><span class="swatch"></span>Optimizer</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์"],["Quantity","จำนวน"],["Serial / Firmware","Serial หรือเวอร์ชัน"]])}</div>
+    <div class="card"><h4><span class="swatch"></span>SmartGuard</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์"],["Serial Number","หมายเลขเครื่อง"],["Installation Point","ตำแหน่งติดตั้ง"]])}</div>
+    <div class="card"><h4><span class="swatch"></span>Meter (Zero Export)</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์"],["Serial Number","หมายเลขเครื่อง"],["CT Ratio","อัตราส่วน CT"]])}</div>
+    <div class="card"><h4><span class="swatch"></span>SmartLogger</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์"],["Serial Number","หมายเลขเครื่อง"],["Firmware","เวอร์ชันเฟิร์มแวร์"]])}</div>
+    ${renderExtraEquipmentTable()}`;
   }
   else if(s.id==="fusion"){
     body = `<div class="card"><h4><span class="swatch"></span>Yield & Generation</h4>${fieldsGrid([["Daily Yield (kWh)","พลังงานผลิตรายวัน",{bind:"fusion.dailyYield"}],["Monthly Yield (kWh)","พลังงานผลิตรายเดือน",{bind:"fusion.monthlyYield"}],["Annual Yield (kWh)","พลังงานผลิตรายปี",{bind:"fusion.annualYield"}]])}<div style="height:12px"></div>${fieldsGrid([["Total Yield (kWh)","พลังงานผลิตสะสมทั้งหมด",{bind:"fusion.totalYield"}],["Self Consumption (%)","สัดส่วนใช้เองในบ้าน",{bind:"fusion.selfConsumption"}],["Performance Trend","แนวโน้มประสิทธิภาพ",{bind:"fusion.trend"}]])}</div>
@@ -792,6 +845,7 @@ function resetFormState(){
   formData.cover={}; formData.sysinfo={}; formData.fusion={}; formData.assess={}; formData.reco={}; formData.ack={}; formData.history={};
   measurements = defaultMeasurements.map(m=>({...m}));
   measResults = {};
+  extraEquipment = [];
   inspResults = {};
   inspRemarks = {};
   Object.keys(photos).forEach(k=>delete photos[k]);
@@ -806,6 +860,11 @@ function resetFormState(){
 }
 function newSite(){
   resetFormState();
+  const newId = "SHC-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-4);
+  formData.cover.inspectionId = newId;
+  const idField = document.querySelector('[data-bind="cover.inspectionId"]');
+  if(idField) idField.value = newId;
+  syncCrossLinks();
   showSection("cover");
   showView("form");
 }
@@ -876,7 +935,7 @@ function renderReportPages(){
   const status = document.getElementById("gaugeStatus").textContent;
   const statusColor = document.getElementById("gaugeStatus").style.color || "#2F8F5B";
   const scorePct = isNaN(parseInt(score)) ? 0 : parseInt(score);
-  const inspId = c.inspectionId ? "SHC-2026-"+String(c.inspectionId).padStart(4,"0").slice(-4) : "SHC-2026-0000";
+  const inspId = c.inspectionId || "SHC-2026-0000";
 
   const catRows = [
     ["FusionSolar Performance","ประสิทธิภาพจากระบบมอนิเตอร์", null],
@@ -1021,7 +1080,7 @@ async function saveInspection(){
       data: {
         cover: formData.cover, sysinfo: formData.sysinfo, fusion: formData.fusion,
         assess: formData.assess, reco: formData.reco, ack: formData.ack,
-        measurements, measResults, photos, inspPhotos, photoNotes,
+        measurements, measResults, photos, inspPhotos, photoNotes, extraEquipment,
         insp: state.scores, inspResults, inspRemarks, score,
       }
     };
@@ -1082,6 +1141,7 @@ async function loadInspection(id){
     Object.assign(formData.ack, d.ack||{});
     if(d.measurements) measurements = d.measurements;
     if(d.measResults) measResults = d.measResults;
+    if(d.extraEquipment) extraEquipment = d.extraEquipment;
     if(d.insp) state.scores = d.insp;
     inspResults = d.inspResults || {};
     inspRemarks = d.inspRemarks || {};

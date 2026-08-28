@@ -262,6 +262,8 @@
         </div>
       </div>
       <div class="topbar-actions">
+        <span id="saveStatus" style="font-size:11px;color:var(--ink-soft);align-self:center;"></span>
+        <button class="tb-btn" onclick="saveInspection()">💾 บันทึกข้อมูล</button>
         <button class="tb-btn primary" onclick="openReport()">📄 ดูตัวอย่าง PDF Report</button>
       </div>
     </div>
@@ -281,6 +283,17 @@
 </div>
 
 <script>
+/* =========================================================
+   BACKEND CONFIG
+   ------------------------------------------------------------
+   1. Deploy Code.gs เป็น Web App บน Google Apps Script (ดูขั้นตอนที่แนบมาให้)
+   2. เอา URL ที่ได้ (ลงท้ายด้วย /exec) มาใส่แทนค่าด้านล่างนี้
+   3. TOOL_NAME ต้องตรงกับ key ใน TOOLS object ของ Code.gs (ค่าเริ่มต้น: solarHealthCheck)
+========================================================= */
+const API_URL = "https://script.google.com/macros/s/AKfycbzJjq1DTFyDL5UMex0_dLOYb2BqR79anP6woh2eTA3XZODdSLx0BOPXmSLhEEb5vXTX/exec"; // เช่น https://script.google.com/macros/s/AKfycb.../exec
+const TOOL_NAME = "solarHealthCheck";
+const backendReady = () => API_URL && API_URL.startsWith("http");
+
 /* =========================================================
    GLOBAL STATE — ทุกช่องที่มี data-bind จะเขียนเข้ามาที่นี่
    และหน้า Report จะดึงค่าจากตรงนี้แบบสด (live)
@@ -657,15 +670,14 @@ function sectionHTML(s){
     <div class="rec-level future"><h5>Future Opportunity</h5><p>พิจารณาในอนาคต — Battery Expansion / EV Charger / Energy Management</p><textarea placeholder="โอกาสต่อยอดในอนาคต..." data-bind="reco.future"></textarea></div>`;
   }
   else if(s.id==="history"){
-    body = `<div class="card"><h4><span class="swatch"></span>ประวัติการตรวจย้อนหลัง</h4>
+    body = `<div class="card"><h4><span class="swatch"></span>ประวัติการตรวจย้อนหลัง <span style="font-weight:400;font-size:11px;color:var(--ink-soft);">(ดึงจาก Google Sheet จริง)</span></h4>
     <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
       <thead><tr style="text-align:left;color:var(--ink-soft);border-bottom:1px solid var(--line);">
-        <th style="padding:8px 6px;">วันที่ตรวจ</th><th style="padding:8px 6px;">Health Score</th><th style="padding:8px 6px;">เทียบครั้งก่อน</th><th style="padding:8px 6px;">หมายเหตุ</th>
+        <th style="padding:8px 6px;">วันที่บันทึก</th><th style="padding:8px 6px;">Health Score</th><th style="padding:8px 6px;">ลูกค้า</th><th style="padding:8px 6px;"></th>
       </tr></thead>
-      <tbody>
-        <tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">รอบตรวจถัดไปจะแสดงที่นี่หลัง Save</td></tr>
-      </tbody>
+      <tbody id="historyBody"><tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">กำลังโหลด...</td></tr></tbody>
     </table>
+    <button class="btn ghost small" style="margin-top:12px;" onclick="loadHistory()">↻ รีเฟรชประวัติ</button>
     </div>`;
   }
   else if(s.id==="ack"){
@@ -714,6 +726,7 @@ function stepSection(dir){
 }
 showSection("cover");
 recomputeGlobalScore();
+loadHistory();
 
 /* =========================================================
    REPORT PREVIEW — ดึงข้อมูลจริงจาก formData / measurements / photos
@@ -814,6 +827,140 @@ function renderReportPages(){
 }
 function openReport(){ renderReportPages(); document.body.classList.add("report-mode"); window.scrollTo({top:0,behavior:"instant"}); }
 function closeReport(){ document.body.classList.remove("report-mode"); }
+
+/* =========================================================
+   SAVE / LOAD — เชื่อมกับ Google Apps Script backend
+   (ใช้ Content-Type: text/plain ตอน POST เพื่อเลี่ยง CORS preflight
+    ซึ่ง Apps Script Web App ไม่รองรับ OPTIONS โดยตรง)
+========================================================= */
+function setSaveStatus(msg, isError){
+  const el = document.getElementById("saveStatus");
+  el.textContent = msg;
+  el.style.color = isError ? "var(--fail)" : "var(--teal)";
+}
+
+async function apiPost(payload){
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: {"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+async function apiGet(params){
+  const url = new URL(API_URL);
+  Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+  const res = await fetch(url.toString());
+  return res.json();
+}
+
+// อัปโหลดรูปทั้งหมดที่ยังเป็น dataURL (ยังไม่เคยขึ้น Drive) แล้วแทนที่ด้วย URL จริง
+async function uploadPendingPhotos(){
+  const jobs = [];
+  Object.keys(photos).forEach(key=>{
+    if(photos[key] && photos[key].startsWith("data:")){
+      jobs.push(apiPost({tool:TOOL_NAME, action:"uploadPhoto", filename:key+".jpg", base64:photos[key]})
+        .then(r=>{ if(r.ok) photos[key] = r.url; }));
+    }
+  });
+  Object.keys(inspPhotos).forEach(key=>{
+    if(inspPhotos[key] && inspPhotos[key].startsWith("data:")){
+      jobs.push(apiPost({tool:TOOL_NAME, action:"uploadPhoto", filename:key.replace(":","_")+".jpg", base64:inspPhotos[key]})
+        .then(r=>{ if(r.ok) inspPhotos[key] = r.url; }));
+    }
+  });
+  await Promise.all(jobs);
+}
+
+async function saveInspection(){
+  if(!backendReady()){
+    setSaveStatus("⚠️ ยังไม่ได้ตั้งค่า API_URL — ดูขั้นตอน Deploy Apps Script", true);
+    return;
+  }
+  setSaveStatus("กำลังอัปโหลดรูป...");
+  try{
+    await uploadPendingPhotos();
+    setSaveStatus("กำลังบันทึกข้อมูล...");
+    const score = document.getElementById("gaugeScore").textContent;
+    const payload = {
+      tool: TOOL_NAME,
+      action: "save",
+      data: {
+        cover: formData.cover, sysinfo: formData.sysinfo, fusion: formData.fusion,
+        assess: formData.assess, reco: formData.reco, ack: formData.ack,
+        measurements, measResults, photos, inspPhotos, photoNotes,
+        insp: state.scores, score,
+      }
+    };
+    const result = await apiPost(payload);
+    if(result.ok){
+      setSaveStatus("✓ บันทึกแล้ว (ID: " + result.id + ")");
+      if(!formData.cover.inspectionId){
+        formData.cover.inspectionId = result.id;
+        syncCrossLinks();
+      }
+      loadHistory();
+    } else {
+      setSaveStatus("บันทึกไม่สำเร็จ: " + result.error, true);
+    }
+  } catch(err){
+    setSaveStatus("เกิดข้อผิดพลาด: " + err.message, true);
+  }
+}
+
+async function loadHistory(){
+  const box = document.getElementById("historyBody");
+  if(!box) return;
+  if(!backendReady()){
+    box.innerHTML = `<tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">ยังไม่ได้ตั้งค่า API_URL ในโค้ด — ประวัติจะแสดงที่นี่หลังต่อ backend</td></tr>`;
+    return;
+  }
+  box.innerHTML = `<tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">กำลังโหลด...</td></tr>`;
+  try{
+    const r = await apiGet({tool:TOOL_NAME, action:"list"});
+    if(!r.ok || !r.records.length){
+      box.innerHTML = `<tr><td colspan="4" style="padding:9px 6px;color:var(--ink-soft);text-align:center;">ยังไม่มีประวัติการตรวจที่บันทึกไว้</td></tr>`;
+      return;
+    }
+    box.innerHTML = r.records.map(rec=>`
+      <tr style="cursor:pointer;" onclick="loadInspection('${rec.id}')">
+        <td class="mono" style="padding:9px 6px;">${new Date(rec.timestamp).toLocaleDateString('th-TH')}</td>
+        <td class="mono" style="padding:9px 6px;">${rec.score||"—"}</td>
+        <td style="padding:9px 6px;">${rec.customerName||"—"}</td>
+        <td style="padding:9px 6px;color:var(--teal);">↻ โหลดข้อมูล</td>
+      </tr>`).join("");
+  } catch(err){
+    box.innerHTML = `<tr><td colspan="4" style="padding:9px 6px;color:var(--fail);text-align:center;">โหลดประวัติไม่สำเร็จ: ${err.message}</td></tr>`;
+  }
+}
+
+async function loadInspection(id){
+  setSaveStatus("กำลังโหลดข้อมูล...");
+  try{
+    const r = await apiGet({tool:TOOL_NAME, action:"get", id});
+    if(!r.ok){ setSaveStatus("โหลดไม่สำเร็จ: " + r.error, true); return; }
+    const d = r.record;
+    Object.assign(formData.cover, d.cover||{});
+    Object.assign(formData.assess, d.assess||{});
+    Object.assign(formData.reco, d.reco||{});
+    Object.assign(formData.ack, d.ack||{});
+    if(d.measurements) measurements = d.measurements;
+    if(d.measResults) measResults = d.measResults;
+    if(d.photos) Object.assign(photos, d.photos);
+    if(d.inspPhotos) Object.assign(inspPhotos, d.inspPhotos);
+    // เติมค่ากลับเข้าช่อง input ที่มี data-bind ตรงกับ field ที่โหลดมา
+    document.querySelectorAll("[data-bind]").forEach(el=>{
+      const [g,k] = el.dataset.bind.split(".");
+      if(formData[g] && formData[g][k] !== undefined) el.value = formData[g][k];
+    });
+    rerenderSection("electrical");
+    syncCrossLinks();
+    setSaveStatus("✓ โหลดข้อมูล ID " + id + " แล้ว");
+    showSection("cover");
+  } catch(err){
+    setSaveStatus("เกิดข้อผิดพลาด: " + err.message, true);
+  }
+}
 </script>
 </body>
 </html>

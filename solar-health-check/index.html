@@ -120,6 +120,28 @@
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
   @media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr;}}
 
+  /* ---- mobile / tablet layout ---- */
+  @media(max-width:860px){
+    .app{flex-direction:column;}
+    .rail{width:100%;height:auto;position:relative;padding:14px 14px 10px;}
+    .rail-brand{margin-bottom:10px;padding-bottom:10px;}
+    .navlist{flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:2px;-webkit-overflow-scrolling:touch;}
+    .navlist li{flex-shrink:0;white-space:nowrap;}
+    .navlist .status-dot{margin-left:6px;}
+    .content{padding:16px 14px 60px;}
+    .topbar{padding:10px 14px;flex-wrap:wrap;row-gap:8px;}
+    .topbar .id-block{flex:1 1 100%;order:0;}
+    .topbar-actions{flex-wrap:wrap;width:100%;}
+    .tb-btn{flex:1 1 auto;justify-content:center;}
+    .insp-row{flex-wrap:wrap;row-gap:8px;}
+    .insp-name{flex:1 1 100%;}
+    .dash-shell{padding:20px 14px 60px;}
+    .dash-header{flex-wrap:wrap;gap:12px;}
+    .dash-controls{flex-direction:column;align-items:stretch;}
+    .rep-page{padding:24px 18px;}
+    .report-shell{padding:16px 10px 60px;}
+  }
+
   .field label{display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:5px;font-weight:600;}
   .field input,.field select,.field textarea{
     width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;font-family:'Inter';
@@ -160,6 +182,11 @@
   .lightbox-inner img{max-width:100%;max-height:70vh;border-radius:10px;background:#fff;object-fit:contain;}
   .lightbox-actions{display:flex;gap:10px;}
   .lightbox-actions .tb-btn{background:#fff;}
+
+  .photo-choice{display:none;position:fixed;inset:0;background:rgba(16,34,43,0.6);z-index:65;align-items:flex-end;justify-content:center;padding:20px;}
+  .photo-choice.open{display:flex;}
+  .photo-choice-inner{background:#fff;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;width:100%;max-width:340px;}
+  .photo-choice-inner .tb-btn{width:100%;justify-content:center;padding:12px;font-size:14px;}
 
   .rec-level{border-left:3px solid var(--line);padding:4px 0 4px 14px;margin-bottom:14px;}
   .rec-level.immediate{border-color:var(--fail);}
@@ -373,6 +400,14 @@
   </div>
 </div>
 
+<div class="photo-choice" id="photoChoice" onclick="if(event.target===this) closePhotoChoice()">
+  <div class="photo-choice-inner">
+    <button class="tb-btn primary" onclick="choosePhotoSource('camera')">📷 ถ่ายภาพ</button>
+    <button class="tb-btn" onclick="choosePhotoSource('gallery')">🖼️ เลือกจากคลังภาพ</button>
+    <button class="tb-btn" onclick="closePhotoChoice()">ยกเลิก</button>
+  </div>
+</div>
+
 <script>
 /* =========================================================
    BACKEND CONFIG
@@ -427,6 +462,13 @@ let measResults = {};
 let extraEquipment = []; // อุปกรณ์เพิ่มเติมที่ไม่ได้อยู่ในหมวดหลัก เช่น รุ่นเฉพาะไซต์
 let inspResults = {};   // rid -> "pass"/"fail"/"na"  (จำสถานะรายข้อของหมวด 05-08)
 let inspRemarks = {};   // rid -> ข้อความ remark ของแต่ละข้อ // index -> pass/fail/na
+
+// รายการรุ่น SmartLogger/CT ที่ใช้บ่อย — เพิ่มรุ่นใหม่ได้โดยแก้ array นี้
+const smartLoggerModelOptions = [
+  "DDSU-666 (1Phase)",
+  "DTSU-666-H (3Phase)",
+  "DTSU-666-HW (3Phase)",
+];
 
 const photoReportCats = [
   {key:"roofOverview", en:"Roof / Array Overview", th:"ภาพรวมหลังคา / พื้นที่ติดตั้งแผง"},
@@ -535,6 +577,37 @@ function fieldsGrid(fields, cols=3){
   }).join("") + `</div>`;
 }
 
+// SmartLogger Model — dropdown ของรุ่นที่ใช้บ่อย พร้อมช่อง "อื่นๆ (ระบุเอง)"
+function smartLoggerModelField(){
+  const current = formData.cover.smartloggerModel || "";
+  const isPreset = smartLoggerModelOptions.includes(current);
+  const selVal = current === "" ? "" : (isPreset ? current : "__other__");
+  const optsHtml = smartLoggerModelOptions.map(o=>`<option value="${o}" ${o===current?"selected":""}>${o}</option>`).join("");
+  return `<div class="field">
+    <label>Model<span class="field-th">รุ่นอุปกรณ์ — เลือกจากรายการหรือระบุเอง</span></label>
+    <select onchange="onSmartLoggerModelChange(this)">
+      <option value="">—</option>
+      ${optsHtml}
+      <option value="__other__" ${selVal==="__other__"?"selected":""}>อื่นๆ (ระบุเอง)</option>
+    </select>
+    <input type="text" data-bind="cover.smartloggerModel" value="${!isPreset?current:""}" placeholder="ระบุรุ่นเอง..." style="margin-top:6px;display:${selVal==="__other__"?"block":"none"};" id="smartloggerCustomInput">
+  </div>`;
+}
+function onSmartLoggerModelChange(sel){
+  const customInput = document.getElementById("smartloggerCustomInput");
+  if(sel.value === "__other__"){
+    customInput.style.display = "block";
+    customInput.value = "";
+    formData.cover.smartloggerModel = "";
+  } else {
+    customInput.style.display = "none";
+    formData.cover.smartloggerModel = sel.value;
+    customInput.value = sel.value;
+  }
+  document.querySelectorAll('[data-bind="cover.smartloggerModel"]').forEach(o=>{ if(o!==customInput) o.value = formData.cover.smartloggerModel; });
+  syncCrossLinks();
+}
+
 // delegated listener: writes any input/textarea with data-bind into formData
 document.addEventListener("input", (e)=>{
   const el = e.target;
@@ -554,12 +627,33 @@ function syncCrossLinks(){
 
 /* ---------------- photo upload (works everywhere) ---------------- */
 function photoBtn(key, big){
-  return `<input type="file" accept="image/*" id="file-${key}" style="display:none" onchange="handlePhotoUpload(event,'${key}')">
-  <div class="photo-btn ${big?'photo-btn-lg':''}" id="thumb-${key}" onclick="openLightbox('${key}')" title="ดู/แนบรูป">📷</div>`;
+  return `<input type="file" accept="image/*" capture="environment" id="filecam-${key}" style="display:none" onchange="handlePhotoUpload(event,'${key}')">
+  <input type="file" accept="image/*" id="file-${key}" style="display:none" onchange="handlePhotoUpload(event,'${key}')">
+  <div class="photo-btn ${big?'photo-btn-lg':''}" id="thumb-${key}" onclick="onPhotoBtnClick('${key}')" title="ดู/แนบรูป">📷</div>`;
+}
+function onPhotoBtnClick(key){
+  const url = key.startsWith("insp:") ? inspPhotos[key] : photos[key];
+  if(url){ openLightbox(key); return; }
+  openPhotoChoice(key);
+}
+let pendingPhotoKey = null;
+function openPhotoChoice(key){
+  pendingPhotoKey = key;
+  document.getElementById("photoChoice").classList.add("open");
+}
+function closePhotoChoice(){
+  document.getElementById("photoChoice").classList.remove("open");
+  pendingPhotoKey = null;
+}
+function choosePhotoSource(source){
+  if(!pendingPhotoKey) return;
+  const key = pendingPhotoKey;
+  closePhotoChoice();
+  document.getElementById(source==="camera" ? "filecam-"+key : "file-"+key).click();
 }
 function openLightbox(key){
   const url = key.startsWith("insp:") ? inspPhotos[key] : photos[key];
-  if(!url){ document.getElementById("file-"+key).click(); return; }
+  if(!url){ openPhotoChoice(key); return; }
   currentLightboxKey = key;
   document.getElementById("lightboxImg").src = url;
   document.getElementById("lightbox").classList.add("open");
@@ -569,7 +663,10 @@ function closeLightbox(){
   currentLightboxKey = null;
 }
 function triggerChangePhoto(){
-  if(currentLightboxKey) document.getElementById("file-"+currentLightboxKey).click();
+  if(!currentLightboxKey) return;
+  const key = currentLightboxKey;
+  closeLightbox();
+  openPhotoChoice(key);
 }
 let currentLightboxKey = null;
 function handlePhotoUpload(e, key){
@@ -586,6 +683,7 @@ function handlePhotoUpload(e, key){
     if(currentLightboxKey===key) document.getElementById("lightboxImg").src = url;
   };
   reader.readAsDataURL(file);
+
 }
 
 /* ---------------- inspection checklist table ---------------- */
@@ -828,12 +926,12 @@ function sectionHTML(s){
   }
   else if(s.id==="sysinfo"){
     body = `<div class="card"><h4><span class="swatch"></span>Inverter</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์",{bind:"cover.inverterModel"}],["Phase","ระบบไฟ (เฟส)"],["Inverter Rating","พิกัดกำลังอินเวอร์เตอร์"]])}<div style="height:12px"></div>${fieldsGrid([["Firmware","เวอร์ชันเฟิร์มแวร์"],["Serial Number","หมายเลขเครื่อง"],["Installation Date","วันที่ติดตั้ง",{type:"date"}]])}<div class="weight-note">ช่อง Model ผูกกับ Inverter Model ในหน้า Cover — กรอกที่ไหนก็อัปเดตอีกที่ให้อัตโนมัติ</div></div>
-    <div class="card"><h4><span class="swatch"></span>Battery & Communication</h4>${fieldsGrid([["Battery Model","รุ่นแบตเตอรี่",{bind:"cover.batteryModel"}],["Capacity","ความจุ"],["Smart Power Sensor","เซนเซอร์วัดพลังงาน"]])}<div style="height:12px"></div>${fieldsGrid([["Communication Method","ช่องทางสื่อสารระบบ"],["Monitoring Account","บัญชีระบบมอนิเตอร์"],["Warranty Expiry","วันหมดประกัน",{type:"date"}]])}<div style="height:12px"></div>${fieldsGrid([["Dongle Model","รุ่น/หมายเลข Dongle สื่อสาร",{bind:"cover.dongleModel"}]],2)}</div>
+    <div class="card"><h4><span class="swatch"></span>Battery & Communication</h4>${fieldsGrid([["Battery Model","รุ่นแบตเตอรี่",{bind:"cover.batteryModel"}],["Capacity","ความจุ"]],2)}<div style="height:12px"></div>${fieldsGrid([["Communication Method","ช่องทางสื่อสารระบบ"],["Monitoring Account","บัญชีระบบมอนิเตอร์"],["Warranty Expiry","วันหมดประกัน",{type:"date"}]])}<div style="height:12px"></div>${fieldsGrid([["Dongle Model","รุ่น/หมายเลข Dongle สื่อสาร",{bind:"cover.dongleModel"}]],2)}</div>
     <div class="card"><h4><span class="swatch"></span>PV / Modules</h4>${fieldsGrid([["PV Capacity (kWp)","กำลังผลิตติดตั้ง",{bind:"cover.pvCapacity"}],["Module Model","รุ่นแผง"],["Quantity","จำนวนแผง"]])}</div>
     <div class="card"><h4><span class="swatch"></span>Optimizer</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์",{bind:"cover.optimizerModel"}],["Quantity","จำนวน",{bind:"cover.optimizerQty"}],["Serial / Firmware","Serial หรือเวอร์ชัน"]])}</div>
     <div class="card"><h4><span class="swatch"></span>SmartGuard</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์",{bind:"cover.smartguardModel"}],["Serial Number","หมายเลขเครื่อง"],["Installation Point","ตำแหน่งติดตั้ง"]])}</div>
     <div class="card"><h4><span class="swatch"></span>Meter (Zero Export)</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์"],["Serial Number","หมายเลขเครื่อง"],["CT Ratio","อัตราส่วน CT"]])}</div>
-    <div class="card"><h4><span class="swatch"></span>SmartLogger</h4>${fieldsGrid([["Model","รุ่นอุปกรณ์",{bind:"cover.smartloggerModel"}],["Serial Number","หมายเลขเครื่อง"],["Firmware","เวอร์ชันเฟิร์มแวร์"]])}</div>
+    <div class="card"><h4><span class="swatch"></span>SmartLogger</h4><div class="grid3">${smartLoggerModelField()}<div class="field"><label>Serial Number<span class="field-th">หมายเลขเครื่อง</span></label><input type="text" placeholder="—"></div><div class="field"><label>Firmware<span class="field-th">เวอร์ชันเฟิร์มแวร์</span></label><input type="text" placeholder="—"></div></div></div>
     ${renderExtraEquipmentTable()}
     <div class="weight-note">ช่องที่มีคู่กับหน้า Cover (Inverter Model, PV Capacity, Battery Model, Optimizer, SmartGuard, SmartLogger, Dongle) จะอัปเดตให้กันแบบสดทั้งสองทาง</div>`;
   }

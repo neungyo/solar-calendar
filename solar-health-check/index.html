@@ -329,7 +329,7 @@
    2. เอา URL ที่ได้ (ลงท้ายด้วย /exec) มาใส่แทนค่าด้านล่างนี้
    3. TOOL_NAME ต้องตรงกับ key ใน TOOLS object ของ Code.gs (ค่าเริ่มต้น: solarHealthCheck)
 ========================================================= */
-const API_URL = "PUT_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE"; // เช่น https://script.google.com/macros/s/AKfycb.../exec
+const API_URL = "https://script.google.com/macros/s/AKfycbzJjq1DTFyDL5UMex0_dLOYb2BqR79anP6woh2eTA3XZODdSLx0BOPXmSLhEEb5vXTX/exec";
 const TOOL_NAME = "solarHealthCheck";
 const backendReady = () => API_URL && API_URL.startsWith("http");
 
@@ -353,7 +353,9 @@ const defaultMeasurements = [
   {name:"อุณหภูมิจุดต่อสาย", value:"", unit:"°C", ref:"≤ 60°C หรือไม่เกิน +15°C จากอุณหภูมิแวดล้อม"},
 ];
 let measurements = defaultMeasurements.map(m=>({...m}));
-let measResults = {}; // index -> pass/fail/na
+let measResults = {};
+let inspResults = {};   // rid -> "pass"/"fail"/"na"  (จำสถานะรายข้อของหมวด 05-08)
+let inspRemarks = {};   // rid -> ข้อความ remark ของแต่ละข้อ // index -> pass/fail/na
 
 const photoReportCats = [
   {key:"roofOverview", en:"Roof / Array Overview", th:"ภาพรวมหลังคา / พื้นที่ติดตั้งแผง"},
@@ -507,18 +509,20 @@ function inspTable(sectionId, groups){
       const rid = `${sectionId}-${groupName}-${idx}`.replace(/\s/g,'');
       const isObj = typeof item === "object";
       const nameHtml = isObj ? `${item.en}<div class="insp-th">${item.th}</div>` : `${item}`;
+      const savedVal = inspResults[rid] || "";
+      const savedRemark = inspRemarks[rid] || "";
       html += `
-      <div class="insp-row" data-rid="${rid}" data-sec="${sectionId}">
+      <div class="insp-row" data-rid="${rid}" data-sec="${sectionId}" data-value="${savedVal}">
         <div class="insp-name">${nameHtml}</div>
         <span class="remark-toggle" onclick="toggleRemark('${rid}')">+ Remark</span>
         ${photoBtn("insp:"+rid)}
         <div class="seg">
-          <button data-v="pass" onclick="setInsp('${rid}','${sectionId}',this,'pass')">Pass</button>
-          <button data-v="fail" onclick="setInsp('${rid}','${sectionId}',this,'fail')">Fail</button>
-          <button data-v="na" onclick="setInsp('${rid}','${sectionId}',this,'na')">N/A</button>
+          <button data-v="pass" class="${savedVal==='pass'?'active':''}" onclick="setInsp('${rid}','${sectionId}',this,'pass')">Pass</button>
+          <button data-v="fail" class="${savedVal==='fail'?'active':''}" onclick="setInsp('${rid}','${sectionId}',this,'fail')">Fail</button>
+          <button data-v="na" class="${savedVal==='na'?'active':''}" onclick="setInsp('${rid}','${sectionId}',this,'na')">N/A</button>
         </div>
       </div>
-      <div class="field" id="remark-${rid}" style="display:none;margin:6px 0 4px;"><textarea placeholder="รายละเอียด / หมายเหตุ..." style="min-height:44px;"></textarea></div>
+      <div class="field" id="remark-${rid}" style="display:${savedRemark?'block':'none'};margin:6px 0 4px;"><textarea placeholder="รายละเอียด / หมายเหตุ..." style="min-height:44px;" oninput="inspRemarks['${rid}']=this.value">${savedRemark}</textarea></div>
       `;
     });
     html += `</div>`;
@@ -534,7 +538,12 @@ function setInsp(rid, sectionId, btn, val){
   row.querySelectorAll(".seg button").forEach(b=>b.classList.remove("active"));
   btn.classList.add("active");
   row.dataset.value = val;
+  inspResults[rid] = val;
   recomputeSection(sectionId);
+  recomputeGlobalScore();
+}
+function recomputeAllChecklists(){
+  ["pv","inverter","battery","electrical"].forEach(id=>recomputeSection(id));
   recomputeGlobalScore();
 }
 function recomputeSection(sectionId){
@@ -765,7 +774,7 @@ function stepSection(dir){
   if(next) showSection(next.id);
 }
 showSection("cover");
-recomputeGlobalScore();
+recomputeAllChecklists();
 showView("dashboard");
 
 /* =========================================================
@@ -783,13 +792,15 @@ function resetFormState(){
   formData.cover={}; formData.sysinfo={}; formData.fusion={}; formData.assess={}; formData.reco={}; formData.ack={}; formData.history={};
   measurements = defaultMeasurements.map(m=>({...m}));
   measResults = {};
+  inspResults = {};
+  inspRemarks = {};
   Object.keys(photos).forEach(k=>delete photos[k]);
   Object.keys(inspPhotos).forEach(k=>delete inspPhotos[k]);
   Object.keys(photoNotes).forEach(k=>delete photoNotes[k]);
   state.scores = {};
   sections.forEach(s=>{ document.getElementById("sec-"+s.id).innerHTML = sectionHTML(s); });
   document.querySelectorAll("[data-bind]").forEach(el=>el.value="");
-  recomputeGlobalScore();
+  recomputeAllChecklists();
   syncCrossLinks();
   setSaveStatus("");
 }
@@ -1011,7 +1022,7 @@ async function saveInspection(){
         cover: formData.cover, sysinfo: formData.sysinfo, fusion: formData.fusion,
         assess: formData.assess, reco: formData.reco, ack: formData.ack,
         measurements, measResults, photos, inspPhotos, photoNotes,
-        insp: state.scores, score,
+        insp: state.scores, inspResults, inspRemarks, score,
       }
     };
     const result = await apiPost(payload);
@@ -1072,6 +1083,8 @@ async function loadInspection(id){
     if(d.measurements) measurements = d.measurements;
     if(d.measResults) measResults = d.measResults;
     if(d.insp) state.scores = d.insp;
+    inspResults = d.inspResults || {};
+    inspRemarks = d.inspRemarks || {};
     if(d.photos) Object.assign(photos, d.photos);
     if(d.inspPhotos) Object.assign(inspPhotos, d.inspPhotos);
     if(d.photoNotes) Object.assign(photoNotes, d.photoNotes);
@@ -1091,8 +1104,8 @@ async function loadInspection(id){
       if(thumb && inspPhotos[key]){ thumb.style.backgroundImage = `url(${inspPhotos[key]})`; thumb.textContent=""; thumb.classList.add("has-photo"); }
     });
     syncCrossLinks();
-    recomputeGlobalScore();
-    setSaveStatus("✓ โหลดข้อมูล ID " + id + " แล้ว (หมายเหตุ: คะแนนรวมและรูปโหลดกลับมาแล้ว แต่สถานะ Pass/Fail รายข้อในเช็คลิสต์ยังต้องกดใหม่)");
+    recomputeAllChecklists();
+    setSaveStatus("✓ โหลดข้อมูล ID " + id + " แล้ว");
     showSection("cover");
   } catch(err){
     setSaveStatus("เกิดข้อผิดพลาด: " + err.message, true);

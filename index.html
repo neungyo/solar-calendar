@@ -74,6 +74,10 @@
      slate rather than red -- it's ordinary outstanding work, not a problem. */
   .msum.remaining { border-color:#cbd5e1; background:#f8fafc; color:#334155; }
   .msum.service { border-color:#111827; background:#111827; color:#ffffff; }
+  /* "รวม" (Sure's request, 2026-08-29): grand total for the month, shown
+     before the survey/install breakdown chips -- distinct indigo so it
+     doesn't get confused with any one category. */
+  .msum.total { border-color:#818cf8; background:#eef2ff; color:#3730a3; font-weight:600; }
   .dot.service { background:#111827; }
   .evt.service { background:#111827; color:#ffffff; border:1px solid #111827; }
   .stat-card.c-service { border-left:4px solid #111827; }
@@ -1476,7 +1480,14 @@ function renderMonthSummary(y, m) {
   function chip(cls, label, n, tip) {
     return '<span class="msum ' + cls + '" title="' + tip + '">' + label + ' <b>' + n + '</b></span>';
   }
+  // "รวม" (Sure's request, 2026-08-29): total jobs this month = survey +
+  // install + service (ล้างแผง) jobs added together -- the same three
+  // numbers shown in the chips right after this one, just summed. Shown
+  // first so it reads as "total, then breakdown."
+  var totalJobsThisMonth = Object.keys(surveyJobs).length + Object.keys(installJobs).length + Object.keys(serviceJobs).length;
   el.innerHTML =
+    chip('total', 'รวม', totalJobsThisMonth,
+      'จำนวนงานรวมของเดือนนี้ (สำรวจ + ติดตั้ง + ล้างแผง)') +
     chip('survey', 'สำรวจ', Object.keys(surveyJobs).length,
       'จำนวนงานที่มีนัดเข้าสำรวจในเดือนนี้ (นับเป็นงาน ไม่ใช่จำนวนวัน)') +
     chip('install', 'ติดตั้ง', Object.keys(installJobs).length,

@@ -1741,9 +1741,9 @@ function buildCopyText_() {
     items.forEach(function(it) { max += it.weight; if (state[it.key]) got += it.weight; });
     var pct = max > 0 ? Math.round((got / max) * 100) : 0;
     lines.push('');
-    lines.push('Installation Progress Checklist:');
+    lines.push('รายการตรวจสอบความคืบหน้างานติดตั้ง:');
     items.forEach(function(it) {
-      lines.push((state[it.key] ? '[x] ' : '[ ] ') + it.title);
+      lines.push((state[it.key] ? '[x] ' : '[ ] ') + it.detail);
     });
     lines.push('');
     lines.push('Remark: ' + checklistRemarkText_(currentChecklistJob, pct));

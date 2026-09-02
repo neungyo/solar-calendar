@@ -841,6 +841,16 @@
   </div>
 </div>
 
+<!-- Client-side PDF compression libs (2026-09-02, Sure's request): survey docs
+     are often 30-50MB scans; these shrink oversized PDFs in the browser
+     before upload so they fit comfortably under the Apps Script POST cap. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" defer></script>
+<script type="module">
+  import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs';
+  window.__pdfjsLib = pdfjsLib;
+</script>
+
 <script>
 var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrRKjebecOzXuJv4WfzoqDUhAvTyid9mM7-yNhuTmJRqn8ID/exec";
 // SECURITY (2026-07-20, Sure's request): there used to be a DEFAULT_ACCESS_KEY
@@ -1768,6 +1778,97 @@ function logStatusClass_(val) {
 }
 
 // Job document upload/view (Sure's request, 2026-08-29).
+
+// Client-side PDF compression (Sure's request, 2026-09-02): survey docs are
+// routinely 30-50MB (many embedded photos), which is close to/over the Apps
+// Script POST size cap once base64-encoded. If a selected PDF is larger than
+// PDF_COMPRESS_THRESHOLD_BYTES, rasterize each page via pdf.js and re-encode
+// as a JPEG-based PDF via pdf-lib, aiming to land at/under
+// PDF_TARGET_MAX_BYTES. This trades text-selectability for a big size win --
+// fine here since these are scans/photos already. Falls back to the original
+// file untouched if the file is small enough, or if the libraries failed to
+// load (offline/blocked), so upload never hard-breaks because of this step.
+var PDF_COMPRESS_THRESHOLD_BYTES = 15 * 1024 * 1024;
+var PDF_TARGET_MAX_BYTES = 15 * 1024 * 1024;
+
+function compressPdfIfNeeded_(file, onProgress) {
+  if (!file || file.size <= PDF_COMPRESS_THRESHOLD_BYTES) {
+    return Promise.resolve(file);
+  }
+  if (!window.__pdfjsLib || !window.PDFLib) {
+    return Promise.resolve(file); // libs not ready -- try uploading as-is
+  }
+  var pdfjsLib = window.__pdfjsLib;
+  var PDFLib = window.PDFLib;
+
+  return file.arrayBuffer().then(function(buf) {
+    return pdfjsLib.getDocument({ data: buf }).promise;
+  }).then(function(pdfDoc) {
+    var numPages = pdfDoc.numPages;
+    var canvases = [];
+    var i = 0;
+
+    function renderNext() {
+      i++;
+      if (i > numPages) return Promise.resolve(canvases);
+      if (onProgress) onProgress(i, numPages);
+      return pdfDoc.getPage(i).then(function(page) {
+        var viewport0 = page.getViewport({ scale: 1 });
+        var maxDim = 1600;
+        var scale = maxDim / Math.max(viewport0.width, viewport0.height);
+        if (scale > 2) scale = 2;
+        if (scale <= 0 || !isFinite(scale)) scale = 1;
+        var viewport = page.getViewport({ scale: scale });
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+        var ctx = canvas.getContext('2d');
+        return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function() {
+          canvases.push({ canvas: canvas, widthPt: viewport0.width, heightPt: viewport0.height });
+          return renderNext();
+        });
+      });
+    }
+
+    return renderNext();
+  }).then(function(canvases) {
+    function canvasToJpegBytes(canvas, quality) {
+      return new Promise(function(resolve, reject) {
+        canvas.toBlob(function(blob) {
+          if (!blob) { reject(new Error('canvas.toBlob failed')); return; }
+          blob.arrayBuffer().then(resolve, reject);
+        }, 'image/jpeg', quality);
+      });
+    }
+
+    function buildPdfAtQuality(quality) {
+      return PDFLib.PDFDocument.create().then(function(outDoc) {
+        var chain = Promise.resolve();
+        canvases.forEach(function(c) {
+          chain = chain
+            .then(function() { return canvasToJpegBytes(c.canvas, quality); })
+            .then(function(jpgBytes) { return outDoc.embedJpg(jpgBytes); })
+            .then(function(jpgImage) {
+              var pg = outDoc.addPage([c.widthPt, c.heightPt]);
+              pg.drawImage(jpgImage, { x: 0, y: 0, width: c.widthPt, height: c.heightPt });
+            });
+        });
+        return chain.then(function() { return outDoc.save(); });
+      });
+    }
+
+    return buildPdfAtQuality(0.6).then(function(bytes) {
+      if (bytes.length <= PDF_TARGET_MAX_BYTES) return bytes;
+      return buildPdfAtQuality(0.35); // second, more aggressive pass
+    });
+  }).then(function(bytes) {
+    return new Blob([bytes], { type: 'application/pdf' });
+  }).catch(function(err) {
+    console.error('PDF compression failed, uploading original file instead:', err);
+    return file;
+  });
+}
+
 function resetDocForm_() {
   var typeEl = document.getElementById('mDocType');
   var fileEl = document.getElementById('mDocFile');
@@ -5841,59 +5942,79 @@ document.getElementById('mDocUploadBtn').onclick = function() {
   var submitBtn = document.getElementById('mDocUploadBtn');
   var jobForUpload = currentDocsJob;
   submitBtn.disabled = true;
-  submitBtn.textContent = 'กำลังอัปโหลด...';
-  var reader = new FileReader();
-  reader.onload = function() {
-    var dataUrl = String(reader.result || '');
-    var base64 = dataUrl.split(',')[1] || '';
-    var payload = {
-      key: RATINGS_ACCESS_KEY,
-      type: 'job_doc_upload',
-      ts_app: (jobForUpload.ts_app || jobForUpload.job_code || jobForUpload._key || ''),
-      customer: jobForUpload.customer || '',
-      contractor: jobForUpload.contractor || '',
-      docType: docType,
-      fileName: file.name,
-      fileData: base64,
-      uploadedBy: uploader
-    };
-    fetch(RATINGS_WEBAPP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    }).then(function(r) { return r.json(); }).then(function(res) {
+  submitBtn.textContent = file.size > PDF_COMPRESS_THRESHOLD_BYTES ? 'กำลังตรวจสอบไฟล์...' : 'กำลังอัปโหลด...';
+
+  compressPdfIfNeeded_(file, function(cur, total) {
+    submitBtn.textContent = 'กำลังบีบอัดไฟล์ (' + cur + '/' + total + ')...';
+  }).then(function(uploadBlob) {
+    var HARD_CAP_BYTES = 20 * 1024 * 1024;
+    if (uploadBlob.size > HARD_CAP_BYTES) {
       submitBtn.disabled = false;
       submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
-      if (res && res.success) {
-        var key = jobForUpload.ts_app || jobForUpload.job_code || jobForUpload._key || '';
-        if (!RATINGS_SUMMARY.jobDocs) RATINGS_SUMMARY.jobDocs = { byJob: {} };
-        if (!RATINGS_SUMMARY.jobDocs.byJob[key]) RATINGS_SUMMARY.jobDocs.byJob[key] = [];
-        RATINGS_SUMMARY.jobDocs.byJob[key].unshift({
-          docType: docType, fileName: file.name, url: res.url || '', uploadedBy: uploader, timestamp: ''
-        });
-        if (currentDocsJob === jobForUpload) {
-          resetDocForm_();
-          renderJobDocs(jobForUpload);
-        }
-        fetchRatingsSummary();
-      } else {
-        errEl.textContent = 'อัปโหลดไม่สำเร็จ: ' + ((res && res.error) || 'unknown error');
-        errEl.style.display = '';
-      }
-    }).catch(function(err) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
-      errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+      errEl.textContent = 'ไฟล์มีขนาดใหญ่เกินไปแม้บีบอัดแล้ว (' +
+        (uploadBlob.size / 1024 / 1024).toFixed(1) + ' MB) กรุณาลดขนาดไฟล์ด้วยตนเองก่อนอัปโหลด';
       errEl.style.display = '';
-    });
-  };
-  reader.onerror = function() {
+      return;
+    }
+    submitBtn.textContent = 'กำลังอัปโหลด...';
+    var reader = new FileReader();
+    reader.onload = function() {
+      var dataUrl = String(reader.result || '');
+      var base64 = dataUrl.split(',')[1] || '';
+      var payload = {
+        key: RATINGS_ACCESS_KEY,
+        type: 'job_doc_upload',
+        ts_app: (jobForUpload.ts_app || jobForUpload.job_code || jobForUpload._key || ''),
+        customer: jobForUpload.customer || '',
+        contractor: jobForUpload.contractor || '',
+        docType: docType,
+        fileName: file.name,
+        fileData: base64,
+        uploadedBy: uploader
+      };
+      fetch(RATINGS_WEBAPP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }).then(function(r) { return r.json(); }).then(function(res) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+        if (res && res.success) {
+          var key = jobForUpload.ts_app || jobForUpload.job_code || jobForUpload._key || '';
+          if (!RATINGS_SUMMARY.jobDocs) RATINGS_SUMMARY.jobDocs = { byJob: {} };
+          if (!RATINGS_SUMMARY.jobDocs.byJob[key]) RATINGS_SUMMARY.jobDocs.byJob[key] = [];
+          RATINGS_SUMMARY.jobDocs.byJob[key].unshift({
+            docType: docType, fileName: file.name, url: res.url || '', uploadedBy: uploader, timestamp: ''
+          });
+          if (currentDocsJob === jobForUpload) {
+            resetDocForm_();
+            renderJobDocs(jobForUpload);
+          }
+          fetchRatingsSummary();
+        } else {
+          errEl.textContent = 'อัปโหลดไม่สำเร็จ: ' + ((res && res.error) || 'unknown error');
+          errEl.style.display = '';
+        }
+      }).catch(function(err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+        errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+        errEl.style.display = '';
+      });
+    };
+    reader.onerror = function() {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+      errEl.textContent = 'อ่านไฟล์ไม่สำเร็จ';
+      errEl.style.display = '';
+    };
+    reader.readAsDataURL(uploadBlob);
+  }).catch(function(err) {
     submitBtn.disabled = false;
     submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
-    errEl.textContent = 'อ่านไฟล์ไม่สำเร็จ';
+    errEl.textContent = 'บีบอัดไฟล์ไม่สำเร็จ: ' + err.message;
     errEl.style.display = '';
-  };
-  reader.readAsDataURL(file);
+  });
 };
 
 document.getElementById('prevMonth').onclick = function() { cur.setMonth(cur.getMonth()-1); renderCalendar(); };

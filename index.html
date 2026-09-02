@@ -687,6 +687,21 @@
     <div class="modal-row" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
       <button class="secondary" id="mCopyBtn" style="width:100%;">📋 คัดลอกข้อมูล</button>
     </div>
+    <div class="modal-row" id="mDocsRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+      <div class="k" style="margin-bottom:8px;font-weight:600;">เอกสารประกอบงาน:</div>
+      <div id="mDocsList" style="margin-bottom:10px;font-size:13px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <select id="mDocType" style="flex:1 1 140px;">
+          <option value="ใบเสนอราคา">ใบเสนอราคา</option>
+          <option value="เอกสารสำรวจ">เอกสารสำรวจ</option>
+          <option value="อื่นๆ">อื่นๆ</option>
+        </select>
+        <input type="file" id="mDocFile" accept="application/pdf,.pdf" style="flex:2 1 200px;">
+      </div>
+      <input type="text" id="mDocUploader" placeholder="ชื่อผู้อัปโหลด" style="width:100%;box-sizing:border-box;margin-bottom:8px;">
+      <div id="mDocError" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none;"></div>
+      <button type="button" class="secondary" id="mDocUploadBtn">📎 เพิ่มเอกสาร (PDF)</button>
+    </div>
     <div class="modal-row" id="mChecklistRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
       <div class="k" style="margin-bottom:8px;font-weight:600;">Installation progress checklist:</div>
       <div style="margin-bottom:8px;max-width:220px;">
@@ -895,7 +910,7 @@ var RATINGS_CRITERIA = [
   { key: 'testing', label: 'ทดสอบระบบก่อนส่งมอบ (Testing & Commissioning)', hint: 'ตรวจสอบแรงดัน ขั้วสาย การสื่อสาร Monitoring และทดสอบการทำงานครบทุกฟังก์ชัน' },
   { key: 'handover', label: 'ส่งมอบพร้อมเอกสาร (Documentation & Handover)', hint: 'ถ่ายรูป Before/After, ส่งรายงานติดตั้ง และอธิบายการใช้งานให้ลูกค้า' }
 ];
-var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} }, checklist: { byJob: {} }, csat: { install: { byJob: {} }, survey: { byJob: {} } } };
+var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} }, checklist: { byJob: {} }, csat: { install: { byJob: {} }, survey: { byJob: {} } }, jobDocs: { byJob: {} } };
 var currentRatingJob = null;
 var currentRatingScores = {};
 var currentLogJob = null;
@@ -907,6 +922,16 @@ var currentCsatJob = null;
 var currentCsatScores = {};
 var currentSurveyCsatJob = null;
 var currentSurveyCsatScores = {};
+var currentDocsJob = null;
+
+// Job document upload/view (Sure's request, 2026-08-29): staff upload PDF
+// quotations, survey documents, etc. against a job so anyone can view them
+// later from the calendar -- available regardless of whether the modal was
+// opened from a survey or install event, since the documents belong to the
+// job as a whole, not to one specific visit. Files are stored in a shared
+// Drive folder by the Contracor_ratings Apps Script; only the resulting
+// view link + metadata are kept in this app's own data model.
+var JOB_DOC_TYPES_ = ['ใบเสนอราคา', 'เอกสารสำรวจ', 'อื่นๆ'];
 
 // Customer Satisfaction survey (Sure's request, 2026-08-24): staff call the
 // customer after install and score 6 fixed questions 1-5 each. Multiple
@@ -1704,6 +1729,20 @@ function openModalForEvent(e) {
       currentChecklistJob = null;
     }
   }
+  // Job documents (Sure's request, 2026-08-29): shown for BOTH survey and
+  // install events, unlike the checklist/day-log sections above, since a
+  // quotation or survey PDF is relevant to the job as a whole regardless of
+  // which visit type the modal happens to be opened from.
+  var mDocsRow = document.getElementById('mDocsRow');
+  if (mDocsRow && mJob) {
+    mDocsRow.style.display = 'flex';
+    currentDocsJob = mJob;
+    resetDocForm_();
+    renderJobDocs(mJob);
+  } else if (mDocsRow) {
+    mDocsRow.style.display = 'none';
+    currentDocsJob = null;
+  }
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -1726,6 +1765,37 @@ function logStatusClass_(val) {
   if (val === 'เสร็จ' || val === 'สามารถติดตั้งได้') return 'log-ok';
   if (val === 'ลูกค้าติดต่อแจ้งปัญหา' || val === 'ลูกค้าติดต่อสอบถาม') return 'log-note';
   return 'log-pending';
+}
+
+// Job document upload/view (Sure's request, 2026-08-29).
+function resetDocForm_() {
+  var typeEl = document.getElementById('mDocType');
+  var fileEl = document.getElementById('mDocFile');
+  var uploaderEl = document.getElementById('mDocUploader');
+  var errEl = document.getElementById('mDocError');
+  if (typeEl) typeEl.value = JOB_DOC_TYPES_[0];
+  if (fileEl) fileEl.value = '';
+  if (uploaderEl) uploaderEl.value = '';
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+}
+
+function renderJobDocs(job) {
+  var host = document.getElementById('mDocsList');
+  if (!host) return;
+  var key = job && (job.ts_app || job.job_code || job._key) || '';
+  var docs = (RATINGS_SUMMARY.jobDocs && RATINGS_SUMMARY.jobDocs.byJob && RATINGS_SUMMARY.jobDocs.byJob[key]) || [];
+  if (!docs.length) {
+    host.innerHTML = '<div style="color:var(--muted);">ยังไม่มีเอกสารที่อัปโหลด</div>';
+    return;
+  }
+  host.innerHTML = docs.map(function(d) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">' +
+      '<div><span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600;background:#eef2ff;color:#3730a3;margin-right:6px;">' +
+        escHtml(d.docType) + '</span>' + escHtml(d.fileName) +
+        '<div style="font-size:11px;color:var(--muted);">โดย ' + escHtml(d.uploadedBy || '-') + (d.timestamp ? (' · ' + escHtml(d.timestamp)) : '') + '</div></div>' +
+      '<a href="' + escHtml(d.url) + '" target="_blank" rel="noopener" class="secondary" style="padding:4px 10px;font-size:12px;border-radius:6px;text-decoration:none;flex-shrink:0;">เปิดดู</a>' +
+    '</div>';
+  }).join('');
 }
 
 // Copy-to-clipboard button (Sure's request, 2026-08-25): staff doing a
@@ -5735,6 +5805,95 @@ document.getElementById('surveyCsatModalSubmit').onclick = function() {
     errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
     errEl.style.display = '';
   });
+};
+
+document.getElementById('mDocUploadBtn').onclick = function() {
+  var errEl = document.getElementById('mDocError');
+  var fileEl = document.getElementById('mDocFile');
+  var typeEl = document.getElementById('mDocType');
+  var uploaderEl = document.getElementById('mDocUploader');
+  var uploader = uploaderEl.value.trim();
+  var docType = typeEl.value;
+  var file = fileEl.files && fileEl.files[0];
+  if (!currentDocsJob) return;
+  if (!file) {
+    errEl.textContent = 'กรุณาเลือกไฟล์ PDF';
+    errEl.style.display = '';
+    return;
+  }
+  var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  if (!isPdf) {
+    errEl.textContent = 'รองรับเฉพาะไฟล์ PDF เท่านั้น';
+    errEl.style.display = '';
+    return;
+  }
+  if (!uploader) {
+    errEl.textContent = 'กรุณาใส่ชื่อผู้อัปโหลด';
+    errEl.style.display = '';
+    return;
+  }
+  if (!ratingsConfigured()) {
+    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางอัปโหลด (RATINGS_WEBAPP_URL)';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  var submitBtn = document.getElementById('mDocUploadBtn');
+  var jobForUpload = currentDocsJob;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'กำลังอัปโหลด...';
+  var reader = new FileReader();
+  reader.onload = function() {
+    var dataUrl = String(reader.result || '');
+    var base64 = dataUrl.split(',')[1] || '';
+    var payload = {
+      key: RATINGS_ACCESS_KEY,
+      type: 'job_doc_upload',
+      ts_app: (jobForUpload.ts_app || jobForUpload.job_code || jobForUpload._key || ''),
+      customer: jobForUpload.customer || '',
+      contractor: jobForUpload.contractor || '',
+      docType: docType,
+      fileName: file.name,
+      fileData: base64,
+      uploadedBy: uploader
+    };
+    fetch(RATINGS_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).then(function(r) { return r.json(); }).then(function(res) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+      if (res && res.success) {
+        var key = jobForUpload.ts_app || jobForUpload.job_code || jobForUpload._key || '';
+        if (!RATINGS_SUMMARY.jobDocs) RATINGS_SUMMARY.jobDocs = { byJob: {} };
+        if (!RATINGS_SUMMARY.jobDocs.byJob[key]) RATINGS_SUMMARY.jobDocs.byJob[key] = [];
+        RATINGS_SUMMARY.jobDocs.byJob[key].unshift({
+          docType: docType, fileName: file.name, url: res.url || '', uploadedBy: uploader, timestamp: ''
+        });
+        if (currentDocsJob === jobForUpload) {
+          resetDocForm_();
+          renderJobDocs(jobForUpload);
+        }
+        fetchRatingsSummary();
+      } else {
+        errEl.textContent = 'อัปโหลดไม่สำเร็จ: ' + ((res && res.error) || 'unknown error');
+        errEl.style.display = '';
+      }
+    }).catch(function(err) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+      errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+      errEl.style.display = '';
+    });
+  };
+  reader.onerror = function() {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+    errEl.textContent = 'อ่านไฟล์ไม่สำเร็จ';
+    errEl.style.display = '';
+  };
+  reader.readAsDataURL(file);
 };
 
 document.getElementById('prevMonth').onclick = function() { cur.setMonth(cur.getMonth()-1); renderCalendar(); };

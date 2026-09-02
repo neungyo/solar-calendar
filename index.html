@@ -255,6 +255,15 @@
   .login-box button { width:100%; margin-top:18px; padding:10px; font-size:14px; }
   .login-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
   .logout-link { font-size:12px; color:var(--muted); text-decoration:underline; cursor:pointer; margin-left:10px; }
+  /* Upload "arc reactor" spinner (Sure's request, 2026-09-02): a glowing
+     rotating triangle shown on the upload button while a document is being
+     checked/compressed/sent, so it's obvious the system is working. */
+  .iron-spinner { display:none; width:15px; height:15px; margin-right:7px; vertical-align:-3px; animation:iron-spin 0.9s linear infinite; }
+  .iron-spinner svg { display:block; width:100%; height:100%; }
+  @keyframes iron-spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+  .doc-item { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); }
+  .doc-delete-btn { background:none; border:none; color:var(--red); cursor:pointer; font-size:15px; padding:2px 6px; flex-shrink:0; line-height:1; }
+  .doc-delete-btn:hover { opacity:0.7; }
 </style>
 </head>
 <body>
@@ -700,7 +709,7 @@
       </div>
       <input type="text" id="mDocUploader" placeholder="ชื่อผู้อัปโหลด" style="width:100%;box-sizing:border-box;margin-bottom:8px;">
       <div id="mDocError" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none;"></div>
-      <button type="button" class="secondary" id="mDocUploadBtn">📎 เพิ่มเอกสาร (PDF)</button>
+      <button type="button" class="secondary" id="mDocUploadBtn"><span class="iron-spinner" id="mDocUploadSpinner"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,2 22,20 2,20" fill="none" stroke="#00d4ff" stroke-width="2.2" stroke-linejoin="round" style="filter:drop-shadow(0 0 3px #00d4ff);"/></svg></span><span id="mDocUploadBtnLabel">📎 เพิ่มเอกสาร (PDF)</span></button>
     </div>
     <div class="modal-row" id="mChecklistRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
       <div class="k" style="margin-bottom:8px;font-weight:600;">Installation progress checklist:</div>
@@ -1890,13 +1899,63 @@ function renderJobDocs(job) {
     return;
   }
   host.innerHTML = docs.map(function(d) {
-    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">' +
+    return '<div class="doc-item">' +
       '<div><span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600;background:#eef2ff;color:#3730a3;margin-right:6px;">' +
         escHtml(d.docType) + '</span>' + escHtml(d.fileName) +
         '<div style="font-size:11px;color:var(--muted);">โดย ' + escHtml(d.uploadedBy || '-') + (d.timestamp ? (' · ' + escHtml(d.timestamp)) : '') + '</div></div>' +
-      '<a href="' + escHtml(d.url) + '" target="_blank" rel="noopener" class="secondary" style="padding:4px 10px;font-size:12px;border-radius:6px;text-decoration:none;flex-shrink:0;">เปิดดู</a>' +
+      '<div style="display:flex;gap:4px;flex-shrink:0;align-items:center;">' +
+        '<a href="' + escHtml(d.url) + '" target="_blank" rel="noopener" class="secondary" style="padding:4px 10px;font-size:12px;border-radius:6px;text-decoration:none;">เปิดดู</a>' +
+        '<button type="button" class="doc-delete-btn" data-row="' + d.row + '" title="ลบเอกสารนี้">🗑</button>' +
+      '</div>' +
     '</div>';
   }).join('');
+}
+
+if (document.getElementById('mDocsList')) {
+  document.getElementById('mDocsList').addEventListener('click', function(ev) {
+    var delBtn = ev.target.closest('.doc-delete-btn');
+    if (delBtn) { deleteJobDoc(parseInt(delBtn.getAttribute('data-row'), 10)); }
+  });
+}
+
+function setDocUploadBtnLabel_(text, busy) {
+  var spinner = document.getElementById('mDocUploadSpinner');
+  var label = document.getElementById('mDocUploadBtnLabel');
+  if (label) label.textContent = text;
+  if (spinner) spinner.style.display = busy ? 'inline-block' : 'none';
+}
+
+function deleteJobDoc(row) {
+  if (!currentDocsJob) return;
+  if (!row || row < 2) return;
+  if (!confirm('ยืนยันลบเอกสารนี้หรือไม่? (จะลบไฟล์ออกจาก Google Drive ด้วย)')) return;
+  var job = currentDocsJob;
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      key: RATINGS_ACCESS_KEY,
+      type: 'job_doc_delete',
+      ts_app: (job.ts_app || job.job_code || job._key || ''),
+      row: row
+    })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (!data || !data.success) {
+      var msg = data && data.error === 'row_mismatch'
+        ? 'ข้อมูลมีการเปลี่ยนแปลงตั้งแต่โหลดหน้านี้ กรุณาปิดและเปิดหน้าต่างนี้ใหม่แล้วลองอีกครั้ง'
+        : ((data && data.error) || 'ลบไม่สำเร็จ');
+      alert(msg);
+      return;
+    }
+    var key = job.ts_app || job.job_code || job._key || '';
+    if (RATINGS_SUMMARY.jobDocs && RATINGS_SUMMARY.jobDocs.byJob && RATINGS_SUMMARY.jobDocs.byJob[key]) {
+      RATINGS_SUMMARY.jobDocs.byJob[key] = RATINGS_SUMMARY.jobDocs.byJob[key].filter(function(d) { return d.row !== row; });
+    }
+    if (currentDocsJob === job) renderJobDocs(job);
+    fetchRatingsSummary();
+  }).catch(function(err) {
+    alert('เชื่อมต่อไม่สำเร็จ: ' + err.message);
+  });
 }
 
 // Copy-to-clipboard button (Sure's request, 2026-08-25): staff doing a
@@ -5942,21 +6001,21 @@ document.getElementById('mDocUploadBtn').onclick = function() {
   var submitBtn = document.getElementById('mDocUploadBtn');
   var jobForUpload = currentDocsJob;
   submitBtn.disabled = true;
-  submitBtn.textContent = file.size > PDF_COMPRESS_THRESHOLD_BYTES ? 'กำลังตรวจสอบไฟล์...' : 'กำลังอัปโหลด...';
+  setDocUploadBtnLabel_(file.size > PDF_COMPRESS_THRESHOLD_BYTES ? 'กำลังตรวจสอบไฟล์...' : 'กำลังอัปโหลด...', true);
 
   compressPdfIfNeeded_(file, function(cur, total) {
-    submitBtn.textContent = 'กำลังบีบอัดไฟล์ (' + cur + '/' + total + ')...';
+    setDocUploadBtnLabel_('กำลังบีบอัดไฟล์ (' + cur + '/' + total + ')...', true);
   }).then(function(uploadBlob) {
     var HARD_CAP_BYTES = 20 * 1024 * 1024;
     if (uploadBlob.size > HARD_CAP_BYTES) {
       submitBtn.disabled = false;
-      submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+      setDocUploadBtnLabel_('📎 เพิ่มเอกสาร (PDF)', false);
       errEl.textContent = 'ไฟล์มีขนาดใหญ่เกินไปแม้บีบอัดแล้ว (' +
         (uploadBlob.size / 1024 / 1024).toFixed(1) + ' MB) กรุณาลดขนาดไฟล์ด้วยตนเองก่อนอัปโหลด';
       errEl.style.display = '';
       return;
     }
-    submitBtn.textContent = 'กำลังอัปโหลด...';
+    setDocUploadBtnLabel_('กำลังอัปโหลด...', true);
     var reader = new FileReader();
     reader.onload = function() {
       var dataUrl = String(reader.result || '');
@@ -5978,13 +6037,13 @@ document.getElementById('mDocUploadBtn').onclick = function() {
         body: JSON.stringify(payload)
       }).then(function(r) { return r.json(); }).then(function(res) {
         submitBtn.disabled = false;
-        submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+        setDocUploadBtnLabel_('📎 เพิ่มเอกสาร (PDF)', false);
         if (res && res.success) {
           var key = jobForUpload.ts_app || jobForUpload.job_code || jobForUpload._key || '';
           if (!RATINGS_SUMMARY.jobDocs) RATINGS_SUMMARY.jobDocs = { byJob: {} };
           if (!RATINGS_SUMMARY.jobDocs.byJob[key]) RATINGS_SUMMARY.jobDocs.byJob[key] = [];
           RATINGS_SUMMARY.jobDocs.byJob[key].unshift({
-            docType: docType, fileName: file.name, url: res.url || '', uploadedBy: uploader, timestamp: ''
+            row: res.row, docType: docType, fileName: file.name, url: res.url || '', uploadedBy: uploader, timestamp: ''
           });
           if (currentDocsJob === jobForUpload) {
             resetDocForm_();
@@ -5997,21 +6056,21 @@ document.getElementById('mDocUploadBtn').onclick = function() {
         }
       }).catch(function(err) {
         submitBtn.disabled = false;
-        submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+        setDocUploadBtnLabel_('📎 เพิ่มเอกสาร (PDF)', false);
         errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
         errEl.style.display = '';
       });
     };
     reader.onerror = function() {
       submitBtn.disabled = false;
-      submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+      setDocUploadBtnLabel_('📎 เพิ่มเอกสาร (PDF)', false);
       errEl.textContent = 'อ่านไฟล์ไม่สำเร็จ';
       errEl.style.display = '';
     };
     reader.readAsDataURL(uploadBlob);
   }).catch(function(err) {
     submitBtn.disabled = false;
-    submitBtn.textContent = '📎 เพิ่มเอกสาร (PDF)';
+    setDocUploadBtnLabel_('📎 เพิ่มเอกสาร (PDF)', false);
     errEl.textContent = 'บีบอัดไฟล์ไม่สำเร็จ: ' + err.message;
     errEl.style.display = '';
   });

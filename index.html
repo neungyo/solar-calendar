@@ -182,6 +182,15 @@
   .csat-status-banner { font-size:12px; padding:8px 10px; border-radius:6px; margin-bottom:10px; }
   .csat-status-banner.open { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
   .csat-status-banner.closed { background:#f3f4f6; color:#4b5563; border:1px solid var(--border); }
+  /* Evaluation tab (Sure's request, 2026-09-04): a dedicated coverage bar
+     per questionnaire showing how many jobs in that table already have a
+     CSAT entry (scored or an outcome attempt) vs how many don't yet. */
+  .csat-coverage-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
+  .csat-coverage-item { display:flex; align-items:center; gap:10px; flex:1 1 260px; min-width:220px; }
+  .csat-coverage-track { flex:1; height:14px; border-radius:7px; background:#e5e7eb; overflow:hidden; }
+  .csat-coverage-fill { height:100%; border-radius:7px 0 0 7px; }
+  .csat-coverage-label { font-size:12px; color:#374151; white-space:nowrap; }
+  .csat-coverage-title { font-size:12px; font-weight:600; color:#1f2430; margin-bottom:4px; }
   .rating-crit-label { font-size:14px; font-weight:600; }
   .rating-crit-hint { font-size:12px; color:var(--muted); margin:2px 0 6px; }
   .stat-value { font-size:28px; font-weight:700; color:var(--text); line-height:1.2; }
@@ -338,6 +347,7 @@
   <button class="secondary view-tab-btn active" id="tabCalendarBtn">📅 ปฏิทิน</button>
   <button class="secondary view-tab-btn" id="tabDocBtn">📋 ตารางเอกสารขนานไฟ</button>
   <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง/ประเมิน</button>
+  <button class="secondary view-tab-btn" id="tabEvalBtn">📝 การประเมิน</button>
   <button class="secondary view-tab-btn" id="tabSlaBtn">🎯 SLA ติดตั้ง</button>
   <button class="secondary view-tab-btn" id="tabAllocBtn">🧭 แนะนำ ผรม. งานใหม่</button>
   <button class="secondary view-tab-btn" id="tabDashBtn">📈 Dashboard</button>
@@ -515,6 +525,84 @@
         </tr>
       </thead>
       <tbody id="overviewTableCompletedBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Evaluation-only tab (Sure's request, 2026-09-04): pulls the same 3
+     status tables out of the Overview tab, but stripped down to just the
+     identifying columns + the 3 evaluation columns (คะแนนคุณภาพ,
+     คะแนนความพึงพอใจ สำรวจ/ติดตั้ง) so staff doing rating work don't have to
+     scroll past the TAC/FAT/document columns or the charts above them.
+     Each table also gets a coverage bar showing how many jobs in it already
+     have a CSAT entry recorded vs how many are still outstanding. -->
+<div id="evalWrap" style="display:none;">
+  <div class="card-box">
+    <div class="overview-section-title">รายละเอียดงาน — สำรวจแล้ว รอกำหนดติดตั้ง</div>
+    <div class="csat-coverage-row">
+      <div class="csat-coverage-item">
+        <div style="flex:1;">
+          <div class="csat-coverage-title">ความพึงพอใจ (สำรวจ)</div>
+          <div id="evalStalledSurveyCoverage"></div>
+        </div>
+      </div>
+    </div>
+    <div class="doc-table-toolbar" id="evalTableStalledCount"></div>
+    <table class="doc-table" id="evalTableStalled">
+      <thead>
+        <tr>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th>
+        </tr>
+      </thead>
+      <tbody id="evalTableStalledBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box">
+    <div class="overview-section-title">รายละเอียดงาน — มีกำหนดติดตั้งแล้ว</div>
+    <div class="csat-coverage-row">
+      <div class="csat-coverage-item">
+        <div style="flex:1;">
+          <div class="csat-coverage-title">ความพึงพอใจ (สำรวจ)</div>
+          <div id="evalScheduledSurveyCoverage"></div>
+        </div>
+      </div>
+    </div>
+    <div class="doc-table-toolbar" id="evalTableScheduledCount"></div>
+    <table class="doc-table" id="evalTableScheduled">
+      <thead>
+        <tr>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th>
+        </tr>
+      </thead>
+      <tbody id="evalTableScheduledBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card-box">
+    <div class="overview-section-title">รายละเอียดงาน — ติดตั้งเสร็จสิ้นแล้ว</div>
+    <div class="csat-coverage-row">
+      <div class="csat-coverage-item">
+        <div style="flex:1;">
+          <div class="csat-coverage-title">ความพึงพอใจ (สำรวจ)</div>
+          <div id="evalCompletedSurveyCoverage"></div>
+        </div>
+      </div>
+      <div class="csat-coverage-item">
+        <div style="flex:1;">
+          <div class="csat-coverage-title">ความพึงพอใจ (ติดตั้ง)</div>
+          <div id="evalCompletedInstallCoverage"></div>
+        </div>
+      </div>
+    </div>
+    <div class="doc-table-toolbar" id="evalTableCompletedCount"></div>
+    <table class="doc-table" id="evalTableCompleted">
+      <thead>
+        <tr>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th>
+        </tr>
+      </thead>
+      <tbody id="evalTableCompletedBody"></tbody>
     </table>
   </div>
 </div>
@@ -1078,6 +1166,7 @@ function fetchRatingsSummary() {
     if (data && !data.error) {
       RATINGS_SUMMARY = data;
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) renderOverviewTable();
+      if (document.getElementById('tabEvalBtn').classList.contains('active')) renderEvalTable();
       if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderManualRatingChart(); renderManualRatingTable(); renderSlaTable(); }
       if (document.getElementById('tabAllocBtn').classList.contains('active')) renderAllocTable();
       // Unconditional (fix 2026-07-27): the Dashboard's rating section was
@@ -3013,7 +3102,11 @@ function renderOverviewSubTable(bodyId, countId, jobs, cat) {
 // the very top (is_changed first), then by the most recent relevant date as
 // a tie-breaker -- so the newest/most-recently-updated status is always at
 // the top of its own table instead of buried in one long combined list.
-function renderOverviewTable() {
+// Shared by renderOverviewTable and renderEvalTable (added 2026-09-04) so
+// both tabs group/sort jobs into the same 3 status buckets identically --
+// the Evaluation tab is meant to show the same rows as the Overview tab's
+// detail tables, just with fewer columns.
+function overviewCategoryGroups_() {
   var allJobs = currentFilteredJobs().filter(function(j) { return jobCategory(j) !== null; });
   var groups = { stalled: [], scheduled: [], completed: [] };
   allJobs.forEach(function(j) {
@@ -3030,10 +3123,87 @@ function renderOverviewTable() {
       return da < db ? 1 : (da > db ? -1 : 0);
     });
   });
+  return groups;
+}
 
+function renderOverviewTable() {
+  var groups = overviewCategoryGroups_();
   renderOverviewSubTable('overviewTableStalledBody', 'overviewTableStalledCount', groups.stalled, 'stalled');
   renderOverviewSubTable('overviewTableScheduledBody', 'overviewTableScheduledCount', groups.scheduled, 'scheduled');
   renderOverviewSubTable('overviewTableCompletedBody', 'overviewTableCompletedCount', groups.completed, 'completed');
+}
+
+// ===================== Evaluation tab (Sure's request, 2026-09-04) =====================
+// A leaner version of the 3 Overview detail tables, dedicated purely to
+// rating/CSAT work: same rows and same cell-renderer functions
+// (renderOverviewRatingCell/renderOverviewSurveyCsatCell/renderOverviewCsatCell)
+// as the Overview tab, but without the address/TAC/FAT/receipt columns that
+// aren't relevant to entering scores. Each table also gets a coverage bar
+// showing how many of its jobs already have a CSAT entry recorded.
+function renderEvalRow(j, i, cat) {
+  var tsAppNum = j.ts_app || j.job_code || j._key || '-';
+  return '<tr>' +
+    '<td>' + (i + 1) + '</td>' +
+    '<td>' + escHtml(tsAppNum) + '</td>' +
+    '<td>' + escHtml(j.customer || '-') + '</td>' +
+    '<td>' + escHtml(j.phone || '-') + '</td>' +
+    '<td>' + escHtml(contractorDisplayName(j.contractor) || '-') + '</td>' +
+    '<td>' + escHtml(j.survey_date || '-') + '</td>' +
+    '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
+    '<td><span class="ov-badge ' + cat + '">' + escHtml(OVERVIEW_STATUS_LABELS[cat]) + '</span></td>' +
+    '<td>' + renderOverviewRatingCell(j, cat) + '</td>' +
+    '<td>' + renderOverviewSurveyCsatCell(j, cat) + '</td>' +
+    '<td>' + renderOverviewCsatCell(j, cat) + '</td>' +
+    '</tr>';
+}
+
+function renderEvalSubTable(bodyId, countId, jobs, cat) {
+  var body = document.getElementById(bodyId);
+  var countEl = document.getElementById(countId);
+  if (countEl) countEl.textContent = 'ทั้งหมด ' + jobs.length + ' งาน';
+  if (!body) return;
+  body.innerHTML = jobs.map(function(j, i) { return renderEvalRow(j, i, cat); }).join('');
+}
+
+// A job counts as "recorded" for a given questionnaire type if it has ANY
+// entry at all -- a real score OR a logged call-outcome attempt (ไม่รับสาย/
+// ติดต่อไม่ได้/ไม่ประสงค์ให้ข้อมูล/ปิดเคส) -- since either way, staff have
+// already acted on it; only jobs with zero entries are "ยังไม่มีการบันทึก".
+function csatCoverageStats_(jobs, type) {
+  var recorded = 0;
+  jobs.forEach(function(j) {
+    var key = j.ts_app || j.job_code || j._key || '';
+    var info = RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat[type] && RATINGS_SUMMARY.csat[type].byJob && RATINGS_SUMMARY.csat[type].byJob[key];
+    if (info && ((info.count || 0) > 0 || (info.attemptCount || 0) > 0)) recorded++;
+  });
+  return { recorded: recorded, notRecorded: jobs.length - recorded, total: jobs.length };
+}
+
+function renderCsatCoverageBar_(hostId, jobs, type, color) {
+  var host = document.getElementById(hostId);
+  if (!host) return;
+  var stats = csatCoverageStats_(jobs, type);
+  if (stats.total === 0) {
+    host.innerHTML = '<div class="chart-empty" style="padding:6px 0;">ไม่มีงานในตารางนี้</div>';
+    return;
+  }
+  var pct = Math.round((stats.recorded / stats.total) * 100);
+  host.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;">' +
+      '<div class="csat-coverage-track"><div class="csat-coverage-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>' +
+      '<div class="csat-coverage-label">บันทึกแล้ว ' + stats.recorded + '/' + stats.total + ' (' + pct + '%) &middot; ยังไม่มี ' + stats.notRecorded + '</div>' +
+    '</div>';
+}
+
+function renderEvalTable() {
+  var groups = overviewCategoryGroups_();
+  renderEvalSubTable('evalTableStalledBody', 'evalTableStalledCount', groups.stalled, 'stalled');
+  renderEvalSubTable('evalTableScheduledBody', 'evalTableScheduledCount', groups.scheduled, 'scheduled');
+  renderEvalSubTable('evalTableCompletedBody', 'evalTableCompletedCount', groups.completed, 'completed');
+  renderCsatCoverageBar_('evalStalledSurveyCoverage', groups.stalled, 'survey', '#d97706');
+  renderCsatCoverageBar_('evalScheduledSurveyCoverage', groups.scheduled, 'survey', '#d97706');
+  renderCsatCoverageBar_('evalCompletedSurveyCoverage', groups.completed, 'survey', '#d97706');
+  renderCsatCoverageBar_('evalCompletedInstallCoverage', groups.completed, 'install', '#2563eb');
 }
 
 // Per-contractor workload/pipeline breakdown -- how many jobs each
@@ -5816,6 +5986,7 @@ function switchView(view) {
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
   document.getElementById('tabOverviewBtn').classList.toggle('active', view === 'overview');
+  document.getElementById('tabEvalBtn').classList.toggle('active', view === 'eval');
   document.getElementById('tabSlaBtn').classList.toggle('active', view === 'sla');
   document.getElementById('tabAllocBtn').classList.toggle('active', view === 'alloc');
   document.getElementById('tabDashBtn').classList.toggle('active', view === 'dash');
@@ -5825,12 +5996,14 @@ function switchView(view) {
   document.getElementById('zoomControls').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('docTableWrap').style.display = (view === 'doc') ? '' : 'none';
   document.getElementById('overviewWrap').style.display = (view === 'overview') ? '' : 'none';
+  document.getElementById('evalWrap').style.display = (view === 'eval') ? '' : 'none';
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   document.getElementById('allocWrap').style.display = (view === 'alloc') ? '' : 'none';
   document.getElementById('dashWrap').style.display = (view === 'dash') ? '' : 'none';
   document.getElementById('projectWrap').style.display = (view === 'project') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderStalledContractorChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
+  if (view === 'eval') { renderEvalTable(); }
   if (view === 'sla') { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderTacDocChart(); renderTacDocTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (view === 'alloc') { renderAllocTable(); }
   if (view === 'dash') { renderDashboard(); }
@@ -5841,6 +6014,7 @@ function onFiltersChanged() {
   renderCalendar();
   if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderStalledContractorChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
+  if (document.getElementById('tabEvalBtn').classList.contains('active')) { renderEvalTable(); }
   if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderTacDocChart(); renderTacDocTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (document.getElementById('tabAllocBtn').classList.contains('active')) { renderAllocTable(); }
   if (document.getElementById('tabDashBtn').classList.contains('active')) { renderDashboard(); }
@@ -5850,6 +6024,7 @@ document.getElementById('tabProjectBtn').onclick = function() { switchView('proj
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
 document.getElementById('tabDocBtn').onclick = function() { switchView('doc'); };
 document.getElementById('tabOverviewBtn').onclick = function() { switchView('overview'); };
+document.getElementById('tabEvalBtn').onclick = function() { switchView('eval'); };
 document.getElementById('tabAllocBtn').onclick = function() { switchView('alloc'); };
 var allocDateInputEl = document.getElementById('allocDateInput');
 if (allocDateInputEl) {
@@ -6574,6 +6749,7 @@ function fetchData(isManualClick) {
       renderCalendar();
       if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderStalledContractorChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
+      if (document.getElementById('tabEvalBtn').classList.contains('active')) { renderEvalTable(); }
       if (document.getElementById('tabProjectBtn').classList.contains('active')) { renderProjectTab(); }
       updateStatusText(false);
       if (statusEl) statusEl.textContent = isManualClick ? '✓ อัปเดตข้อมูลล่าสุดเรียบร้อย' : '';

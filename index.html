@@ -171,6 +171,17 @@
   .csat-score-btn.selected { background:#dbeafe; border-color:#2563eb; color:#1e3a8a; font-weight:700; }
   .survey-csat-score-btn { flex:1; padding:6px 0; border:1px solid var(--border); border-radius:6px; background:#fff; color:#111827; cursor:pointer; font-size:13px; text-align:center; }
   .survey-csat-score-btn.selected { background:#fef3c7; border-color:#d97706; color:#92400e; font-weight:700; }
+  /* Call-outcome buttons (added 2026-09-03): "ไม่รับสาย / ติดต่อไม่ได้ /
+     ไม่ประสงค์ให้ข้อมูล" -- an alternative to a 1-5 score for this call
+     attempt, shared visual style between the install and survey CSAT
+     modals. */
+  .outcome-btn-row { display:flex; gap:6px; margin:4px 0 4px; flex-wrap:wrap; }
+  .csat-outcome-btn, .survey-csat-outcome-btn { flex:1 1 30%; padding:7px 4px; border:1px solid var(--border); border-radius:6px; background:#fff; color:#374151; cursor:pointer; font-size:12px; text-align:center; }
+  .csat-outcome-btn.selected { background:#fee2e2; border-color:#dc2626; color:#991b1b; font-weight:700; }
+  .survey-csat-outcome-btn.selected { background:#fef3c7; border-color:#d97706; color:#92400e; font-weight:700; }
+  .csat-status-banner { font-size:12px; padding:8px 10px; border-radius:6px; margin-bottom:10px; }
+  .csat-status-banner.open { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+  .csat-status-banner.closed { background:#f3f4f6; color:#4b5563; border:1px solid var(--border); }
   .rating-crit-label { font-size:14px; font-weight:600; }
   .rating-crit-hint { font-size:12px; color:var(--muted); margin:2px 0 6px; }
   .stat-value { font-size:28px; font-weight:700; color:var(--text); line-height:1.2; }
@@ -705,7 +716,7 @@
           <option value="เอกสารสำรวจ">เอกสารสำรวจ</option>
           <option value="อื่นๆ">อื่นๆ</option>
         </select>
-        <input type="file" id="mDocFile" accept="application/pdf,.pdf" style="flex:2 1 200px;">
+        <input type="file" id="mDocFile" accept="application/pdf,.pdf,image/*" style="flex:2 1 200px;">
       </div>
       <input type="text" id="mDocUploader" placeholder="ชื่อผู้อัปโหลด" style="width:100%;box-sizing:border-box;margin-bottom:8px;">
       <div id="mDocError" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none;"></div>
@@ -812,8 +823,18 @@
   <div class="modal-box" style="width:480px;">
     <h2 id="csatModalTitle">แบบสอบถามความพึงพอใจลูกค้า (งานติดตั้ง)</h2>
     <div id="csatModalSub" style="font-size:13px;color:var(--muted);margin:-8px 0 14px;"></div>
+    <div id="csatStatusBanner" class="csat-status-banner" style="display:none;"></div>
     <div id="csatCriteriaHost"></div>
     <div style="margin-top:4px;">
+      <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">หรือเลือกผลการโทร (แทนการให้คะแนน ถ้าติดต่อลูกค้าไม่สำเร็จ)</label>
+      <div class="outcome-btn-row" id="csatOutcomeRow">
+        <button type="button" class="csat-outcome-btn" data-outcome="ไม่รับสาย">ไม่รับสาย</button>
+        <button type="button" class="csat-outcome-btn" data-outcome="ติดต่อไม่ได้">ติดต่อไม่ได้</button>
+        <button type="button" class="csat-outcome-btn" data-outcome="ไม่ประสงค์ให้ข้อมูล">ไม่ประสงค์ให้ข้อมูล</button>
+      </div>
+      <button type="button" id="csatCloseCaseBtn" class="secondary" style="display:none;width:100%;margin-top:2px;">ปิดเคส (หยุดติดตามชั่วคราว)</button>
+    </div>
+    <div style="margin-top:10px;">
       <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">ชื่อผู้โทรสำรวจ *</label>
       <input type="text" id="csatCallerName" placeholder="ชื่อผู้โทรสำรวจ" style="width:100%;">
     </div>
@@ -833,8 +854,18 @@
   <div class="modal-box" style="width:480px;">
     <h2 id="surveyCsatModalTitle">แบบสอบถามความพึงพอใจลูกค้า (งานสำรวจ)</h2>
     <div id="surveyCsatModalSub" style="font-size:13px;color:var(--muted);margin:-8px 0 14px;"></div>
+    <div id="surveyCsatStatusBanner" class="csat-status-banner" style="display:none;"></div>
     <div id="surveyCsatCriteriaHost"></div>
     <div style="margin-top:4px;">
+      <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">หรือเลือกผลการโทร (แทนการให้คะแนน ถ้าติดต่อลูกค้าไม่สำเร็จ)</label>
+      <div class="outcome-btn-row" id="surveyCsatOutcomeRow">
+        <button type="button" class="survey-csat-outcome-btn" data-outcome="ไม่รับสาย">ไม่รับสาย</button>
+        <button type="button" class="survey-csat-outcome-btn" data-outcome="ติดต่อไม่ได้">ติดต่อไม่ได้</button>
+        <button type="button" class="survey-csat-outcome-btn" data-outcome="ไม่ประสงค์ให้ข้อมูล">ไม่ประสงค์ให้ข้อมูล</button>
+      </div>
+      <button type="button" id="surveyCsatCloseCaseBtn" class="secondary" style="display:none;width:100%;margin-top:2px;">ปิดเคส (หยุดติดตามชั่วคราว)</button>
+    </div>
+    <div style="margin-top:10px;">
       <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">ชื่อผู้โทรสำรวจ *</label>
       <input type="text" id="surveyCsatCallerName" placeholder="ชื่อผู้โทรสำรวจ" style="width:100%;">
     </div>
@@ -939,9 +970,23 @@ var currentEditingSurveyLogRow = null;
 var currentChecklistJob = null;
 var currentCsatJob = null;
 var currentCsatScores = {};
+var currentCsatOutcome = null;
 var currentSurveyCsatJob = null;
 var currentSurveyCsatScores = {};
+var currentSurveyCsatOutcome = null;
 var currentDocsJob = null;
+
+// Call-outcome options for CSAT (Sure's request, 2026-09-03): when staff
+// can't get a real score out of the customer this attempt. These three
+// strings are posted to the backend verbatim as `outcome` and must match
+// CSAT_OUTCOMES_ in the Apps Script exactly. CSAT_OUTCOME_CLOSE_ ("ปิดเคส")
+// is a separate 4th action, only offered after one of the two "couldn't
+// reach them" outcomes below, to explicitly stop further attempts -- a
+// later scored submission or a fresh outcome pick naturally reopens the
+// case again (see renderOverviewCsatCell/renderOverviewSurveyCsatCell).
+var CSAT_OUTCOME_OPTIONS_ = ['ไม่รับสาย', 'ติดต่อไม่ได้', 'ไม่ประสงค์ให้ข้อมูล'];
+var CSAT_OUTCOMES_ALLOW_CLOSE_ = ['ไม่รับสาย', 'ติดต่อไม่ได้'];
+var CSAT_OUTCOME_CLOSE_ = 'ปิดเคส';
 
 // Job document upload/view (Sure's request, 2026-08-29): staff upload PDF
 // quotations, survey documents, etc. against a job so anyone can view them
@@ -1091,6 +1136,7 @@ function openCsatModal(jobKey) {
   }
   currentCsatJob = job;
   currentCsatScores = {};
+  currentCsatOutcome = null;
   document.getElementById('csatModalSub').textContent =
     (job.ts_app || job.job_code || '-') + ' · ' + (job.customer || '') + ' · ' + (contractorDisplayName(job.contractor) || '-');
   var host = document.getElementById('csatCriteriaHost');
@@ -1102,8 +1148,22 @@ function openCsatModal(jobKey) {
       '</div>' +
     '</div>';
   }).join('');
+  Array.prototype.forEach.call(document.querySelectorAll('#csatOutcomeRow .csat-outcome-btn'), function(b) { b.classList.remove('selected'); });
+  document.getElementById('csatCloseCaseBtn').style.display = 'none';
   document.getElementById('csatCallerName').value = '';
   document.getElementById('csatNote').value = '';
+  var csatKey = job.ts_app || job.job_code || job._key || '';
+  var csatInfo = RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat.install && RATINGS_SUMMARY.csat.install.byJob && RATINGS_SUMMARY.csat.install.byJob[csatKey];
+  var bannerEl = document.getElementById('csatStatusBanner');
+  if (csatInfo && csatInfo.latestOutcome) {
+    bannerEl.className = 'csat-status-banner ' + (csatInfo.closed ? 'closed' : 'open');
+    bannerEl.textContent = csatInfo.closed
+      ? 'เคสนี้ถูกปิดไว้ (ครั้งล่าสุด) -- เลือกให้คะแนนหรือผลการโทรใหม่เพื่อเปิดเคสอีกครั้ง'
+      : 'ครั้งล่าสุด: ' + csatInfo.latestOutcome + ' -- สามารถกดปิดเคสได้ถ้าจะหยุดติดตามชั่วคราว';
+    bannerEl.style.display = '';
+  } else {
+    bannerEl.style.display = 'none';
+  }
   var errEl = document.getElementById('csatModalError');
   errEl.style.display = 'none';
   if (!ratingsConfigured()) {
@@ -1120,6 +1180,7 @@ function openSurveyCsatModal(jobKey) {
   // table (stalled/scheduled/completed) has already had its survey visit.
   currentSurveyCsatJob = job;
   currentSurveyCsatScores = {};
+  currentSurveyCsatOutcome = null;
   document.getElementById('surveyCsatModalSub').textContent =
     (job.ts_app || job.job_code || '-') + ' · ' + (job.customer || '') + ' · ' + (contractorDisplayName(job.contractor) || '-');
   var host = document.getElementById('surveyCsatCriteriaHost');
@@ -1131,8 +1192,22 @@ function openSurveyCsatModal(jobKey) {
       '</div>' +
     '</div>';
   }).join('');
+  Array.prototype.forEach.call(document.querySelectorAll('#surveyCsatOutcomeRow .survey-csat-outcome-btn'), function(b) { b.classList.remove('selected'); });
+  document.getElementById('surveyCsatCloseCaseBtn').style.display = 'none';
   document.getElementById('surveyCsatCallerName').value = '';
   document.getElementById('surveyCsatNote').value = '';
+  var surveyCsatKey = job.ts_app || job.job_code || job._key || '';
+  var surveyCsatInfo = RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat.survey && RATINGS_SUMMARY.csat.survey.byJob && RATINGS_SUMMARY.csat.survey.byJob[surveyCsatKey];
+  var surveyBannerEl = document.getElementById('surveyCsatStatusBanner');
+  if (surveyCsatInfo && surveyCsatInfo.latestOutcome) {
+    surveyBannerEl.className = 'csat-status-banner ' + (surveyCsatInfo.closed ? 'closed' : 'open');
+    surveyBannerEl.textContent = surveyCsatInfo.closed
+      ? 'เคสนี้ถูกปิดไว้ (ครั้งล่าสุด) -- เลือกให้คะแนนหรือผลการโทรใหม่เพื่อเปิดเคสอีกครั้ง'
+      : 'ครั้งล่าสุด: ' + surveyCsatInfo.latestOutcome + ' -- สามารถกดปิดเคสได้ถ้าจะหยุดติดตามชั่วคราว';
+    surveyBannerEl.style.display = '';
+  } else {
+    surveyBannerEl.style.display = 'none';
+  }
   var errEl = document.getElementById('surveyCsatModalError');
   errEl.style.display = 'none';
   if (!ratingsConfigured()) {
@@ -1876,6 +1951,67 @@ function compressPdfIfNeeded_(file, onProgress) {
     console.error('PDF compression failed, uploading original file instead:', err);
     return file;
   });
+}
+
+// Image uploads (Sure's request, 2026-09-03): job documents can now be a
+// photo (jpg/png/etc.), not just a PDF. Phone photos are often several MB,
+// so oversized images get resized/recompressed client-side the same way
+// oversized PDFs do -- via <canvas>, no extra library needed this time.
+// Unlike the PDF path (which always keeps the .pdf extension), a compressed
+// image is always re-encoded as JPEG, so its filename may change to .jpg;
+// prepareDocUploadFile_() is the single entry point the upload handler calls
+// so it doesn't need to know which branch ran.
+var IMAGE_COMPRESS_THRESHOLD_BYTES = 5 * 1024 * 1024;
+
+function compressImageIfNeeded_(file) {
+  var originalMime = file.type || 'image/jpeg';
+  if (!file || file.size <= IMAGE_COMPRESS_THRESHOLD_BYTES) {
+    return Promise.resolve({ blob: file, fileName: file.name, mimeType: originalMime });
+  }
+  return new Promise(function(resolve) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      try {
+        var maxDim = 1920;
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function(blob) {
+          if (!blob) { resolve({ blob: file, fileName: file.name, mimeType: originalMime }); return; }
+          var newName = (file.name || 'image').replace(/\.[a-zA-Z0-9]+$/, '') + '.jpg';
+          resolve({ blob: blob, fileName: newName, mimeType: 'image/jpeg' });
+        }, 'image/jpeg', 0.75);
+      } catch (err) {
+        resolve({ blob: file, fileName: file.name, mimeType: originalMime });
+      }
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      resolve({ blob: file, fileName: file.name, mimeType: originalMime });
+    };
+    img.src = url;
+  });
+}
+
+function isPdfFile_(file) {
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+}
+function isImageFile_(file) {
+  return /^image\//.test(file.type || '') || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name || '');
+}
+
+function prepareDocUploadFile_(file, onProgress) {
+  if (isPdfFile_(file)) {
+    return compressPdfIfNeeded_(file, onProgress).then(function(blob) {
+      return { blob: blob, fileName: file.name, mimeType: 'application/pdf' };
+    });
+  }
+  return compressImageIfNeeded_(file);
 }
 
 function resetDocForm_() {
@@ -2775,15 +2911,34 @@ function renderOverviewRatingCell(j, cat) {
   return html;
 }
 
+// Shared by both CSAT overview cells (added 2026-09-03 for call-outcome
+// support): decides what badge to show given a job's csatInfo --
+// a real average (scored calls exist), the latest call-outcome (no scores
+// yet, but at least one no-pickup/unreachable/declined attempt logged), a
+// "closed" variant of that when staff explicitly stopped the case, or the
+// original "no data at all" badge. The rate button stays available in every
+// case so staff can add a new attempt (which reopens a closed case) at any
+// time -- see submitCsatPayload_/submitSurveyCsatPayload_.
+function csatBadgeHtml_(csatInfo) {
+  if (!csatInfo || (!csatInfo.count && !csatInfo.attemptCount)) {
+    return '<span class="rating-badge none">ยังไม่มีคะแนน</span>';
+  }
+  if (csatInfo.count) {
+    return '<span class="rating-badge">' + csatInfo.avg + '/5 (' + csatInfo.count + ' ครั้ง)</span>';
+  }
+  if (csatInfo.closed) {
+    return '<span class="rating-badge none" title="กดปุ่มด้านล่างเพื่อเปิดเคสและลองใหม่">ปิดเคส</span>';
+  }
+  return '<span class="rating-badge none">' + escHtml(csatInfo.latestOutcome || '-') + '</span>';
+}
+
 function renderOverviewCsatCell(j, cat) {
   var csatKey = j.ts_app || j.job_code || j._key || '';
   var csatInfo = RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat.install && RATINGS_SUMMARY.csat.install.byJob && RATINGS_SUMMARY.csat.install.byJob[csatKey];
   if (cat !== 'completed') {
     return '<span class="rating-badge none" title="สำรวจความพึงพอใจได้เมื่อติดตั้งเสร็จสิ้นแล้ว">รอติดตั้งเสร็จ</span>';
   }
-  var html = csatInfo
-    ? '<span class="rating-badge">' + csatInfo.avg + '/5 (' + csatInfo.count + ' ครั้ง)</span>'
-    : '<span class="rating-badge none">ยังไม่มีคะแนน</span>';
+  var html = csatBadgeHtml_(csatInfo);
   html += '<button type="button" class="secondary csat-rate-btn" data-csat-key="' + escHtml(j._key) + '">บันทึกแบบสอบถาม</button>';
   return html;
 }
@@ -2791,9 +2946,7 @@ function renderOverviewCsatCell(j, cat) {
 function renderOverviewSurveyCsatCell(j, cat) {
   var csatKey = j.ts_app || j.job_code || j._key || '';
   var csatInfo = RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat.survey && RATINGS_SUMMARY.csat.survey.byJob && RATINGS_SUMMARY.csat.survey.byJob[csatKey];
-  var html = csatInfo
-    ? '<span class="rating-badge">' + csatInfo.avg + '/5 (' + csatInfo.count + ' ครั้ง)</span>'
-    : '<span class="rating-badge none">ยังไม่มีคะแนน</span>';
+  var html = csatBadgeHtml_(csatInfo);
   html += '<button type="button" class="secondary survey-csat-rate-btn" data-survey-csat-key="' + escHtml(j._key) + '">บันทึกแบบสอบถาม</button>';
   return html;
 }
@@ -5760,6 +5913,33 @@ document.addEventListener('click', function(ev) {
     Array.prototype.forEach.call(csatRow.querySelectorAll('.csat-score-btn'), function(b) {
       b.classList.toggle('selected', b === csatScoreBtn);
     });
+    // Giving a real score means this attempt is no longer a "couldn't
+    // reach them" outcome -- clear any outcome selection so the two paths
+    // stay mutually exclusive.
+    if (currentCsatOutcome) {
+      currentCsatOutcome = null;
+      Array.prototype.forEach.call(document.querySelectorAll('#csatOutcomeRow .csat-outcome-btn'), function(b) { b.classList.remove('selected'); });
+      document.getElementById('csatCloseCaseBtn').style.display = 'none';
+    }
+    return;
+  }
+  var csatOutcomeBtn = ev.target.closest('.csat-outcome-btn');
+  if (csatOutcomeBtn) {
+    var outcomeVal = csatOutcomeBtn.getAttribute('data-outcome');
+    var alreadySelected = csatOutcomeBtn.classList.contains('selected');
+    currentCsatOutcome = alreadySelected ? null : outcomeVal;
+    Array.prototype.forEach.call(document.querySelectorAll('#csatOutcomeRow .csat-outcome-btn'), function(b) {
+      b.classList.toggle('selected', !alreadySelected && b === csatOutcomeBtn);
+    });
+    // Picking an outcome means no numeric score applies to this attempt --
+    // clear any partial score selections so a stray old click can't sneak
+    // scores into an outcome-only submission.
+    if (currentCsatOutcome) {
+      currentCsatScores = {};
+      Array.prototype.forEach.call(document.querySelectorAll('#csatCriteriaHost .csat-score-btn.selected'), function(b) { b.classList.remove('selected'); });
+    }
+    document.getElementById('csatCloseCaseBtn').style.display =
+      (currentCsatOutcome && CSAT_OUTCOMES_ALLOW_CLOSE_.indexOf(currentCsatOutcome) !== -1) ? '' : 'none';
     return;
   }
   var surveyCsatRateBtn = ev.target.closest('.survey-csat-rate-btn');
@@ -5775,6 +5955,27 @@ document.addEventListener('click', function(ev) {
     Array.prototype.forEach.call(surveyCsatRow.querySelectorAll('.survey-csat-score-btn'), function(b) {
       b.classList.toggle('selected', b === surveyCsatScoreBtn);
     });
+    if (currentSurveyCsatOutcome) {
+      currentSurveyCsatOutcome = null;
+      Array.prototype.forEach.call(document.querySelectorAll('#surveyCsatOutcomeRow .survey-csat-outcome-btn'), function(b) { b.classList.remove('selected'); });
+      document.getElementById('surveyCsatCloseCaseBtn').style.display = 'none';
+    }
+    return;
+  }
+  var surveyCsatOutcomeBtn = ev.target.closest('.survey-csat-outcome-btn');
+  if (surveyCsatOutcomeBtn) {
+    var surveyOutcomeVal = surveyCsatOutcomeBtn.getAttribute('data-outcome');
+    var surveyAlreadySelected = surveyCsatOutcomeBtn.classList.contains('selected');
+    currentSurveyCsatOutcome = surveyAlreadySelected ? null : surveyOutcomeVal;
+    Array.prototype.forEach.call(document.querySelectorAll('#surveyCsatOutcomeRow .survey-csat-outcome-btn'), function(b) {
+      b.classList.toggle('selected', !surveyAlreadySelected && b === surveyCsatOutcomeBtn);
+    });
+    if (currentSurveyCsatOutcome) {
+      currentSurveyCsatScores = {};
+      Array.prototype.forEach.call(document.querySelectorAll('#surveyCsatCriteriaHost .survey-csat-score-btn.selected'), function(b) { b.classList.remove('selected'); });
+    }
+    document.getElementById('surveyCsatCloseCaseBtn').style.display =
+      (currentSurveyCsatOutcome && CSAT_OUTCOMES_ALLOW_CLOSE_.indexOf(currentSurveyCsatOutcome) !== -1) ? '' : 'none';
   }
 });
 document.getElementById('ratingModalClose').onclick = function() {
@@ -5848,7 +6049,10 @@ document.getElementById('csatModalOverlay').addEventListener('click', function(e
     document.getElementById('csatModalOverlay').classList.remove('open');
   }
 });
-document.getElementById('csatModalSubmit').onclick = function() {
+// Shared by the "บันทึกแบบสอบถาม" submit button and the "ปิดเคส" button --
+// both post to the same handleCsatSubmit_ backend endpoint, just with a
+// different outcome value (or none, for a real score submission).
+function submitCsatPayload_(outcomeOverride) {
   var errEl = document.getElementById('csatModalError');
   var caller = document.getElementById('csatCallerName').value.trim();
   if (!caller) {
@@ -5856,18 +6060,7 @@ document.getElementById('csatModalSubmit').onclick = function() {
     errEl.style.display = '';
     return;
   }
-  var missing = CSAT_CRITERIA.filter(function(cr) { return !currentCsatScores[cr.key]; });
-  if (missing.length) {
-    errEl.textContent = 'กรุณาให้คะแนนครบทุกข้อ';
-    errEl.style.display = '';
-    return;
-  }
-  if (!ratingsConfigured()) {
-    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึกแบบสอบถาม (RATINGS_WEBAPP_URL)';
-    errEl.style.display = '';
-    return;
-  }
-  errEl.style.display = 'none';
+  var outcome = outcomeOverride || currentCsatOutcome || '';
   var payload = {
     key: RATINGS_ACCESS_KEY,
     type: 'csat_submit',
@@ -5876,19 +6069,42 @@ document.getElementById('csatModalSubmit').onclick = function() {
     contractor: currentCsatJob.contractor || '',
     status: currentCsatJob.status || '',
     caller: caller,
-    note: document.getElementById('csatNote').value.trim(),
-    scores: currentCsatScores
+    note: document.getElementById('csatNote').value.trim()
   };
+  if (outcome) {
+    payload.outcome = outcome;
+  } else {
+    var missing = CSAT_CRITERIA.filter(function(cr) { return !currentCsatScores[cr.key]; });
+    if (missing.length) {
+      errEl.textContent = 'กรุณาให้คะแนนครบทุกข้อ หรือเลือกผลการโทรแทน';
+      errEl.style.display = '';
+      return;
+    }
+    payload.scores = currentCsatScores;
+  }
+  if (!ratingsConfigured()) {
+    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึกแบบสอบถาม (RATINGS_WEBAPP_URL)';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
   var submitBtn = document.getElementById('csatModalSubmit');
+  var closeBtn = document.getElementById('csatCloseCaseBtn');
   submitBtn.disabled = true;
+  closeBtn.disabled = true;
+  var origSubmitLabel = submitBtn.textContent;
+  var origCloseLabel = closeBtn.textContent;
   submitBtn.textContent = 'กำลังบันทึก...';
+  closeBtn.textContent = 'กำลังบันทึก...';
   fetch(RATINGS_WEBAPP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
   }).then(function(r) { return r.json(); }).then(function(res) {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'บันทึกแบบสอบถาม';
+    closeBtn.disabled = false;
+    submitBtn.textContent = origSubmitLabel;
+    closeBtn.textContent = origCloseLabel;
     if (res && res.success) {
       document.getElementById('csatModalOverlay').classList.remove('open');
       fetchRatingsSummary();
@@ -5898,11 +6114,15 @@ document.getElementById('csatModalSubmit').onclick = function() {
     }
   }).catch(function(err) {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'บันทึกแบบสอบถาม';
+    closeBtn.disabled = false;
+    submitBtn.textContent = origSubmitLabel;
+    closeBtn.textContent = origCloseLabel;
     errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
     errEl.style.display = '';
   });
-};
+}
+document.getElementById('csatModalSubmit').onclick = function() { submitCsatPayload_(null); };
+document.getElementById('csatCloseCaseBtn').onclick = function() { submitCsatPayload_(CSAT_OUTCOME_CLOSE_); };
 
 document.getElementById('surveyCsatModalClose').onclick = function() {
   document.getElementById('surveyCsatModalOverlay').classList.remove('open');
@@ -5912,7 +6132,7 @@ document.getElementById('surveyCsatModalOverlay').addEventListener('click', func
     document.getElementById('surveyCsatModalOverlay').classList.remove('open');
   }
 });
-document.getElementById('surveyCsatModalSubmit').onclick = function() {
+function submitSurveyCsatPayload_(outcomeOverride) {
   var errEl = document.getElementById('surveyCsatModalError');
   var caller = document.getElementById('surveyCsatCallerName').value.trim();
   if (!caller) {
@@ -5920,18 +6140,7 @@ document.getElementById('surveyCsatModalSubmit').onclick = function() {
     errEl.style.display = '';
     return;
   }
-  var missing = SURVEY_CSAT_CRITERIA.filter(function(cr) { return !currentSurveyCsatScores[cr.key]; });
-  if (missing.length) {
-    errEl.textContent = 'กรุณาให้คะแนนครบทุกข้อ';
-    errEl.style.display = '';
-    return;
-  }
-  if (!ratingsConfigured()) {
-    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึกแบบสอบถาม (RATINGS_WEBAPP_URL)';
-    errEl.style.display = '';
-    return;
-  }
-  errEl.style.display = 'none';
+  var outcome = outcomeOverride || currentSurveyCsatOutcome || '';
   var payload = {
     key: RATINGS_ACCESS_KEY,
     type: 'survey_csat_submit',
@@ -5939,19 +6148,42 @@ document.getElementById('surveyCsatModalSubmit').onclick = function() {
     customer: currentSurveyCsatJob.customer || '',
     contractor: currentSurveyCsatJob.contractor || '',
     caller: caller,
-    note: document.getElementById('surveyCsatNote').value.trim(),
-    scores: currentSurveyCsatScores
+    note: document.getElementById('surveyCsatNote').value.trim()
   };
+  if (outcome) {
+    payload.outcome = outcome;
+  } else {
+    var missing = SURVEY_CSAT_CRITERIA.filter(function(cr) { return !currentSurveyCsatScores[cr.key]; });
+    if (missing.length) {
+      errEl.textContent = 'กรุณาให้คะแนนครบทุกข้อ หรือเลือกผลการโทรแทน';
+      errEl.style.display = '';
+      return;
+    }
+    payload.scores = currentSurveyCsatScores;
+  }
+  if (!ratingsConfigured()) {
+    errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางบันทึกแบบสอบถาม (RATINGS_WEBAPP_URL)';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
   var submitBtn = document.getElementById('surveyCsatModalSubmit');
+  var closeBtn = document.getElementById('surveyCsatCloseCaseBtn');
   submitBtn.disabled = true;
+  closeBtn.disabled = true;
+  var origSubmitLabel = submitBtn.textContent;
+  var origCloseLabel = closeBtn.textContent;
   submitBtn.textContent = 'กำลังบันทึก...';
+  closeBtn.textContent = 'กำลังบันทึก...';
   fetch(RATINGS_WEBAPP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
   }).then(function(r) { return r.json(); }).then(function(res) {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'บันทึกแบบสอบถาม';
+    closeBtn.disabled = false;
+    submitBtn.textContent = origSubmitLabel;
+    closeBtn.textContent = origCloseLabel;
     if (res && res.success) {
       document.getElementById('surveyCsatModalOverlay').classList.remove('open');
       fetchRatingsSummary();
@@ -5961,11 +6193,15 @@ document.getElementById('surveyCsatModalSubmit').onclick = function() {
     }
   }).catch(function(err) {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'บันทึกแบบสอบถาม';
+    closeBtn.disabled = false;
+    submitBtn.textContent = origSubmitLabel;
+    closeBtn.textContent = origCloseLabel;
     errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
     errEl.style.display = '';
   });
-};
+}
+document.getElementById('surveyCsatModalSubmit').onclick = function() { submitSurveyCsatPayload_(null); };
+document.getElementById('surveyCsatCloseCaseBtn').onclick = function() { submitSurveyCsatPayload_(CSAT_OUTCOME_CLOSE_); };
 
 document.getElementById('mDocUploadBtn').onclick = function() {
   var errEl = document.getElementById('mDocError');
@@ -5981,9 +6217,8 @@ document.getElementById('mDocUploadBtn').onclick = function() {
     errEl.style.display = '';
     return;
   }
-  var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
-  if (!isPdf) {
-    errEl.textContent = 'รองรับเฉพาะไฟล์ PDF เท่านั้น';
+  if (!isPdfFile_(file) && !isImageFile_(file)) {
+    errEl.textContent = 'รองรับเฉพาะไฟล์ PDF หรือรูปภาพเท่านั้น';
     errEl.style.display = '';
     return;
   }
@@ -6001,11 +6236,15 @@ document.getElementById('mDocUploadBtn').onclick = function() {
   var submitBtn = document.getElementById('mDocUploadBtn');
   var jobForUpload = currentDocsJob;
   submitBtn.disabled = true;
-  setDocUploadBtnLabel_(file.size > PDF_COMPRESS_THRESHOLD_BYTES ? 'กำลังตรวจสอบไฟล์...' : 'กำลังอัปโหลด...', true);
+  var docSizeThreshold_ = isPdfFile_(file) ? PDF_COMPRESS_THRESHOLD_BYTES : IMAGE_COMPRESS_THRESHOLD_BYTES;
+  setDocUploadBtnLabel_(file.size > docSizeThreshold_ ? 'กำลังตรวจสอบไฟล์...' : 'กำลังอัปโหลด...', true);
 
-  compressPdfIfNeeded_(file, function(cur, total) {
+  prepareDocUploadFile_(file, function(cur, total) {
     setDocUploadBtnLabel_('กำลังบีบอัดไฟล์ (' + cur + '/' + total + ')...', true);
-  }).then(function(uploadBlob) {
+  }).then(function(prepared) {
+    var uploadBlob = prepared.blob;
+    var uploadFileName = prepared.fileName;
+    var uploadMime = prepared.mimeType;
     var HARD_CAP_BYTES = 20 * 1024 * 1024;
     if (uploadBlob.size > HARD_CAP_BYTES) {
       submitBtn.disabled = false;
@@ -6027,7 +6266,8 @@ document.getElementById('mDocUploadBtn').onclick = function() {
         customer: jobForUpload.customer || '',
         contractor: jobForUpload.contractor || '',
         docType: docType,
-        fileName: file.name,
+        fileName: uploadFileName,
+        mimeType: uploadMime,
         fileData: base64,
         uploadedBy: uploader
       };
@@ -6043,7 +6283,7 @@ document.getElementById('mDocUploadBtn').onclick = function() {
           if (!RATINGS_SUMMARY.jobDocs) RATINGS_SUMMARY.jobDocs = { byJob: {} };
           if (!RATINGS_SUMMARY.jobDocs.byJob[key]) RATINGS_SUMMARY.jobDocs.byJob[key] = [];
           RATINGS_SUMMARY.jobDocs.byJob[key].unshift({
-            row: res.row, docType: docType, fileName: file.name, url: res.url || '', uploadedBy: uploader, timestamp: ''
+            row: res.row, docType: docType, fileName: uploadFileName, url: res.url || '', uploadedBy: uploader, timestamp: ''
           });
           if (currentDocsJob === jobForUpload) {
             resetDocForm_();

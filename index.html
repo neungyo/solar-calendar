@@ -346,7 +346,7 @@
 <div class="view-tabs">
   <button class="secondary view-tab-btn active" id="tabCalendarBtn">📅 ปฏิทิน</button>
   <button class="secondary view-tab-btn" id="tabDocBtn">📋 ตารางเอกสารขนานไฟ</button>
-  <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง/ประเมิน</button>
+  <button class="secondary view-tab-btn" id="tabOverviewBtn">📊 ภาพรวมสำรวจ/ติดตั้ง</button>
   <button class="secondary view-tab-btn" id="tabEvalBtn">📝 การประเมิน</button>
   <button class="secondary view-tab-btn" id="tabSlaBtn">🎯 SLA ติดตั้ง</button>
   <button class="secondary view-tab-btn" id="tabAllocBtn">🧭 แนะนำ ผรม. งานใหม่</button>
@@ -673,7 +673,7 @@
 
   <div class="card-box chart-card">
     <div class="overview-section-title">คะแนนประเมินคุณภาพจากทีมงาน</div>
-    <div class="doc-table-toolbar">คะแนนนี้มาจากการที่ทีมงานให้คะแนนแต่ละงานด้วยตนเอง (1-5 คะแนนต่อหัวข้อ) ผ่านปุ่ม "ให้คะแนน" ในตารางรายละเอียดงาน แท็บภาพรวม ไม่ได้คำนวณจากระยะเวลาติดตั้งเหมือนคะแนน SLA ด้านบน</div>
+    <div class="doc-table-toolbar">คะแนนนี้มาจากการที่ทีมงานให้คะแนนแต่ละงานด้วยตนเอง (1-5 คะแนนต่อหัวข้อ) ผ่านปุ่ม "ให้คะแนน" ในตารางรายละเอียดงาน แท็บการประเมิน ไม่ได้คำนวณจากระยะเวลาติดตั้งเหมือนคะแนน SLA ด้านบน</div>
     <div class="chart-legend">
       <span class="chart-legend-item"><span class="chart-swatch" style="background:#2563eb;"></span>ความปลอดภัย</span>
       <span class="chart-legend-item"><span class="chart-swatch" style="background:#7c3aed;"></span>ตามแบบมาตรฐาน</span>
@@ -5003,7 +5003,7 @@ function dashSpecManualRating(type) {
 function dashManualRatingNote() {
   var byC = RATINGS_SUMMARY.byContractor || {};
   var contractors = Object.keys(byC).filter(function(c) { return byC[c] && byC[c].count; });
-  if (contractors.length === 0) return 'ยังไม่มีการให้คะแนนประเมินคุณภาพจากทีมงาน (ให้คะแนนได้ที่แท็บ "ภาพรวมสำรวจ/ติดตั้ง/ประเมิน" ปุ่ม "ให้คะแนน" ของงานที่ติดตั้งเสร็จแล้ว)';
+  if (contractors.length === 0) return 'ยังไม่มีการให้คะแนนประเมินคุณภาพจากทีมงาน (ให้คะแนนได้ที่แท็บ "การประเมิน" ปุ่ม "ให้คะแนน" ของงานที่ติดตั้งเสร็จแล้ว)';
   var totalJobs = contractors.reduce(function(s, c) { return s + byC[c].count; }, 0);
   return 'คำนวณจากงานที่ให้คะแนนแล้วทั้งหมด ' + totalJobs + ' งาน จาก ผรม. ' + contractors.length + ' ราย — ตัวเลขในวงเล็บคือจำนวนงานที่นำมาเฉลี่ยของแต่ละราย';
 }

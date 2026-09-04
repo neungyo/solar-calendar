@@ -495,7 +495,7 @@
     <table class="doc-table" id="overviewTableStalled">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableStalledBody"></tbody>
@@ -508,7 +508,7 @@
     <table class="doc-table" id="overviewTableScheduled">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableScheduledBody"></tbody>
@@ -521,7 +521,7 @@
     <table class="doc-table" id="overviewTableCompleted">
       <thead>
         <tr>
-          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th>คะแนนคุณภาพ</th><th>คะแนนความพึงพอใจ (สำรวจ)</th><th>คะแนนความพึงพอใจ (ติดตั้ง)</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
+          <th>#</th><th>TS App</th><th>ลูกค้า</th><th>เบอร์โทรศัพท์</th><th>ที่อยู่</th><th>ผรม.</th><th>วันที่สำรวจ</th><th>วันที่นัดติดตั้ง</th><th>สถานะ</th><th style="text-align:center;">Proposal Quotation (TAC)</th><th style="text-align:center;">FAT (TS)</th><th style="text-align:center;">ใบส่งมอบงาน&ตรวจรับงาน (TS)</th>
         </tr>
       </thead>
       <tbody id="overviewTableCompletedBody"></tbody>
@@ -3080,9 +3080,6 @@ function renderOverviewRow(j, i, cat) {
     '<td>' + escHtml(j.survey_date || '-') + '</td>' +
     '<td>' + escHtml(j.install_appointment || 'ยังไม่มีกำหนด') + '</td>' +
     '<td><span class="ov-badge ' + cat + '">' + escHtml(OVERVIEW_STATUS_LABELS[cat]) + '</span></td>' +
-    '<td>' + renderOverviewRatingCell(j, cat) + '</td>' +
-    '<td>' + renderOverviewSurveyCsatCell(j, cat) + '</td>' +
-    '<td>' + renderOverviewCsatCell(j, cat) + '</td>' +
     '<td style="text-align:center;">' + renderDocStatusCell(j.proposal_tac_name, j.proposal_tac_link) + '</td>' +
     '<td style="text-align:center;">' + renderDocStatusCell(j.fat_ts_name, j.fat_ts_link) + '</td>' +
     '<td style="text-align:center;">' + renderDocStatusCell(j.receipt_ts_name, j.receipt_ts_link) + '</td>' +

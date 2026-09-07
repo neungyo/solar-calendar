@@ -6067,7 +6067,7 @@ function renderProblemDetail_(c) {
   var mJob = problemMatchedJob_(c);
   var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
 
-  document.getElementById('pvTitle').textContent = c.site || c.customer || '(ไม่มีชื่อ)';
+  document.getElementById('pvTitle').textContent = c.customer || c.site || '(ไม่มีชื่อ)';
   document.getElementById('pvType').textContent = isOnsite
     ? ('🚗 Onsite — นัดหมาย ' + (c.appointment_date || '-') + (c.appointment_time ? (' ' + c.appointment_time) : ''))
     : ('📞 ทางโทรศัพท์ (oncall) — บันทึกวันที่ ' + (c.report_date || '-'));
@@ -6586,8 +6586,12 @@ function renderProblemTab() {
       dotSpan.style.cssText = 'flex-shrink:0;display:inline-block;width:7px;height:7px;border-radius:50%;background:' + dot + ';';
       pill.appendChild(dotSpan);
       var txt = document.createElement('span');
-      var label = (c.site || c.customer || '-');
-      var prefix = c.resolved ? '✅ ' : (isOnsite ? '🚗 ' : '📞 ');
+      // Sure's request, 2026-09-07: show the customer's name (not the site
+      // address) as the pill label, and always keep the oncall/onsite icon
+      // visible even once resolved -- just add a checkmark alongside it
+      // rather than replacing it, so the type stays visible at a glance.
+      var label = (c.customer || c.site || '-');
+      var prefix = (isOnsite ? '🚗' : '📞') + (c.resolved ? ' ✅' : '') + ' ';
       txt.textContent = prefix + label.slice(0, 18);
       pill.appendChild(txt);
       pill.title = 'คลิกดูรายละเอียด';

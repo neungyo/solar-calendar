@@ -819,17 +819,31 @@
     <div class="doc-table-toolbar" style="margin-top:20px;">รายการเคสทั้งหมด (<span id="problemCaseCount">0</span>)</div>
     <div style="overflow-x:auto;margin-bottom:20px;">
       <table class="doc-table">
-        <thead><tr><th>Site / ลูกค้า</th><th>TS App</th><th>เบอร์โทร</th><th>อาการ</th><th>รูปแบบ</th><th>นัดหมาย</th><th>สถานะ</th><th></th></tr></thead>
+        <thead><tr><th>Site / ลูกค้า</th><th>TS App</th><th>ติดตั้งเสร็จ</th><th>ผรม.ติดตั้ง</th><th>เบอร์โทร</th><th>อาการ</th><th>รูปแบบ</th><th>นัดหมาย</th><th>สถานะ</th><th></th></tr></thead>
         <tbody id="problemCaseListBody"></tbody>
       </table>
     </div>
 
-    <div id="problemDetailBox" style="display:none;margin-top:14px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;line-height:1.7;"></div>
   </div>
 </div>
 
 <div id="problemLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;">
   <img id="problemLightboxImg" src="" style="max-width:92vw;max-height:92vh;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,0.5);">
+</div>
+
+<div class="modal-overlay" id="problemViewOverlay">
+  <div class="modal-box">
+    <h2 id="pvTitle"></h2>
+    <div class="modal-row"><div class="k">ประเภท:</div><div class="v" id="pvType"></div></div>
+    <div class="modal-row"><div class="k">เลขงาน:</div><div class="v" id="pvJobCode"></div></div>
+    <div class="modal-row"><div class="k">ผรม.:</div><div class="v" id="pvContractor"></div></div>
+    <div class="modal-row"><div class="k">อุปกรณ์:</div><div class="v" id="pvEquipment"></div></div>
+    <div class="modal-row"><div class="k">ที่อยู่:</div><div class="v" id="pvAddress"></div></div>
+    <div class="modal-row"><div class="k">Location:</div><div class="v" id="pvLocation"></div></div>
+    <div class="modal-row"><div class="k">เบอร์ติดต่อ:</div><div class="v" id="pvPhone"></div></div>
+    <div id="pvProblemBody" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;font-size:13px;line-height:1.7;"></div>
+    <button type="button" class="secondary" id="pvCloseBtn" style="width:100%;margin-top:14px;">ปิด</button>
+  </div>
 </div>
 
 <div id="bannerHost"></div>
@@ -5944,6 +5958,30 @@ function problemStatusBadgeHtml_(c) {
     : '<span class="rating-badge none">⏳ ดำเนินการอยู่</span>';
 }
 
+// Best-effort link from a Problem Case back to its install job record, so
+// the case list / detail popup can show read-only install info (completed
+// date, installing contractor, equipment, location) that the Problem Cases
+// sheet itself doesn't store -- Sure's request, 2026-09-07. A case's TS App
+// field can hold multiple comma-separated numbers (multi-unit sites), so we
+// match against each part; falls back to an exact customer-name match.
+function problemMatchedJob_(c) {
+  if (!c) return null;
+  var list = JOBS || [];
+  var tsParts = String(c.ts_app || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  if (tsParts.length) {
+    for (var i = 0; i < list.length; i++) {
+      var jTs = String(list[i].ts_app || list[i].job_code || '').trim();
+      if (jTs && tsParts.indexOf(jTs) !== -1) return list[i];
+    }
+  }
+  if (c.customer) {
+    for (var k = 0; k < list.length; k++) {
+      if (String(list[k].customer || '').trim() === String(c.customer).trim()) return list[k];
+    }
+  }
+  return null;
+}
+
 function renderProblemCaseList() {
   var body = document.getElementById('problemCaseListBody');
   var countEl = document.getElementById('problemCaseCount');
@@ -5952,16 +5990,21 @@ function renderProblemCaseList() {
   var cases = problemCases().filter(function(c) { return problemMatchesSearch_(c, q); });
   if (countEl) countEl.textContent = cases.length;
   if (!cases.length) {
-    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);">ไม่พบเคส</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);">ไม่พบเคส</td></tr>';
     return;
   }
   body.innerHTML = cases.map(function(c) {
     var apptText = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_
       ? (escHtml(c.appointment_date || '-') + (c.appointment_time ? (' ' + escHtml(c.appointment_time)) : ''))
       : '-';
+    var mJob = problemMatchedJob_(c);
+    var installDoneText = (mJob && jobFinishIso_(mJob)) || '-';
+    var installContractorText = mJob ? (contractorDisplayName(mJob.contractor) || mJob.contractor || '-') : '-';
     return '<tr>' +
       '<td>' + escHtml(c.site || c.customer || '-') + (c.site && c.customer ? ('<div style="font-size:11px;color:var(--muted);">' + escHtml(c.customer) + '</div>') : '') + '</td>' +
       '<td>' + escHtml(c.ts_app || '-') + '</td>' +
+      '<td>' + escHtml(installDoneText) + '</td>' +
+      '<td>' + escHtml(installContractorText) + '</td>' +
       '<td>' + escHtml(c.phone || '-') + '</td>' +
       '<td>' + escHtml((c.symptom || '').slice(0, 40)) + '</td>' +
       '<td>' + problemTypeBadgeHtml_(c) + '</td>' +
@@ -5982,12 +6025,26 @@ function problemCaseByRow_(row) {
   return null;
 }
 
+// A Drive share link from file.getUrl() (".../file/d/FILE_ID/view...") is an
+// HTML viewer page, not an image resource -- an <img src> pointed at it just
+// shows a broken image. This rewrites it into Drive's thumbnail endpoint,
+// which serves the actual image bytes and is what needs to go in <img src>
+// or the lightbox. Fixes Sure's report (2026-09-07): "upload ภาพแล้ว...
+// ไม่แสดงภาพ".
+function problemPhotoImgSrc_(url, sizePx) {
+  if (!url) return '';
+  var m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  var id = m ? m[1] : '';
+  if (!id) return url;
+  return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (sizePx || 1600);
+}
+
 function renderProblemLogEntry_(log) {
   var photosHtml = '';
   if (log.photos && log.photos.length) {
     photosHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' +
       log.photos.map(function(url) {
-        return '<img src="' + escHtml(url) + '" class="problem-log-photo" data-url="' + escHtml(url) + '" ' +
+        return '<img src="' + escHtml(problemPhotoImgSrc_(url, 200)) + '" class="problem-log-photo" data-url="' + escHtml(url) + '" ' +
           'style="width:64px;height:64px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--border);">';
       }).join('') + '</div>';
   }
@@ -5998,31 +6055,44 @@ function renderProblemLogEntry_(log) {
     '</div>';
 }
 
+// Popup version of the case detail view (Sure's request, 2026-09-07): opens
+// as a modal styled like the regular "show install job" popup, with the same
+// core job-identity fields up top (site, type/date, job number, contractor,
+// equipment, address, Location, phone -- pulled from the matched install job
+// via problemMatchedJob_ where the Problem Case record itself doesn't carry
+// them), and the full problem-report content (symptom, resolution log, photo
+// upload/view) below that, unchanged from before.
 function renderProblemDetail_(c) {
-  var box = document.getElementById('problemDetailBox');
-  if (!box) return;
   currentProblemCase = c;
-  box.style.display = 'block';
-  var typeLabel = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_ ? '🚗 Onsite (ต้องเข้าหน้างาน)' : '📞 ทางโทรศัพท์ (oncall)';
-  var apptLine = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_
-    ? ('<div>นัดหมาย: ' + escHtml(c.appointment_date || '-') + (c.appointment_time ? (' ' + escHtml(c.appointment_time)) : '') + '</div>')
-    : '';
+  var mJob = problemMatchedJob_(c);
+  var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
+
+  document.getElementById('pvTitle').textContent = c.site || c.customer || '(ไม่มีชื่อ)';
+  document.getElementById('pvType').textContent = isOnsite
+    ? ('🚗 Onsite — นัดหมาย ' + (c.appointment_date || '-') + (c.appointment_time ? (' ' + c.appointment_time) : ''))
+    : ('📞 ทางโทรศัพท์ (oncall) — บันทึกวันที่ ' + (c.report_date || '-'));
+  document.getElementById('pvJobCode').textContent = c.ts_app || '-';
+  document.getElementById('pvContractor').textContent = c.contractor || (mJob ? contractorDisplayName(mJob.contractor) : '') || '-';
+  document.getElementById('pvEquipment').textContent = (mJob && mJob.equipment) || '-';
+  document.getElementById('pvAddress').textContent = c.site || (mJob && mJob.address) || '-';
+  var pvLocEl = document.getElementById('pvLocation');
+  var locUrl = mJob && mJob.location;
+  if (locUrl) {
+    pvLocEl.innerHTML = '<a class="loc-link" href="' + locUrl + '" target="_blank" rel="noopener">เปิดแผนที่</a>';
+  } else {
+    pvLocEl.textContent = '-';
+  }
+  document.getElementById('pvPhone').textContent = c.phone || '-';
+
   var logsHtml = (c.logs && c.logs.length)
     ? c.logs.slice().reverse().map(renderProblemLogEntry_).join('')
     : '<div style="color:var(--muted);">ยังไม่มีบันทึกการแก้ไข</div>';
 
-  box.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">' +
-      '<div>' +
-        '<div style="font-weight:700;font-size:14px;margin-bottom:4px;">' + escHtml(c.site || c.customer || '-') + '</div>' +
-        '<div>ลูกค้า: ' + escHtml(c.customer || '-') + ' &nbsp;·&nbsp; เบอร์โทร: ' + escHtml(c.phone || '-') + ' &nbsp;·&nbsp; TS App: ' + escHtml(c.ts_app || '-') + '</div>' +
-        '<div>ผรม.: ' + escHtml(c.contractor || '-') + ' &nbsp;·&nbsp; วันที่แจ้ง: ' + escHtml(c.report_date || '-') + ' &nbsp;·&nbsp; ผู้แจ้ง: ' + escHtml(c.reported_by || '-') + '</div>' +
-        '<div>อาการที่เกิดขึ้น: ' + escHtml(c.symptom || '-') + '</div>' +
-        '<div>รูปแบบการแก้ไข: ' + typeLabel + '</div>' +
-        apptLine +
-      '</div>' +
-      '<div>' + problemStatusBadgeHtml_(c) + '</div>' +
-    '</div>' +
+  var body = document.getElementById('pvProblemBody');
+  body.innerHTML =
+    '<div>ลูกค้า: ' + escHtml(c.customer || '-') + ' &nbsp;·&nbsp; ผู้แจ้ง: ' + escHtml(c.reported_by || '-') + '</div>' +
+    '<div style="margin-top:4px;">อาการที่เกิดขึ้น: ' + escHtml(c.symptom || '-') + '</div>' +
+    '<div style="margin-top:6px;">สถานะ: ' + problemStatusBadgeHtml_(c) + '</div>' +
     '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">' +
       '<div style="font-weight:600;margin-bottom:6px;">บันทึกการแก้ไข</div>' +
       '<div id="problemLogList">' + logsHtml + '</div>' +
@@ -6046,6 +6116,8 @@ function renderProblemDetail_(c) {
       if (img) openProblemLightbox_(img.getAttribute('data-url'));
     });
   }
+
+  document.getElementById('problemViewOverlay').classList.add('open');
 }
 
 function fileToBase64_(blob) {
@@ -6127,7 +6199,7 @@ function openProblemLightbox_(url) {
   var lb = document.getElementById('problemLightbox');
   var img = document.getElementById('problemLightboxImg');
   if (!lb || !img) return;
-  img.src = url;
+  img.src = problemPhotoImgSrc_(url, 1600);
   lb.style.display = 'flex';
 }
 function closeProblemLightbox_() {
@@ -6136,6 +6208,17 @@ function closeProblemLightbox_() {
 }
 var problemLightboxEl = document.getElementById('problemLightbox');
 if (problemLightboxEl) problemLightboxEl.onclick = function() { closeProblemLightbox_(); };
+
+var pvCloseBtnEl = document.getElementById('pvCloseBtn');
+if (pvCloseBtnEl) pvCloseBtnEl.onclick = function() {
+  document.getElementById('problemViewOverlay').classList.remove('open');
+};
+var problemViewOverlayEl = document.getElementById('problemViewOverlay');
+if (problemViewOverlayEl) {
+  problemViewOverlayEl.addEventListener('click', function(ev) {
+    if (ev.target === problemViewOverlayEl) problemViewOverlayEl.classList.remove('open');
+  });
+}
 
 function problemJobSearchResults_(q) {
   if (!q || q.length < 2) return [];
@@ -6305,8 +6388,8 @@ function deleteProblemCase_(row) {
       RATINGS_SUMMARY.problems = RATINGS_SUMMARY.problems.filter(function(x) { return x.row !== row; });
     }
     if (currentProblemCase === c) {
-      var box = document.getElementById('problemDetailBox');
-      if (box) box.style.display = 'none';
+      var pvOverlay = document.getElementById('problemViewOverlay');
+      if (pvOverlay) pvOverlay.classList.remove('open');
       currentProblemCase = null;
     }
     renderProblemCaseList();

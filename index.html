@@ -351,7 +351,7 @@
   <button class="secondary view-tab-btn" id="tabSlaBtn">🎯 SLA ติดตั้ง</button>
   <button class="secondary view-tab-btn" id="tabAllocBtn">🧭 แนะนำ ผรม. งานใหม่</button>
   <button class="secondary view-tab-btn" id="tabDashBtn">📈 Dashboard</button>
-  <button class="secondary view-tab-btn" id="tabProjectBtn">🏗️ Project</button>
+  <button class="secondary view-tab-btn" id="tabProblemBtn">🛠️ Problem</button>
 </div>
 
 <div class="month-nav" id="monthNavRow">
@@ -752,28 +752,84 @@
   <div id="dashSections"></div>
 </div>
 
-<div id="projectWrap" style="display:none;">
+<div id="problemWrap" style="display:none;">
   <div class="card-box">
-    <div class="overview-section-title">Project — ปฏิทินติดตามงานโครงการ</div>
-    <div class="doc-table-toolbar">ข้อมูลจากชีต "Progress Project" (งาน B2B / Comply / Pre-Sale) แยกจากงานติดตั้งลูกค้ารายย่อยในแท็บอื่น ใช้ติดตามความคืบหน้าของแต่ละโครงการเรื่อยๆ</div>
+    <div class="overview-section-title">Problem — บันทึกปัญหาหน้างานหลังติดตั้ง</div>
+    <div class="doc-table-toolbar">บันทึกปัญหาหน้างานที่ติดตั้งไปแล้ว (มิเตอร์อ่านค่าไม่ได้ ค่า GND ไม่ได้ น้ำรั่วซึม ฯลฯ) ค้นหาเคสด้วยชื่อ Site / เบอร์โทรลูกค้า / เลข TS Job หรือสร้างเคสใหม่ทันทีที่มีการแจ้งปัญหาเข้ามา แล้วค่อยเข้ามาเพิ่มบันทึกการแก้ไขทีหลังได้</div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 14px;">
+      <input type="text" id="problemSearchInput" placeholder="ค้นหา: ชื่อ Site / เบอร์โทร / เลข TS Job" style="flex:1 1 260px;">
+      <button class="secondary" id="problemNewCaseBtn">+ สร้างเคสใหม่</button>
+    </div>
+
+    <div id="problemNewCaseForm" style="display:none;border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--bg);">
+      <div style="font-weight:600;margin-bottom:10px;">สร้างเคสปัญหาใหม่</div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ค้นหางาน (ชื่อลูกค้า / เลข TS Job / ที่อยู่) เพื่อดึงข้อมูลอัตโนมัติ</label>
+        <input type="text" id="problemJobSearchInput" placeholder="พิมพ์เพื่อค้นหางานที่เคยติดตั้ง..." style="width:100%;box-sizing:border-box;">
+        <div id="problemJobSearchResults" style="display:none;max-height:180px;overflow:auto;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#fff;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">เลข TS Job</label><input type="text" id="pcTsApp" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ชื่อลูกค้า</label><input type="text" id="pcCustomer" style="width:100%;box-sizing:border-box;"></div>
+        <div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Site / ที่อยู่</label><input type="text" id="pcSite" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">เบอร์โทร</label><input type="text" id="pcPhone" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ผรม.</label><input type="text" id="pcContractor" style="width:100%;box-sizing:border-box;"></div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">อาการที่เกิดขึ้น</label>
+        <textarea id="pcSymptom" rows="2" style="width:100%;box-sizing:border-box;" placeholder="เช่น มิเตอร์อ่านค่าไม่ได้, ค่า GND ไม่ได้, น้ำรั่วซึม..."></textarea>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">รูปแบบการแก้ไข</label>
+        <label style="margin-right:16px;"><input type="radio" name="pcResType" id="pcResPhone" value="โทรศัพท์" checked> 📞 ทางโทรศัพท์ (oncall)</label>
+        <label><input type="radio" name="pcResType" id="pcResOnsite" value="Onsite"> 🚗 Onsite</label>
+      </div>
+      <div id="pcAppointmentRow" style="display:none;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่นัดหมาย</label><input type="date" id="pcApptDate" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">เวลานัดหมาย</label><input type="time" id="pcApptTime" style="width:100%;box-sizing:border-box;"></div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ผู้แจ้ง/ผู้สร้างเคส</label>
+        <input type="text" id="pcReportedBy" style="width:100%;box-sizing:border-box;" placeholder="ชื่อผู้บันทึกเคสนี้">
+      </div>
+      <div id="pcError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="secondary" id="pcSubmitBtn">บันทึกเคส</button>
+        <button class="secondary" id="pcCancelBtn">ยกเลิก</button>
+      </div>
+    </div>
+
+    <div class="doc-table-toolbar">รายการเคสทั้งหมด (<span id="problemCaseCount">0</span>)</div>
+    <div style="overflow-x:auto;margin-bottom:20px;">
+      <table class="doc-table">
+        <thead><tr><th>Site / ลูกค้า</th><th>TS App</th><th>เบอร์โทร</th><th>อาการ</th><th>รูปแบบ</th><th>นัดหมาย</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody id="problemCaseListBody"></tbody>
+      </table>
+    </div>
+
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:10px 0 12px;">
-      <div class="month-summary" id="projectSummary"></div>
+      <div class="month-summary" id="problemSummary"></div>
       <div style="display:flex;align-items:center;gap:10px;">
-        <button class="secondary" id="projectPrevMonth">‹ เดือนก่อน</button>
-        <strong id="projectMonthLabel"></strong>
-        <button class="secondary" id="projectNextMonth">เดือนถัดไป ›</button>
+        <button class="secondary" id="problemPrevMonth">‹ เดือนก่อน</button>
+        <strong id="problemMonthLabel"></strong>
+        <button class="secondary" id="problemNextMonth">เดือนถัดไป ›</button>
       </div>
     </div>
     <div class="legend">
-      <span><span class="dot" style="background:#64748b;"></span>เริ่มโครงการ</span>
-      <span><span class="dot" style="background:#2563eb;"></span>วันเข้าสำรวจ</span>
-      <span><span class="dot" style="background:#d97706;"></span>วันนัดติดตั้ง</span>
-      <span style="border-left:1px solid var(--border);padding-left:14px;">🔥 = เร่งด่วน &nbsp;·&nbsp; สีเทาจาง/ขีดฆ่า = ยกเลิกโครงการ</span>
+      <span><span class="dot" style="background:#2563eb;"></span>แก้ไขทางโทรศัพท์ (oncall)</span>
+      <span><span class="dot" style="background:#dc2626;"></span>ต้องเข้า Onsite</span>
+      <span style="border-left:1px solid var(--border);padding-left:14px;">✅ = แก้ไขเสร็จสิ้นแล้ว</span>
     </div>
-    <div class="calendar-grid" id="projectDowRow"></div>
-    <div class="calendar-grid" id="projectCalGrid"></div>
-    <div id="projectDetailBox" style="display:none;margin-top:14px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;line-height:1.7;"></div>
+    <div class="calendar-grid" id="problemDowRow"></div>
+    <div class="calendar-grid" id="problemCalGrid"></div>
+
+    <div id="problemDetailBox" style="display:none;margin-top:14px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;line-height:1.7;"></div>
   </div>
+</div>
+
+<div id="problemLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;">
+  <img id="problemLightboxImg" src="" style="max-width:92vw;max-height:92vh;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,0.5);">
 </div>
 
 <div id="bannerHost"></div>
@@ -998,9 +1054,12 @@ var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || localStorage.getI
 
 var JOBS = [];
 var EVENTS = [];
-// "Project" tab (Sure's request, 2026-08-07): tracks the separate
-// "Progress Project" sheet tab. Populated from data.projects in fetchData()
-// below, same as JOBS/EVENTS come from data.jobs/data.events.
+// "Project" tab (2026-08-07) was REPLACED by the "Problem" tab (2026-09-07,
+// Sure's request -- "แทนที่ของเดิมทั้งหมด"). PROJECTS/refresh_calendar.py's
+// __PROJECTS_JSON__ feed is left harmlessly in place (still populated if
+// present) but no longer read by any UI -- the Problem tab's case data comes
+// live from RATINGS_SUMMARY.problems instead (see problemCases()/switchView
+// 'problem' below), the same live-fetch mechanism as jobDocs/CSAT/checklist.
 var PROJECTS = [];
 var ALL_CONTRACTORS = [];
 var CHART_PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#c026d3','#65a30d','#ea580c','#0d9488','#9333ea','#facc15','#f43f5e','#0ea5e9'];
@@ -1169,6 +1228,7 @@ function fetchRatingsSummary() {
       if (document.getElementById('tabEvalBtn').classList.contains('active')) renderEvalTable();
       if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderManualRatingChart(); renderManualRatingTable(); renderSlaTable(); }
       if (document.getElementById('tabAllocBtn').classList.contains('active')) renderAllocTable();
+      if (document.getElementById('tabProblemBtn').classList.contains('active')) { renderProblemCaseList(); renderProblemTab(); }
       // Unconditional (fix 2026-07-27): the Dashboard's rating section was
       // coming up empty whenever the user opened that tab BEFORE this fetch
       // resolved -- the old "only if the tab is active" guard meant the
@@ -5836,42 +5896,425 @@ function dashExportPdf() {
 // which don't line up with PROJECTS' fields, so mixing them in would filter
 // silently wrong. Keeps its own month cursor instead of sharing CUR_Y/CUR_M
 // with the main calendar so switching tabs never jumps the user's place.
-var PROJECT_KIND_LABEL = { start: 'เริ่มโครงการ', survey: 'สำรวจ', install: 'นัดติดตั้ง' };
-var PROJECT_KIND_DOT = { start: '#64748b', survey: '#2563eb', install: '#d97706' };
-var PROJECT_KIND_BG = { start: '#f1f5f9', survey: '#eff6ff', install: '#fffbeb' };
-var PROJECT_KIND_FG = { start: '#334155', survey: '#1e3a8a', install: '#92400e' };
-var projectCur = { y: TODAY.getFullYear(), m: TODAY.getMonth() + 1 };
+// Problem-case tracking (added 2026-09-07, Sure's request) -- REPLACES the
+// old "Project" pipeline-tracking tab entirely. Data comes live from
+// RATINGS_SUMMARY.problems (see fetchRatingsSummary() / the fetchData()
+// success callback below), same live-fetch mechanism as jobDocs/CSAT/
+// checklist -- NOT from the periodic-snapshot PROJECTS/refresh_calendar.py
+// pipeline, which can't support interactive case creation or photo uploads.
+var PROBLEM_RES_TYPE_PHONE_ = 'โทรศัพท์';
+var PROBLEM_RES_TYPE_ONSITE_ = 'Onsite';
+var problemCur = { y: TODAY.getFullYear(), m: TODAY.getMonth() + 1 };
+var currentProblemCase = null;
 
-function buildProjectEvents_() {
-  var evs = [];
-  (PROJECTS || []).forEach(function(p, idx) {
-    if (p.start) evs.push({ date: p.start, kind: 'start', p: p, idx: idx });
-    if (p.survey) evs.push({ date: p.survey, kind: 'survey', p: p, idx: idx });
-    if (p.install) evs.push({ date: p.install, kind: 'install', p: p, idx: idx });
-  });
-  return evs;
+function problemCases() {
+  return (RATINGS_SUMMARY && RATINGS_SUMMARY.problems) || [];
 }
 
-function renderProjectSummary_(monthEvents) {
-  var counts = { total: 0, ongoing: 0, urgent: 0, done: 0, cancelled: 0 };
-  var seen = {};
+// Calendar date logic (Sure's 2nd clarifying answer, 2026-09-07): ALL cases
+// show on the calendar as soon as they're reported -- oncall or onsite
+// alike. Once an onsite case has an appointment date, the calendar switches
+// to showing it under THAT date instead (the day someone will actually go
+// fix it), not the original report date.
+function problemDisplayDate_(c) {
+  if (c.resolution_type === PROBLEM_RES_TYPE_ONSITE_ && c.appointment_date) return c.appointment_date;
+  return c.report_date;
+}
+
+function problemMatchesSearch_(c, q) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  return (String(c.site || '').toLowerCase().indexOf(q) !== -1) ||
+    (String(c.customer || '').toLowerCase().indexOf(q) !== -1) ||
+    (String(c.phone || '').toLowerCase().indexOf(q) !== -1) ||
+    (String(c.ts_app || '').toLowerCase().indexOf(q) !== -1);
+}
+
+function problemTypeBadgeHtml_(c) {
+  var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
+  var bg = isOnsite ? '#fee2e2' : '#dbeafe';
+  var fg = isOnsite ? '#991b1b' : '#1e40af';
+  var label = isOnsite ? '🚗 Onsite' : '📞 โทรศัพท์';
+  return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:' + bg + ';color:' + fg + ';white-space:nowrap;">' + label + '</span>';
+}
+
+function problemStatusBadgeHtml_(c) {
+  return c.resolved
+    ? '<span class="rating-badge" style="background:#dcfce7;color:#166534;">✅ แก้ไขเสร็จสิ้น</span>'
+    : '<span class="rating-badge none">⏳ ดำเนินการอยู่</span>';
+}
+
+function renderProblemCaseList() {
+  var body = document.getElementById('problemCaseListBody');
+  var countEl = document.getElementById('problemCaseCount');
+  if (!body) return;
+  var q = ((document.getElementById('problemSearchInput') || {}).value || '').trim();
+  var cases = problemCases().filter(function(c) { return problemMatchesSearch_(c, q); });
+  if (countEl) countEl.textContent = cases.length;
+  if (!cases.length) {
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);">ไม่พบเคส</td></tr>';
+    return;
+  }
+  body.innerHTML = cases.map(function(c) {
+    var apptText = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_
+      ? (escHtml(c.appointment_date || '-') + (c.appointment_time ? (' ' + escHtml(c.appointment_time)) : ''))
+      : '-';
+    return '<tr>' +
+      '<td>' + escHtml(c.site || c.customer || '-') + (c.site && c.customer ? ('<div style="font-size:11px;color:var(--muted);">' + escHtml(c.customer) + '</div>') : '') + '</td>' +
+      '<td>' + escHtml(c.ts_app || '-') + '</td>' +
+      '<td>' + escHtml(c.phone || '-') + '</td>' +
+      '<td>' + escHtml((c.symptom || '').slice(0, 40)) + '</td>' +
+      '<td>' + problemTypeBadgeHtml_(c) + '</td>' +
+      '<td>' + apptText + '</td>' +
+      '<td>' + problemStatusBadgeHtml_(c) + '</td>' +
+      '<td><button type="button" class="secondary problem-view-btn" data-row="' + c.row + '" style="padding:4px 10px;font-size:12px;">ดูรายละเอียด</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function problemCaseByRow_(row) {
+  var list = problemCases();
+  for (var i = 0; i < list.length; i++) { if (list[i].row === row) return list[i]; }
+  return null;
+}
+
+function renderProblemLogEntry_(log) {
+  var photosHtml = '';
+  if (log.photos && log.photos.length) {
+    photosHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' +
+      log.photos.map(function(url) {
+        return '<img src="' + escHtml(url) + '" class="problem-log-photo" data-url="' + escHtml(url) + '" ' +
+          'style="width:64px;height:64px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--border);">';
+      }).join('') + '</div>';
+  }
+  return '<div style="padding:8px 0;border-bottom:1px solid var(--border);">' +
+    '<div style="font-size:12px;color:var(--muted);">' + escHtml(log.logDate || '-') + ' &nbsp;·&nbsp; โดย ' + escHtml(log.loggedBy || '-') + '</div>' +
+    '<div>' + escHtml(log.detail || '-') + '</div>' +
+    photosHtml +
+    '</div>';
+}
+
+function renderProblemDetail_(c) {
+  var box = document.getElementById('problemDetailBox');
+  if (!box) return;
+  currentProblemCase = c;
+  box.style.display = 'block';
+  var typeLabel = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_ ? '🚗 Onsite (ต้องเข้าหน้างาน)' : '📞 ทางโทรศัพท์ (oncall)';
+  var apptLine = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_
+    ? ('<div>นัดหมาย: ' + escHtml(c.appointment_date || '-') + (c.appointment_time ? (' ' + escHtml(c.appointment_time)) : '') + '</div>')
+    : '';
+  var logsHtml = (c.logs && c.logs.length)
+    ? c.logs.slice().reverse().map(renderProblemLogEntry_).join('')
+    : '<div style="color:var(--muted);">ยังไม่มีบันทึกการแก้ไข</div>';
+
+  box.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">' +
+      '<div>' +
+        '<div style="font-weight:700;font-size:14px;margin-bottom:4px;">' + escHtml(c.site || c.customer || '-') + '</div>' +
+        '<div>ลูกค้า: ' + escHtml(c.customer || '-') + ' &nbsp;·&nbsp; เบอร์โทร: ' + escHtml(c.phone || '-') + ' &nbsp;·&nbsp; TS App: ' + escHtml(c.ts_app || '-') + '</div>' +
+        '<div>ผรม.: ' + escHtml(c.contractor || '-') + ' &nbsp;·&nbsp; วันที่แจ้ง: ' + escHtml(c.report_date || '-') + ' &nbsp;·&nbsp; ผู้แจ้ง: ' + escHtml(c.reported_by || '-') + '</div>' +
+        '<div>อาการที่เกิดขึ้น: ' + escHtml(c.symptom || '-') + '</div>' +
+        '<div>รูปแบบการแก้ไข: ' + typeLabel + '</div>' +
+        apptLine +
+      '</div>' +
+      '<div>' + problemStatusBadgeHtml_(c) + '</div>' +
+    '</div>' +
+    '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">' +
+      '<div style="font-weight:600;margin-bottom:6px;">บันทึกการแก้ไข</div>' +
+      '<div id="problemLogList">' + logsHtml + '</div>' +
+    '</div>' +
+    '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">' +
+      '<div style="font-weight:600;margin-bottom:6px;">+ เพิ่มบันทึกการแก้ไข</div>' +
+      '<input type="text" id="plLoggedBy" placeholder="ชื่อผู้บันทึก/ผู้เข้าแก้ไข" style="width:100%;box-sizing:border-box;margin-bottom:6px;">' +
+      '<textarea id="plDetail" rows="2" placeholder="รายละเอียดการแก้ไข..." style="width:100%;box-sizing:border-box;margin-bottom:6px;"></textarea>' +
+      '<input type="file" id="plPhotoFile" accept="image/*" multiple style="margin-bottom:6px;">' +
+      '<label style="display:block;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="plResolved"' + (c.resolved ? ' checked disabled' : '') + '> ทำเครื่องหมายว่าแก้ไขเสร็จสิ้นแล้ว (ปิดเคส)</label>' +
+      '<div id="plError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:6px;"></div>' +
+      '<button type="button" class="secondary" id="plSubmitBtn">+ เพิ่มบันทึก</button>' +
+    '</div>';
+
+  var submitBtn = document.getElementById('plSubmitBtn');
+  if (submitBtn) submitBtn.onclick = function() { submitProblemLog_(c); };
+  var logListEl = document.getElementById('problemLogList');
+  if (logListEl) {
+    logListEl.addEventListener('click', function(ev) {
+      var img = ev.target.closest && ev.target.closest('.problem-log-photo');
+      if (img) openProblemLightbox_(img.getAttribute('data-url'));
+    });
+  }
+}
+
+function fileToBase64_(blob) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() { resolve(String(reader.result || '').split(',')[1] || ''); };
+    reader.onerror = function(err) { reject(err); };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function submitProblemLog_(c) {
+  var errEl = document.getElementById('plError');
+  var loggedByEl = document.getElementById('plLoggedBy');
+  var detailEl = document.getElementById('plDetail');
+  var fileEl = document.getElementById('plPhotoFile');
+  var resolvedEl = document.getElementById('plResolved');
+  var loggedBy = (loggedByEl.value || '').trim();
+  var detail = (detailEl.value || '').trim();
+  var files = fileEl.files ? Array.prototype.slice.call(fileEl.files) : [];
+  if (!loggedBy) { errEl.textContent = 'กรุณาใส่ชื่อผู้บันทึก'; errEl.style.display = ''; return; }
+  if (!detail && !files.length) { errEl.textContent = 'กรุณาใส่รายละเอียดการแก้ไข หรือแนบรูปภาพอย่างน้อยหนึ่งรูป'; errEl.style.display = ''; return; }
+  for (var i = 0; i < files.length; i++) {
+    if (!isImageFile_(files[i])) { errEl.textContent = 'แนบได้เฉพาะไฟล์รูปภาพเท่านั้น'; errEl.style.display = ''; return; }
+  }
+  if (!ratingsConfigured()) { errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางอัปโหลด (RATINGS_WEBAPP_URL)'; errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+
+  var submitBtn = document.getElementById('plSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = files.length ? 'กำลังอัปโหลดรูปภาพ...' : 'กำลังบันทึก...';
+
+  Promise.all(files.map(function(f) {
+    return compressImageIfNeeded_(f).then(function(prepared) {
+      return fileToBase64_(prepared.blob).then(function(b64) {
+        return { fileName: prepared.fileName, mimeType: prepared.mimeType, fileData: b64 };
+      });
+    });
+  })).then(function(photos) {
+    var payload = {
+      key: RATINGS_ACCESS_KEY,
+      type: 'problem_log_add',
+      caseRow: c.row,
+      logged_by: loggedBy,
+      detail: detail,
+      photos: photos
+    };
+    if (resolvedEl && resolvedEl.checked && !c.resolved) payload.resolved = true;
+    return fetch(RATINGS_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '+ เพิ่มบันทึก';
+    if (!res || !res.success) {
+      errEl.textContent = (res && res.error) || 'บันทึกไม่สำเร็จ';
+      errEl.style.display = '';
+      return;
+    }
+    c.logs = c.logs || [];
+    c.logs.push({ row: res.row, logDate: '', loggedBy: loggedBy, detail: detail, photos: res.photoUrls || [] });
+    if (resolvedEl && resolvedEl.checked) c.resolved = true;
+    renderProblemDetail_(c);
+    renderProblemCaseList();
+    renderProblemTab();
+    fetchRatingsSummary();
+  }).catch(function(err) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '+ เพิ่มบันทึก';
+    errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+    errEl.style.display = '';
+  });
+}
+
+function openProblemLightbox_(url) {
+  if (!url) return;
+  var lb = document.getElementById('problemLightbox');
+  var img = document.getElementById('problemLightboxImg');
+  if (!lb || !img) return;
+  img.src = url;
+  lb.style.display = 'flex';
+}
+function closeProblemLightbox_() {
+  var lb = document.getElementById('problemLightbox');
+  if (lb) lb.style.display = 'none';
+}
+var problemLightboxEl = document.getElementById('problemLightbox');
+if (problemLightboxEl) problemLightboxEl.onclick = function() { closeProblemLightbox_(); };
+
+function problemJobSearchResults_(q) {
+  if (!q || q.length < 2) return [];
+  q = q.toLowerCase();
+  return (JOBS || []).filter(function(j) {
+    return (String(j.ts_app || j.job_code || '').toLowerCase().indexOf(q) !== -1) ||
+      (String(j.customer || '').toLowerCase().indexOf(q) !== -1) ||
+      (String(j.address || '').toLowerCase().indexOf(q) !== -1);
+  }).slice(0, 8);
+}
+
+function resetProblemCaseForm_() {
+  ['pcTsApp', 'pcCustomer', 'pcSite', 'pcPhone', 'pcContractor', 'pcSymptom', 'pcApptDate', 'pcApptTime', 'pcReportedBy'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var phoneRadio = document.getElementById('pcResPhone');
+  if (phoneRadio) phoneRadio.checked = true;
+  var apptRow = document.getElementById('pcAppointmentRow');
+  if (apptRow) apptRow.style.display = 'none';
+  var errEl = document.getElementById('pcError');
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  var jobResults = document.getElementById('problemJobSearchResults');
+  if (jobResults) { jobResults.style.display = 'none'; jobResults.innerHTML = ''; }
+  var jobSearchInput = document.getElementById('problemJobSearchInput');
+  if (jobSearchInput) jobSearchInput.value = '';
+}
+
+function submitProblemCase_() {
+  var errEl = document.getElementById('pcError');
+  var tsApp = (document.getElementById('pcTsApp').value || '').trim();
+  var customer = (document.getElementById('pcCustomer').value || '').trim();
+  var site = (document.getElementById('pcSite').value || '').trim();
+  var phone = (document.getElementById('pcPhone').value || '').trim();
+  var contractor = (document.getElementById('pcContractor').value || '').trim();
+  var symptom = (document.getElementById('pcSymptom').value || '').trim();
+  var isOnsite = !!(document.getElementById('pcResOnsite') && document.getElementById('pcResOnsite').checked);
+  var resolutionType = isOnsite ? PROBLEM_RES_TYPE_ONSITE_ : PROBLEM_RES_TYPE_PHONE_;
+  var apptDate = (document.getElementById('pcApptDate').value || '').trim();
+  var apptTime = (document.getElementById('pcApptTime').value || '').trim();
+  var reportedBy = (document.getElementById('pcReportedBy').value || '').trim();
+
+  if (!tsApp && !customer && !site) { errEl.textContent = 'กรุณาระบุอย่างน้อยหนึ่งอย่าง: เลข TS Job / ชื่อลูกค้า / Site'; errEl.style.display = ''; return; }
+  if (!symptom) { errEl.textContent = 'กรุณาใส่อาการที่เกิดขึ้น'; errEl.style.display = ''; return; }
+  if (isOnsite && !apptDate) { errEl.textContent = 'งาน Onsite ต้องระบุวันที่นัดหมาย'; errEl.style.display = ''; return; }
+  if (!reportedBy) { errEl.textContent = 'กรุณาใส่ชื่อผู้แจ้ง/ผู้สร้างเคส'; errEl.style.display = ''; return; }
+  if (!ratingsConfigured()) { errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางอัปโหลด (RATINGS_WEBAPP_URL)'; errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+
+  var submitBtn = document.getElementById('pcSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'กำลังบันทึก...';
+
+  var reportDate = TODAY_ISO;
+  var payload = {
+    key: RATINGS_ACCESS_KEY,
+    type: 'problem_case_create',
+    ts_app: tsApp, customer: customer, site: site, phone: phone, contractor: contractor,
+    symptom: symptom, resolution_type: resolutionType,
+    appointment_date: isOnsite ? apptDate : '', appointment_time: isOnsite ? apptTime : '',
+    reported_by: reportedBy, report_date: reportDate
+  };
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'บันทึกเคส';
+    if (!res || !res.success) {
+      errEl.textContent = (res && res.error) || 'บันทึกไม่สำเร็จ';
+      errEl.style.display = '';
+      return;
+    }
+    if (!RATINGS_SUMMARY.problems) RATINGS_SUMMARY.problems = [];
+    var newCase = {
+      row: res.row, ts_app: tsApp, customer: customer, site: site, phone: phone, contractor: contractor,
+      report_date: reportDate, symptom: symptom, resolution_type: resolutionType,
+      appointment_date: isOnsite ? apptDate : '', appointment_time: isOnsite ? apptTime : '',
+      resolved: false, reported_by: reportedBy, logs: []
+    };
+    RATINGS_SUMMARY.problems.unshift(newCase);
+    document.getElementById('problemNewCaseForm').style.display = 'none';
+    resetProblemCaseForm_();
+    renderProblemCaseList();
+    renderProblemTab();
+    renderProblemDetail_(newCase);
+    fetchRatingsSummary();
+  }).catch(function(err) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'บันทึกเคส';
+    errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+    errEl.style.display = '';
+  });
+}
+
+var problemSearchInputEl = document.getElementById('problemSearchInput');
+if (problemSearchInputEl) problemSearchInputEl.addEventListener('input', function() { renderProblemCaseList(); });
+
+var problemCaseListBodyEl = document.getElementById('problemCaseListBody');
+if (problemCaseListBodyEl) {
+  problemCaseListBodyEl.addEventListener('click', function(ev) {
+    var btn = ev.target.closest && ev.target.closest('.problem-view-btn');
+    if (!btn) return;
+    var row = parseInt(btn.getAttribute('data-row'), 10);
+    var c = problemCaseByRow_(row);
+    if (c) renderProblemDetail_(c);
+  });
+}
+
+var problemNewCaseBtnEl = document.getElementById('problemNewCaseBtn');
+if (problemNewCaseBtnEl) {
+  problemNewCaseBtnEl.onclick = function() {
+    var form = document.getElementById('problemNewCaseForm');
+    var show = form.style.display === 'none' || !form.style.display;
+    if (show) { resetProblemCaseForm_(); form.style.display = ''; }
+    else { form.style.display = 'none'; }
+  };
+}
+var pcCancelBtnEl = document.getElementById('pcCancelBtn');
+if (pcCancelBtnEl) pcCancelBtnEl.onclick = function() { document.getElementById('problemNewCaseForm').style.display = 'none'; };
+var pcSubmitBtnEl = document.getElementById('pcSubmitBtn');
+if (pcSubmitBtnEl) pcSubmitBtnEl.onclick = function() { submitProblemCase_(); };
+var pcResPhoneEl = document.getElementById('pcResPhone');
+var pcResOnsiteEl = document.getElementById('pcResOnsite');
+[pcResPhoneEl, pcResOnsiteEl].forEach(function(r) {
+  if (!r) return;
+  r.addEventListener('change', function() {
+    var apptRow = document.getElementById('pcAppointmentRow');
+    if (apptRow) apptRow.style.display = (pcResOnsiteEl && pcResOnsiteEl.checked) ? 'grid' : 'none';
+  });
+});
+
+var problemJobSearchInputEl = document.getElementById('problemJobSearchInput');
+if (problemJobSearchInputEl) {
+  problemJobSearchInputEl.addEventListener('input', function() {
+    var q = this.value.trim();
+    var results = problemJobSearchResults_(q);
+    var host = document.getElementById('problemJobSearchResults');
+    if (!results.length) { host.style.display = 'none'; host.innerHTML = ''; return; }
+    host._results = results;
+    host.style.display = '';
+    host.innerHTML = results.map(function(j, idx) {
+      return '<div class="problem-job-result" data-idx="' + idx + '" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">' +
+        '<div style="font-weight:600;">' + escHtml(j.customer || '-') + ' &nbsp;·&nbsp; ' + escHtml(j.ts_app || j.job_code || '-') + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);">' + escHtml(j.address || '-') + '</div>' +
+        '</div>';
+    }).join('');
+  });
+}
+var problemJobSearchResultsEl = document.getElementById('problemJobSearchResults');
+if (problemJobSearchResultsEl) {
+  problemJobSearchResultsEl.addEventListener('click', function(ev) {
+    var item = ev.target.closest && ev.target.closest('.problem-job-result');
+    if (!item) return;
+    var idx = parseInt(item.getAttribute('data-idx'), 10);
+    var results = this._results || [];
+    var j = results[idx];
+    if (!j) return;
+    document.getElementById('pcTsApp').value = j.ts_app || j.job_code || '';
+    document.getElementById('pcCustomer').value = j.customer || '';
+    document.getElementById('pcSite').value = j.address || '';
+    document.getElementById('pcPhone').value = j.phone || '';
+    document.getElementById('pcContractor').value = contractorDisplayName(j.contractor) || j.contractor || '';
+    this.style.display = 'none';
+    document.getElementById('problemJobSearchInput').value = '';
+  });
+}
+
+function renderProblemSummary_(monthEvents) {
+  var counts = { total: 0, phone: 0, onsite: 0, resolved: 0 };
   monthEvents.forEach(function(e) {
-    if (seen[e.idx]) return;
-    seen[e.idx] = true;
     counts.total++;
-    if (e.p.pstatus === 'เร่งด่วน') counts.urgent++;
-    else if (e.p.pstatus === 'ดำเนินการแล้วเสร็จ') counts.done++;
-    else if (e.p.pstatus === 'ยกเลิกโครงการ') counts.cancelled++;
-    else counts.ongoing++;
+    if (e.c.resolution_type === PROBLEM_RES_TYPE_ONSITE_) counts.onsite++; else counts.phone++;
+    if (e.c.resolved) counts.resolved++;
   });
   var defs = [
     { k: 'total', label: 'ทั้งหมด', cls: 'survey' },
-    { k: 'ongoing', label: 'กำลังดำเนินการ', cls: 'install' },
-    { k: 'urgent', label: 'เร่งด่วน', style: 'border-color:#fca5a5;background:#fef2f2;color:#991b1b;' },
-    { k: 'done', label: 'เสร็จสิ้น', cls: 'completed' },
-    { k: 'cancelled', label: 'ยกเลิก', cls: 'remaining' }
+    { k: 'phone', label: '📞 โทรศัพท์', cls: 'install' },
+    { k: 'onsite', label: '🚗 Onsite', style: 'border-color:#fca5a5;background:#fef2f2;color:#991b1b;' },
+    { k: 'resolved', label: '✅ แก้ไขแล้ว', cls: 'completed' }
   ];
-  var host = document.getElementById('projectSummary');
+  var host = document.getElementById('problemSummary');
   if (!host) return;
   host.innerHTML = defs.map(function(d) {
     var attrs = d.cls ? ' class="msum ' + d.cls + '"' : (' class="msum" style="' + d.style + '"');
@@ -5879,23 +6322,20 @@ function renderProjectSummary_(monthEvents) {
   }).join('');
 }
 
-function renderProjectDetail_(p) {
-  var box = document.getElementById('projectDetailBox');
-  if (!box) return;
-  box.style.display = 'block';
-  var typeTag = { 'Project': 'โครงการ', 'Comply': 'Comply', 'Pre-Sale': 'Pre-Sale' }[p.type] || (p.type || '-');
-  box.innerHTML =
-    '<div style="font-weight:700;margin-bottom:4px;">' + escHtml(p.detail || '-') + '</div>' +
-    '<div>ลูกค้า: ' + escHtml(p.customer || '-') + ' &nbsp;·&nbsp; ประเภท: ' + escHtml(typeTag) +
-    ' &nbsp;·&nbsp; สถานะโครงการ: ' + escHtml(p.pstatus || '-') + '</div>' +
-    '<div>ผรม.: ' + escHtml(p.contractor || '-') + ' &nbsp;·&nbsp; เริ่มโครงการ: ' + (p.start || '-') +
-    ' &nbsp;·&nbsp; สำรวจ: ' + (p.survey || '-') + ' &nbsp;·&nbsp; นัดติดตั้ง: ' + (p.install || '-') + '</div>';
+function buildProblemEvents_() {
+  var evs = [];
+  problemCases().forEach(function(c) {
+    var d = problemDisplayDate_(c);
+    if (!d) return;
+    evs.push({ date: d, c: c });
+  });
+  return evs;
 }
 
-function renderProjectTab() {
-  var dowRowEl = document.getElementById('projectDowRow');
-  var gridEl = document.getElementById('projectCalGrid');
-  var labelEl = document.getElementById('projectMonthLabel');
+function renderProblemTab() {
+  var dowRowEl = document.getElementById('problemDowRow');
+  var gridEl = document.getElementById('problemCalGrid');
+  var labelEl = document.getElementById('problemMonthLabel');
   if (!dowRowEl || !gridEl || !labelEl) return;
 
   if (!dowRowEl.childElementCount) {
@@ -5907,15 +6347,15 @@ function renderProjectTab() {
     });
   }
 
-  var PROJECT_THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+  var PROBLEM_THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
     'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-  var y = projectCur.y, m = projectCur.m;
-  labelEl.textContent = PROJECT_THAI_MONTHS[m - 1] + ' ' + (y + 543);
+  var y = problemCur.y, m = problemCur.m;
+  labelEl.textContent = PROBLEM_THAI_MONTHS[m - 1] + ' ' + (y + 543);
 
   var monthKey = y + '-' + pad(m);
-  var allEvents = buildProjectEvents_();
+  var allEvents = buildProblemEvents_();
   var monthEvents = allEvents.filter(function(e) { return e.date.slice(0, 7) === monthKey; });
-  renderProjectSummary_(monthEvents);
+  renderProblemSummary_(monthEvents);
 
   var firstOfMonth = new Date(y, m - 1, 1);
   var startOffset = (firstOfMonth.getDay() + 6) % 7;
@@ -5947,36 +6387,37 @@ function renderProjectTab() {
 
     var dayEvs = monthEvents.filter(function(e) { return e.date === dateIso; });
     dayEvs.forEach(function(e) {
-      var urgent = e.p.pstatus === 'เร่งด่วน';
-      var cancelled = e.p.pstatus === 'ยกเลิกโครงการ';
+      var c = e.c;
+      var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
+      var bg = c.resolved ? '#f1f5f9' : (isOnsite ? '#fee2e2' : '#dbeafe');
+      var fg = c.resolved ? '#94a3b8' : (isOnsite ? '#991b1b' : '#1e40af');
+      var dot = c.resolved ? '#94a3b8' : (isOnsite ? '#dc2626' : '#2563eb');
       var pill = document.createElement('div');
       pill.style.cssText = 'border-radius:4px;padding:2px 4px;margin-bottom:2px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;background:' +
-        (cancelled ? '#f1f5f9' : PROJECT_KIND_BG[e.kind]) + ';color:' + (cancelled ? '#94a3b8' : PROJECT_KIND_FG[e.kind]) + ';' +
-        (urgent ? 'border-left:3px solid #dc2626;' : '') + (cancelled ? 'text-decoration:line-through;' : '');
+        bg + ';color:' + fg + ';' + (c.resolved ? 'text-decoration:line-through;' : '');
       var dotSpan = document.createElement('span');
-      dotSpan.style.cssText = 'flex-shrink:0;display:inline-block;width:7px;height:7px;border-radius:50%;background:' + (cancelled ? '#94a3b8' : PROJECT_KIND_DOT[e.kind]) + ';';
+      dotSpan.style.cssText = 'flex-shrink:0;display:inline-block;width:7px;height:7px;border-radius:50%;background:' + dot + ';';
       pill.appendChild(dotSpan);
       var txt = document.createElement('span');
-      var label = (e.p.customer || e.p.detail || '');
-      txt.textContent = (urgent ? '🔥 ' : '') + PROJECT_KIND_LABEL[e.kind] + ': ' + label.slice(0, 18);
+      var label = (c.site || c.customer || '-');
+      var prefix = c.resolved ? '✅ ' : (isOnsite ? '🚗 ' : '📞 ');
+      txt.textContent = prefix + label.slice(0, 18);
       pill.appendChild(txt);
       pill.title = 'คลิกดูรายละเอียด';
-      pill.onclick = function() { renderProjectDetail_(e.p); };
+      pill.onclick = function() { renderProblemDetail_(c); };
       cell.appendChild(pill);
     });
     gridEl.appendChild(cell);
   }
 }
 
-document.getElementById('projectPrevMonth').onclick = function() {
-  projectCur.m--; if (projectCur.m < 1) { projectCur.m = 12; projectCur.y--; }
-  document.getElementById('projectDetailBox').style.display = 'none';
-  renderProjectTab();
+document.getElementById('problemPrevMonth').onclick = function() {
+  problemCur.m--; if (problemCur.m < 1) { problemCur.m = 12; problemCur.y--; }
+  renderProblemTab();
 };
-document.getElementById('projectNextMonth').onclick = function() {
-  projectCur.m++; if (projectCur.m > 12) { projectCur.m = 1; projectCur.y++; }
-  document.getElementById('projectDetailBox').style.display = 'none';
-  renderProjectTab();
+document.getElementById('problemNextMonth').onclick = function() {
+  problemCur.m++; if (problemCur.m > 12) { problemCur.m = 1; problemCur.y++; }
+  renderProblemTab();
 };
 
 function switchView(view) {
@@ -5987,7 +6428,7 @@ function switchView(view) {
   document.getElementById('tabSlaBtn').classList.toggle('active', view === 'sla');
   document.getElementById('tabAllocBtn').classList.toggle('active', view === 'alloc');
   document.getElementById('tabDashBtn').classList.toggle('active', view === 'dash');
-  document.getElementById('tabProjectBtn').classList.toggle('active', view === 'project');
+  document.getElementById('tabProblemBtn').classList.toggle('active', view === 'problem');
   document.getElementById('calendarWrap').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('monthNavRow').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('zoomControls').style.display = (view === 'calendar') ? '' : 'none';
@@ -5997,14 +6438,14 @@ function switchView(view) {
   document.getElementById('slaWrap').style.display = (view === 'sla') ? '' : 'none';
   document.getElementById('allocWrap').style.display = (view === 'alloc') ? '' : 'none';
   document.getElementById('dashWrap').style.display = (view === 'dash') ? '' : 'none';
-  document.getElementById('projectWrap').style.display = (view === 'project') ? '' : 'none';
+  document.getElementById('problemWrap').style.display = (view === 'problem') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderStalledContractorChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (view === 'eval') { renderEvalTable(); }
   if (view === 'sla') { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderTacDocChart(); renderTacDocTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (view === 'alloc') { renderAllocTable(); }
   if (view === 'dash') { renderDashboard(); }
-  if (view === 'project') { renderProjectTab(); }
+  if (view === 'problem') { renderProblemCaseList(); renderProblemTab(); }
 }
 
 function onFiltersChanged() {
@@ -6017,7 +6458,7 @@ function onFiltersChanged() {
   if (document.getElementById('tabDashBtn').classList.contains('active')) { renderDashboard(); }
 }
 
-document.getElementById('tabProjectBtn').onclick = function() { switchView('project'); };
+document.getElementById('tabProblemBtn').onclick = function() { switchView('problem'); };
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
 document.getElementById('tabDocBtn').onclick = function() { switchView('doc'); };
 document.getElementById('tabOverviewBtn').onclick = function() { switchView('overview'); };
@@ -6747,7 +7188,7 @@ function fetchData(isManualClick) {
       if (document.getElementById('tabDocBtn').classList.contains('active')) { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderStalledContractorChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
       if (document.getElementById('tabEvalBtn').classList.contains('active')) { renderEvalTable(); }
-      if (document.getElementById('tabProjectBtn').classList.contains('active')) { renderProjectTab(); }
+      if (document.getElementById('tabProblemBtn').classList.contains('active')) { renderProblemCaseList(); renderProblemTab(); }
       updateStatusText(false);
       if (statusEl) statusEl.textContent = isManualClick ? '✓ อัปเดตข้อมูลล่าสุดเรียบร้อย' : '';
       if (statusEl && isManualClick) setTimeout(function(){ statusEl.textContent=''; }, 5000);

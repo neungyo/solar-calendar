@@ -490,7 +490,13 @@
   </div>
 
   <div class="card-box">
-    <div class="overview-section-title">รายละเอียดงาน — สำรวจแล้ว รอกำหนดติดตั้ง</div>
+    <div class="overview-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <span>รายละเอียดงาน — สำรวจแล้ว รอกำหนดติดตั้ง</span>
+      <span class="dash-export-group" style="margin-left:0;">
+        <button class="secondary dash-export-btn" id="stalledExportXlsBtn" title="ดาวน์โหลดตารางนี้เป็นไฟล์ Excel">⬇ Export Excel</button>
+        <button class="secondary dash-export-btn" id="stalledExportPdfBtn" title="เปิดหน้าต่างพิมพ์ แล้วเลือก &quot;บันทึกเป็น PDF&quot;">⬇ Export PDF</button>
+      </span>
+    </div>
     <div class="doc-table-toolbar" id="overviewTableStalledCount"></div>
     <table class="doc-table" id="overviewTableStalled">
       <thead>
@@ -3204,6 +3210,95 @@ function renderOverviewTable() {
   renderOverviewSubTable('overviewTableCompletedBody', 'overviewTableCompletedCount', groups.completed, 'completed');
 }
 
+// Export buttons for the "สำรวจแล้ว รอกำหนดติดตั้ง" detail table (Sure's
+// request, 2026-09-11) -- pulls a timestamped snapshot of exactly what's on
+// screen (same rows/columns, same filters applied) for offline status
+// tracking. Excel export uses the classic "HTML table saved as .xls" trick
+// so Excel opens it natively with no extra library; PDF export reuses the
+// same window.print() approach as the Dashboard tab's export button.
+function stalledExportStamp_() {
+  var d = new Date();
+  return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+}
+
+function stalledExportDocText_(name) {
+  var hasDoc = !!(name && String(name).trim());
+  return hasDoc ? String(name).trim() : 'ไม่มี';
+}
+
+var STALLED_EXPORT_HEADERS = ['#', 'TS App', 'ลูกค้า', 'เบอร์โทรศัพท์', 'ที่อยู่', 'ผรม.', 'วันที่สำรวจ', 'วันที่นัดติดตั้ง', 'สถานะ', 'Proposal Quotation (TAC)', 'FAT (TS)', 'ใบส่งมอบงาน&ตรวจรับงาน (TS)'];
+
+function stalledExportRows_() {
+  var groups = overviewCategoryGroups_();
+  return groups.stalled.map(function(j, i) {
+    return [
+      i + 1,
+      j.ts_app || j.job_code || j._key || '-',
+      j.customer || '-',
+      j.phone || '-',
+      j.address || '-',
+      contractorDisplayName(j.contractor) || '-',
+      j.survey_date || '-',
+      j.install_appointment || 'ยังไม่มีกำหนด',
+      OVERVIEW_STATUS_LABELS.stalled,
+      stalledExportDocText_(j.proposal_tac_name),
+      stalledExportDocText_(j.fat_ts_name),
+      stalledExportDocText_(j.receipt_ts_name)
+    ];
+  });
+}
+
+function stalledExportToExcel() {
+  var rows = stalledExportRows_();
+  var stamp = stalledExportStamp_();
+  var now = new Date();
+  var title = 'รายละเอียดงาน สำรวจแล้ว รอกำหนดติดตั้ง (ข้อมูล ณ ' + TODAY_ISO + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ' น. ทั้งหมด ' + rows.length + ' งาน)';
+  var html = '<html><head><meta charset="UTF-8"></head><body>' +
+    '<table border="1">' +
+    '<tr><td colspan="' + STALLED_EXPORT_HEADERS.length + '"><b>' + escHtml(title) + '</b></td></tr>' +
+    '<tr>' + STALLED_EXPORT_HEADERS.map(function(h) { return '<th>' + escHtml(h) + '</th>'; }).join('') + '</tr>' +
+    rows.map(function(r) {
+      return '<tr>' + r.map(function(c) { return '<td>' + escHtml(c) + '</td>'; }).join('') + '</tr>';
+    }).join('') +
+    '</table></body></html>';
+  var blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  dxDownload(blob, 'สำรวจแล้ว-รอกำหนดติดตั้ง_' + stamp + '.xls');
+}
+
+function stalledExportToPdf() {
+  var rows = stalledExportRows_();
+  var now = new Date();
+  var genLabel = TODAY_ISO + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ' น.';
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+    '<title>สำรวจแล้ว รอกำหนดติดตั้ง ' + stalledExportStamp_() + '</title>' +
+    '<style>' +
+    '@page{size:A4 landscape;margin:10mm;}' +
+    'body{font-family:"TH Sarabun New","Sarabun",Arial,sans-serif;color:#111;}' +
+    'h1{font-size:16px;margin:0 0 4px;}' +
+    '.meta{font-size:11px;color:#555;margin-bottom:10px;}' +
+    'table{width:100%;border-collapse:collapse;font-size:10.5px;}' +
+    'th,td{border:1px solid #999;padding:4px 6px;text-align:left;}' +
+    'th{background:#f1f5f9;}' +
+    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
+    '</style></head><body>' +
+    '<h1>รายละเอียดงาน — สำรวจแล้ว รอกำหนดติดตั้ง</h1>' +
+    '<div class="meta">ข้อมูล ณ ' + escHtml(genLabel) + ' &middot; ทั้งหมด ' + rows.length + ' งาน</div>' +
+    '<table><thead><tr>' + STALLED_EXPORT_HEADERS.map(function(h) { return '<th>' + escHtml(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    rows.map(function(r) {
+      return '<tr>' + r.map(function(c) { return '<td>' + escHtml(c) + '</td>'; }).join('') + '</tr>';
+    }).join('') +
+    '</tbody></table></body></html>';
+  var w = window.open('', '_blank');
+  if (!w) {
+    alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาต pop-up ของเว็บนี้ แล้วกดใหม่อีกครั้งครับ');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function() { try { w.focus(); w.print(); } catch (e) {} }, 400);
+}
+
 // ===================== Evaluation tab (Sure's request, 2026-09-04) =====================
 // A leaner version of the 3 Overview detail tables, dedicated purely to
 // rating/CSAT work: same rows and same cell-renderer functions
@@ -5249,6 +5344,11 @@ var dashPdfBtnEl = document.getElementById('dashExportPdfBtn');
 if (dashPdfBtnEl) dashPdfBtnEl.onclick = function() { dashExportPdf(); };
 var dashJpgBtnEl = document.getElementById('dashExportJpgBtn');
 if (dashJpgBtnEl) dashJpgBtnEl.onclick = function() { dashExportJpeg(dashJpgBtnEl); };
+
+var stalledXlsBtnEl = document.getElementById('stalledExportXlsBtn');
+if (stalledXlsBtnEl) stalledXlsBtnEl.onclick = function() { stalledExportToExcel(); };
+var stalledPdfBtnEl = document.getElementById('stalledExportPdfBtn');
+if (stalledPdfBtnEl) stalledPdfBtnEl.onclick = function() { stalledExportToPdf(); };
 
 // ---------------------------------------------------------------------------
 // Executive export board (Sure's request, 2026-07-28; restyled 2026-07-31 to

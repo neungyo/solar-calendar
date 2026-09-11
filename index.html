@@ -3398,34 +3398,53 @@ function renderEvalTable() {
   renderEvalCsatCharts();
 }
 
-// ===== Monthly CSAT trend charts (Sure's request, 2026-09-11) =====
+// ===== Monthly CSAT trend charts (Sure's request, 2026-09-11; fixed
+// 2026-09-11 per Sure's follow-up) =====
 // Two small widgets at the top of the "การประเมิน" tab -- one for survey
 // CSAT, one for install CSAT -- showing the average score (1-5) per month
-// across ALL scored entries ever recorded for that questionnaire type
-// (all-time, not scoped to the 3 status groups below), so staff can see
-// whether satisfaction is trending up or down month over month. Each chart
-// can switch between bar (default), line, and pie/donut views.
-// Depends on each CSAT log entry carrying a `date` field -- added to
-// buildCsatSummary_ in the backend on 2026-09-11. Entries recorded before
-// that backend update won't have a date and are silently excluded from the
-// trend (they still count fine everywhere else, e.g. the badge/avg on each
-// job row, which doesn't need a date).
+// across ALL scored jobs for that questionnaire type (all-time, not scoped
+// to the 3 status groups below), so staff can see whether satisfaction is
+// trending up or down month over month. Each chart can switch between bar
+// (default), line, and pie/donut views.
+//
+// First version bucketed by the CSAT *call's* submission timestamp (when
+// staff happened to phone the customer), which Sure flagged as wrong: staff
+// often catch up on a backlog of calls for old jobs all in the same week,
+// so that clustered everything into whichever 1-2 months the calls actually
+// happened rather than showing a real trend. Bucketing now uses each JOB's
+// own date instead -- survey_date for survey CSAT, jobFinishIso_ (actual
+// install completion, falling back to the appointment date) for install
+// CSAT -- so a score shows up in the month the underlying work happened,
+// matching how the rest of the app (and Sure) thinks about "which month
+// this job belongs to". Each job contributes its one job-level average
+// (RATINGS_SUMMARY.csat[type].byJob[key].avg, already averaged across
+// however many times that job was called) as a single point.
 var EVAL_CHART_TYPE = { survey: 'bar', install: 'bar' };
 var EVAL_CHART_COLOR = { survey: '#d97706', install: '#2563eb' };
+
+function jobForCsatKey_(key) {
+  for (var i = 0; i < JOBS.length; i++) {
+    var j = JOBS[i];
+    if ((j.ts_app || j.job_code || j._key || '') === key) return j;
+  }
+  return null;
+}
 
 function csatMonthlyTrend_(type) {
   var byJob = (RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat[type] && RATINGS_SUMMARY.csat[type].byJob) || {};
   var byMonth = {};
   Object.keys(byJob).forEach(function(key) {
-    var entries = byJob[key].entries || [];
-    entries.forEach(function(e) {
-      if (!e || e.outcome || typeof e.avg !== 'number' || !e.date) return;
-      var mk = String(e.date).slice(0, 7);
-      if (!/^\d{4}-\d{2}$/.test(mk)) return;
-      if (!byMonth[mk]) byMonth[mk] = { sum: 0, count: 0 };
-      byMonth[mk].sum += e.avg;
-      byMonth[mk].count++;
-    });
+    var info = byJob[key];
+    if (!info || !info.count || typeof info.avg !== 'number') return; // no real scores for this job
+    var job = jobForCsatKey_(key);
+    if (!job) return;
+    var dateStr = type === 'install' ? (jobFinishIso_(job) || job.install_appointment || '') : (job.survey_date || '');
+    if (!dateStr) return;
+    var mk = String(dateStr).slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(mk)) return;
+    if (!byMonth[mk]) byMonth[mk] = { sum: 0, count: 0 };
+    byMonth[mk].sum += info.avg;
+    byMonth[mk].count++;
   });
   var months = Object.keys(byMonth).sort();
   return months.map(function(mk) {

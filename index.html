@@ -206,6 +206,7 @@
   .dash-scope-label { font-size:13px; color:var(--muted); }
   .dash-scope-btn { font-size:12px; padding:6px 12px; }
   .dash-scope-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .chart-type-switch { display:inline-flex; gap:6px; }
   .dash-scope-note { font-size:12px; color:var(--muted); }
   .dash-export-group { display:inline-flex; gap:8px; margin-left:auto; }
   .dash-export-btn { font-size:12px; padding:6px 14px; background:#0f172a; color:#fff; border:1px solid #0f172a; }
@@ -543,6 +544,30 @@
      Each table also gets a coverage bar showing how many jobs in it already
      have a CSAT entry recorded vs how many are still outstanding. -->
 <div id="evalWrap" style="display:none;">
+  <div class="card-box chart-card">
+    <div class="overview-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <span>แนวโน้มคะแนนความพึงพอใจ (สำรวจ) รายเดือน</span>
+      <span class="chart-type-switch" data-chart-target="survey">
+        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn active" data-chart-type="bar">แท่ง</button>
+        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn" data-chart-type="line">เส้น</button>
+        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn" data-chart-type="pie">วงกลม</button>
+      </span>
+    </div>
+    <div id="evalCsatSurveyChartHost"></div>
+  </div>
+
+  <div class="card-box chart-card">
+    <div class="overview-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <span>แนวโน้มคะแนนความพึงพอใจ (ติดตั้ง) รายเดือน</span>
+      <span class="chart-type-switch" data-chart-target="install">
+        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn active" data-chart-type="bar">แท่ง</button>
+        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn" data-chart-type="line">เส้น</button>
+        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn" data-chart-type="pie">วงกลม</button>
+      </span>
+    </div>
+    <div id="evalCsatInstallChartHost"></div>
+  </div>
+
   <div class="card-box">
     <div class="overview-section-title">รายละเอียดงาน — สำรวจแล้ว รอกำหนดติดตั้ง</div>
     <div class="csat-coverage-row">
@@ -3370,7 +3395,156 @@ function renderEvalTable() {
   renderCsatCoverageBar_('evalScheduledSurveyCoverage', groups.scheduled, 'survey', '#d97706');
   renderCsatCoverageBar_('evalCompletedSurveyCoverage', groups.completed, 'survey', '#d97706');
   renderCsatCoverageBar_('evalCompletedInstallCoverage', groups.completed, 'install', '#2563eb');
+  renderEvalCsatCharts();
 }
+
+// ===== Monthly CSAT trend charts (Sure's request, 2026-09-11) =====
+// Two small widgets at the top of the "การประเมิน" tab -- one for survey
+// CSAT, one for install CSAT -- showing the average score (1-5) per month
+// across ALL scored entries ever recorded for that questionnaire type
+// (all-time, not scoped to the 3 status groups below), so staff can see
+// whether satisfaction is trending up or down month over month. Each chart
+// can switch between bar (default), line, and pie/donut views.
+// Depends on each CSAT log entry carrying a `date` field -- added to
+// buildCsatSummary_ in the backend on 2026-09-11. Entries recorded before
+// that backend update won't have a date and are silently excluded from the
+// trend (they still count fine everywhere else, e.g. the badge/avg on each
+// job row, which doesn't need a date).
+var EVAL_CHART_TYPE = { survey: 'bar', install: 'bar' };
+var EVAL_CHART_COLOR = { survey: '#d97706', install: '#2563eb' };
+
+function csatMonthlyTrend_(type) {
+  var byJob = (RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat[type] && RATINGS_SUMMARY.csat[type].byJob) || {};
+  var byMonth = {};
+  Object.keys(byJob).forEach(function(key) {
+    var entries = byJob[key].entries || [];
+    entries.forEach(function(e) {
+      if (!e || e.outcome || typeof e.avg !== 'number' || !e.date) return;
+      var mk = String(e.date).slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(mk)) return;
+      if (!byMonth[mk]) byMonth[mk] = { sum: 0, count: 0 };
+      byMonth[mk].sum += e.avg;
+      byMonth[mk].count++;
+    });
+  });
+  var months = Object.keys(byMonth).sort();
+  return months.map(function(mk) {
+    var m = byMonth[mk];
+    return { month: mk, avg: Math.round((m.sum / m.count) * 10) / 10, count: m.count };
+  });
+}
+
+function evalBarChartSvg_(rows, color) {
+  var barWidth = 42, gap = 24, chartHeight = 180, leftPad = 28, topPad = 16, bottomPad = 34;
+  var width = leftPad + rows.length * (barWidth + gap) + gap;
+  var height = topPad + chartHeight + bottomPad;
+  var parts = [];
+  parts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  for (var g = 0; g <= 5; g++) {
+    var gy = topPad + chartHeight - (chartHeight * g / 5);
+    parts.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    parts.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + g + '</text>');
+  }
+  rows.forEach(function(r, i) {
+    var x = leftPad + i * (barWidth + gap) + gap / 2;
+    var segH = (r.avg / 5) * chartHeight;
+    var y = topPad + chartHeight - segH;
+    parts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" fill="' + color + '" rx="4"><title>' + escHtml(monthLabelFromKey(r.month)) + ': ' + r.avg + '/5 (' + r.count + ' ครั้ง)</title></rect>');
+    parts.push('<text x="' + (x + barWidth / 2) + '" y="' + (y - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + r.avg + '</text>');
+    parts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 18) + '" font-size="10.5" fill="#374151" text-anchor="middle">' + escHtml(monthLabelFromKey(r.month)) + '</text>');
+  });
+  parts.push('</svg>');
+  return parts.join('');
+}
+
+function evalLineChartSvg_(rows, color) {
+  var stepX = 70, chartHeight = 180, leftPad = 28, topPad = 16, bottomPad = 34, rightPad = 24;
+  var width = leftPad + Math.max(1, rows.length - 1) * stepX + rightPad;
+  var height = topPad + chartHeight + bottomPad;
+  function xAt(i) { return leftPad + i * stepX; }
+  function yAt(v) { return topPad + chartHeight - (v / 5) * chartHeight; }
+  var parts = [];
+  parts.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" style="max-width:' + width + 'px;" xmlns="http://www.w3.org/2000/svg">');
+  for (var g = 0; g <= 5; g++) {
+    var gy = topPad + chartHeight - (chartHeight * g / 5);
+    parts.push('<line x1="' + leftPad + '" y1="' + gy + '" x2="' + width + '" y2="' + gy + '" stroke="#e2e5ea" stroke-width="1"></line>');
+    parts.push('<text x="' + (leftPad - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="#6b7280" text-anchor="end">' + g + '</text>');
+  }
+  var pts = rows.map(function(r, i) { return xAt(i) + ',' + yAt(r.avg); }).join(' ');
+  parts.push('<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="2.5"></polyline>');
+  rows.forEach(function(r, i) {
+    parts.push('<circle cx="' + xAt(i) + '" cy="' + yAt(r.avg) + '" r="4" fill="' + color + '"><title>' + escHtml(monthLabelFromKey(r.month)) + ': ' + r.avg + '/5 (' + r.count + ' ครั้ง)</title></circle>');
+    parts.push('<text x="' + xAt(i) + '" y="' + (yAt(r.avg) - 10) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + r.avg + '</text>');
+    parts.push('<text x="' + xAt(i) + '" y="' + (topPad + chartHeight + 18) + '" font-size="10.5" fill="#374151" text-anchor="middle">' + escHtml(monthLabelFromKey(r.month)) + '</text>');
+  });
+  parts.push('</svg>');
+  return parts.join('');
+}
+
+// Pie/donut view of the same monthly series -- not a natural fit for a
+// trend (a pie shows parts of a whole, not a value over time), but Sure
+// explicitly asked for it as a selectable option alongside bar/line, so each
+// month becomes a slice sized by that month's average score (relative
+// weight among the displayed months) with a legend showing the exact score.
+function evalPieChartSvg_(rows, color) {
+  var r = 62, sw = 26, cx = 80, cy = 80;
+  var total = rows.reduce(function(s, x) { return s + x.avg; }, 0);
+  if (total <= 0) return '<div class="chart-empty">ยังไม่มีข้อมูล</div>';
+  var circumference = 2 * Math.PI * r;
+  var offset = 0;
+  var segs = [];
+  var colorAt = function(i) { return 'hsl(' + ((i * 47) % 360) + ', 62%, 48%)'; };
+  rows.forEach(function(row, i) {
+    var frac = row.avg / total;
+    var len = frac * circumference;
+    segs.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + colorAt(i) + '" stroke-width="' + sw + '" stroke-dasharray="' + len + ' ' + (circumference - len) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"><title>' + escHtml(monthLabelFromKey(row.month)) + ': ' + row.avg + '/5 (' + row.count + ' ครั้ง)</title></circle>');
+    offset += len;
+  });
+  var avgOfAvgs = Math.round((total / rows.length) * 10) / 10;
+  var svg = '<svg viewBox="0 0 160 160" width="160" height="160">' + segs.join('') +
+    '<circle cx="' + cx + '" cy="' + cy + '" r="' + (r - sw / 2 - 4) + '" fill="#fff"></circle>' +
+    '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" font-size="20" font-weight="700" fill="#1f2430">' + avgOfAvgs + '</text>' +
+    '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="10" fill="#6b7280">เฉลี่ยรวม</text>' +
+    '</svg>';
+  var legend = '<div class="donut-legend" style="margin-top:0;">' + rows.map(function(row, i) {
+    return '<span class="donut-legend-item"><span class="donut-swatch" style="background:' + colorAt(i) + ';"></span>' + escHtml(monthLabelFromKey(row.month)) + '<b>' + row.avg + '/5</b></span>';
+  }).join('') + '</div>';
+  return '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">' + svg + legend + '</div>';
+}
+
+function renderEvalCsatChart_(type) {
+  var hostId = type === 'survey' ? 'evalCsatSurveyChartHost' : 'evalCsatInstallChartHost';
+  var host = document.getElementById(hostId);
+  if (!host) return;
+  var rows = csatMonthlyTrend_(type);
+  if (rows.length === 0) {
+    host.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูลคะแนนความพึงพอใจ</div>';
+    return;
+  }
+  var color = EVAL_CHART_COLOR[type];
+  var chartType = EVAL_CHART_TYPE[type];
+  if (chartType === 'line') host.innerHTML = evalLineChartSvg_(rows, color);
+  else if (chartType === 'pie') host.innerHTML = evalPieChartSvg_(rows, color);
+  else host.innerHTML = evalBarChartSvg_(rows, color);
+}
+
+function renderEvalCsatCharts() {
+  renderEvalCsatChart_('survey');
+  renderEvalCsatChart_('install');
+}
+
+document.querySelectorAll('.eval-chart-type-btn').forEach(function(b) {
+  b.onclick = function() {
+    var wrap = b.parentElement;
+    var target = wrap ? wrap.getAttribute('data-chart-target') : null;
+    if (!target) return;
+    EVAL_CHART_TYPE[target] = b.getAttribute('data-chart-type');
+    Array.prototype.forEach.call(wrap.querySelectorAll('.eval-chart-type-btn'), function(x) {
+      x.classList.toggle('active', x === b);
+    });
+    renderEvalCsatChart_(target);
+  };
+});
 
 // Per-contractor workload/pipeline breakdown -- how many jobs each
 // contractor has in each stage (awaiting survey / surveyed-stalled /

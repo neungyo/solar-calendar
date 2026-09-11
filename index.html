@@ -207,6 +207,8 @@
   .dash-scope-btn { font-size:12px; padding:6px 12px; }
   .dash-scope-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   .chart-type-switch { display:inline-flex; gap:6px; }
+  .eval-chart-type-btn { font-size:12px; padding:6px 12px; }
+  .eval-chart-type-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   .dash-scope-note { font-size:12px; color:var(--muted); }
   .dash-export-group { display:inline-flex; gap:8px; margin-left:auto; }
   .dash-export-btn { font-size:12px; padding:6px 14px; background:#0f172a; color:#fff; border:1px solid #0f172a; }
@@ -548,9 +550,9 @@
     <div class="overview-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <span>แนวโน้มคะแนนความพึงพอใจ (สำรวจ) รายเดือน</span>
       <span class="chart-type-switch" data-chart-target="survey">
-        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn active" data-chart-type="bar">แท่ง</button>
-        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn" data-chart-type="line">เส้น</button>
-        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn" data-chart-type="pie">วงกลม</button>
+        <button type="button" class="secondary eval-chart-type-btn active" data-chart-type="bar">แท่ง</button>
+        <button type="button" class="secondary eval-chart-type-btn" data-chart-type="line">เส้น</button>
+        <button type="button" class="secondary eval-chart-type-btn" data-chart-type="pie">วงกลม</button>
       </span>
     </div>
     <div id="evalCsatSurveyChartHost"></div>
@@ -560,9 +562,9 @@
     <div class="overview-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <span>แนวโน้มคะแนนความพึงพอใจ (ติดตั้ง) รายเดือน</span>
       <span class="chart-type-switch" data-chart-target="install">
-        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn active" data-chart-type="bar">แท่ง</button>
-        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn" data-chart-type="line">เส้น</button>
-        <button type="button" class="secondary dash-scope-btn eval-chart-type-btn" data-chart-type="pie">วงกลม</button>
+        <button type="button" class="secondary eval-chart-type-btn active" data-chart-type="bar">แท่ง</button>
+        <button type="button" class="secondary eval-chart-type-btn" data-chart-type="line">เส้น</button>
+        <button type="button" class="secondary eval-chart-type-btn" data-chart-type="pie">วงกลม</button>
       </span>
     </div>
     <div id="evalCsatInstallChartHost"></div>

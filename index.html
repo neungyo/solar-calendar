@@ -3456,7 +3456,7 @@ function csatMonthlyTrend_(type) {
 }
 
 function evalBarChartSvg_(rows, color) {
-  var barWidth = 42, gap = 24, chartHeight = 180, leftPad = 28, topPad = 16, bottomPad = 34;
+  var barWidth = 42, gap = 24, chartHeight = 180, leftPad = 28, topPad = 36, bottomPad = 34;
   var width = leftPad + rows.length * (barWidth + gap) + gap;
   var height = topPad + chartHeight + bottomPad;
   var parts = [];
@@ -3470,8 +3470,9 @@ function evalBarChartSvg_(rows, color) {
     var x = leftPad + i * (barWidth + gap) + gap / 2;
     var segH = (r.avg / 5) * chartHeight;
     var y = topPad + chartHeight - segH;
-    parts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" fill="' + color + '" rx="4"><title>' + escHtml(monthLabelFromKey(r.month)) + ': ' + r.avg + '/5 (' + r.count + ' ครั้ง)</title></rect>');
-    parts.push('<text x="' + (x + barWidth / 2) + '" y="' + (y - 6) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + r.avg + '</text>');
+    parts.push('<rect x="' + x + '" y="' + y + '" width="' + barWidth + '" height="' + segH + '" fill="' + color + '" rx="4"><title>' + escHtml(monthLabelFromKey(r.month)) + ': ' + r.avg + '/5 (' + r.count + ' ไซต์)</title></rect>');
+    parts.push('<text x="' + (x + barWidth / 2) + '" y="' + (y - 20) + '" font-size="12" fill="#1f2430" text-anchor="middle" font-weight="700">' + r.avg + '</text>');
+    parts.push('<text x="' + (x + barWidth / 2) + '" y="' + (y - 6) + '" font-size="9.5" fill="#6b7280" text-anchor="middle">(' + r.count + ' ไซต์)</text>');
     parts.push('<text x="' + (x + barWidth / 2) + '" y="' + (topPad + chartHeight + 18) + '" font-size="10.5" fill="#374151" text-anchor="middle">' + escHtml(monthLabelFromKey(r.month)) + '</text>');
   });
   parts.push('</svg>');
@@ -3479,7 +3480,7 @@ function evalBarChartSvg_(rows, color) {
 }
 
 function evalLineChartSvg_(rows, color) {
-  var stepX = 70, chartHeight = 180, leftPad = 28, topPad = 16, bottomPad = 34, rightPad = 24;
+  var stepX = 70, chartHeight = 180, leftPad = 28, topPad = 34, bottomPad = 34, rightPad = 24;
   var width = leftPad + Math.max(1, rows.length - 1) * stepX + rightPad;
   var height = topPad + chartHeight + bottomPad;
   function xAt(i) { return leftPad + i * stepX; }
@@ -3494,8 +3495,9 @@ function evalLineChartSvg_(rows, color) {
   var pts = rows.map(function(r, i) { return xAt(i) + ',' + yAt(r.avg); }).join(' ');
   parts.push('<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="2.5"></polyline>');
   rows.forEach(function(r, i) {
-    parts.push('<circle cx="' + xAt(i) + '" cy="' + yAt(r.avg) + '" r="4" fill="' + color + '"><title>' + escHtml(monthLabelFromKey(r.month)) + ': ' + r.avg + '/5 (' + r.count + ' ครั้ง)</title></circle>');
-    parts.push('<text x="' + xAt(i) + '" y="' + (yAt(r.avg) - 10) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + r.avg + '</text>');
+    parts.push('<circle cx="' + xAt(i) + '" cy="' + yAt(r.avg) + '" r="4" fill="' + color + '"><title>' + escHtml(monthLabelFromKey(r.month)) + ': ' + r.avg + '/5 (' + r.count + ' ไซต์)</title></circle>');
+    parts.push('<text x="' + xAt(i) + '" y="' + (yAt(r.avg) - 22) + '" font-size="11" fill="#1f2430" text-anchor="middle" font-weight="600">' + r.avg + '</text>');
+    parts.push('<text x="' + xAt(i) + '" y="' + (yAt(r.avg) - 8) + '" font-size="9.5" fill="#6b7280" text-anchor="middle">(' + r.count + ' ไซต์)</text>');
     parts.push('<text x="' + xAt(i) + '" y="' + (topPad + chartHeight + 18) + '" font-size="10.5" fill="#374151" text-anchor="middle">' + escHtml(monthLabelFromKey(r.month)) + '</text>');
   });
   parts.push('</svg>');
@@ -3518,17 +3520,18 @@ function evalPieChartSvg_(rows, color) {
   rows.forEach(function(row, i) {
     var frac = row.avg / total;
     var len = frac * circumference;
-    segs.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + colorAt(i) + '" stroke-width="' + sw + '" stroke-dasharray="' + len + ' ' + (circumference - len) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"><title>' + escHtml(monthLabelFromKey(row.month)) + ': ' + row.avg + '/5 (' + row.count + ' ครั้ง)</title></circle>');
+    segs.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + colorAt(i) + '" stroke-width="' + sw + '" stroke-dasharray="' + len + ' ' + (circumference - len) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"><title>' + escHtml(monthLabelFromKey(row.month)) + ': ' + row.avg + '/5 (' + row.count + ' ไซต์)</title></circle>');
     offset += len;
   });
   var avgOfAvgs = Math.round((total / rows.length) * 10) / 10;
+  var totalSites = rows.reduce(function(s, x) { return s + x.count; }, 0);
   var svg = '<svg viewBox="0 0 160 160" width="160" height="160">' + segs.join('') +
     '<circle cx="' + cx + '" cy="' + cy + '" r="' + (r - sw / 2 - 4) + '" fill="#fff"></circle>' +
     '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" font-size="20" font-weight="700" fill="#1f2430">' + avgOfAvgs + '</text>' +
-    '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="10" fill="#6b7280">เฉลี่ยรวม</text>' +
+    '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="10" fill="#6b7280">เฉลี่ยรวม (' + totalSites + ' ไซต์)</text>' +
     '</svg>';
   var legend = '<div class="donut-legend" style="margin-top:0;">' + rows.map(function(row, i) {
-    return '<span class="donut-legend-item"><span class="donut-swatch" style="background:' + colorAt(i) + ';"></span>' + escHtml(monthLabelFromKey(row.month)) + '<b>' + row.avg + '/5</b></span>';
+    return '<span class="donut-legend-item"><span class="donut-swatch" style="background:' + colorAt(i) + ';"></span>' + escHtml(monthLabelFromKey(row.month)) + '<b>' + row.avg + '/5</b> <span style="color:#6b7280;font-size:11px;">(' + row.count + ' ไซต์)</span></span>';
   }).join('') + '</div>';
   return '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">' + svg + legend + '</div>';
 }

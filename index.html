@@ -213,6 +213,14 @@
   .eval-chart-summary-min { color:#dc2626; }
   .eval-chart-summary-max { color:#16a34a; }
   .eval-chart-summary-month { font-weight:400; color:#6b7280; margin-left:2px; }
+  .eval-chart-criteria { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+  .eval-chart-criteria-item { flex:1 1 260px; min-width:220px; border-radius:8px; padding:10px 12px; font-size:12.5px; line-height:1.5; }
+  .eval-chart-criteria-improve { background:#fef2f2; border:1px solid #fecaca; }
+  .eval-chart-criteria-good { background:#f0fdf4; border:1px solid #bbf7d0; }
+  .eval-chart-criteria-tag { font-weight:700; margin-bottom:4px; }
+  .eval-chart-criteria-improve .eval-chart-criteria-tag { color:#dc2626; }
+  .eval-chart-criteria-good .eval-chart-criteria-tag { color:#16a34a; }
+  .eval-chart-criteria-text { color:#374151; }
   .dash-scope-note { font-size:12px; color:var(--muted); }
   .dash-export-group { display:inline-flex; gap:8px; margin-left:auto; }
   .dash-export-btn { font-size:12px; padding:6px 14px; background:#0f172a; color:#fff; border:1px solid #0f172a; }
@@ -3564,6 +3572,62 @@ function evalChartSummaryHtml_(rows) {
     '</div>';
 }
 
+// Sure's request (round 2): the min/max month summary above only says
+// WHICH month was best/worst, not WHAT specifically drove that -- so add a
+// per-question breakdown that names the exact criterion (e.g. "ความรวดเร็ว
+// ในการนัดหมาย") the team should improve, and the one customers are
+// happiest with. Averages every scored CSAT entry's per-question score
+// (q1..q5/q6) across the SAME population of jobs used in the trend chart
+// above (cross-referenced via jobForCsatKey_ + a valid survey/install date,
+// exactly like csatMonthlyTrend_) so the two summaries always agree with
+// each other. Entries with an outcome (no scores submitted) are skipped.
+function csatCriteriaBreakdown_(type) {
+  var byJob = (RATINGS_SUMMARY.csat && RATINGS_SUMMARY.csat[type] && RATINGS_SUMMARY.csat[type].byJob) || {};
+  var criteria = type === 'install' ? CSAT_CRITERIA : SURVEY_CSAT_CRITERIA;
+  var sums = {}, counts = {};
+  criteria.forEach(function(cr) { sums[cr.key] = 0; counts[cr.key] = 0; });
+  Object.keys(byJob).forEach(function(key) {
+    var info = byJob[key];
+    if (!info || !info.count) return;
+    var job = jobForCsatKey_(key);
+    if (!job) return;
+    var dateStr = type === 'install' ? (jobFinishIso_(job) || job.install_appointment || '') : (job.survey_date || '');
+    if (!dateStr) return;
+    (info.entries || []).forEach(function(entry) {
+      if (entry.outcome) return;
+      criteria.forEach(function(cr) {
+        var v = Number(entry[cr.key]);
+        if (v > 0) { sums[cr.key] += v; counts[cr.key]++; }
+      });
+    });
+  });
+  return criteria.map(function(cr) {
+    var n = counts[cr.key];
+    return { key: cr.key, label: cr.label, avg: n ? Math.round((sums[cr.key] / n) * 10) / 10 : null, n: n };
+  }).filter(function(r) { return r.avg !== null; });
+}
+
+function evalChartCriteriaHtml_(type) {
+  var rows = csatCriteriaBreakdown_(type);
+  if (rows.length < 2) return '';
+  var minRow = rows[0], maxRow = rows[0];
+  rows.forEach(function(r) {
+    if (r.avg < minRow.avg) minRow = r;
+    if (r.avg > maxRow.avg) maxRow = r;
+  });
+  if (minRow.avg === maxRow.avg) return '';
+  return '<div class="eval-chart-criteria">' +
+    '<div class="eval-chart-criteria-item eval-chart-criteria-improve">' +
+      '<div class="eval-chart-criteria-tag">จุดที่ควรปรับปรุง (' + minRow.avg + '/5)</div>' +
+      '<div class="eval-chart-criteria-text">' + escHtml(minRow.label) + '</div>' +
+    '</div>' +
+    '<div class="eval-chart-criteria-item eval-chart-criteria-good">' +
+      '<div class="eval-chart-criteria-tag">จุดที่ลูกค้าประทับใจที่สุด (' + maxRow.avg + '/5)</div>' +
+      '<div class="eval-chart-criteria-text">' + escHtml(maxRow.label) + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 function renderEvalCsatChart_(type) {
   var hostId = type === 'survey' ? 'evalCsatSurveyChartHost' : 'evalCsatInstallChartHost';
   var host = document.getElementById(hostId);
@@ -3579,7 +3643,7 @@ function renderEvalCsatChart_(type) {
   if (chartType === 'line') chartHtml = evalLineChartSvg_(rows, color);
   else if (chartType === 'pie') chartHtml = evalPieChartSvg_(rows, color);
   else chartHtml = evalBarChartSvg_(rows, color);
-  host.innerHTML = evalChartSummaryHtml_(rows) + chartHtml;
+  host.innerHTML = evalChartSummaryHtml_(rows) + evalChartCriteriaHtml_(type) + chartHtml;
 }
 
 function renderEvalCsatCharts() {

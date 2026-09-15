@@ -209,6 +209,10 @@
   .chart-type-switch { display:inline-flex; gap:6px; }
   .eval-chart-type-btn { font-size:12px; padding:6px 12px; }
   .eval-chart-type-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .eval-chart-summary { display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px; font-size:12.5px; font-weight:600; }
+  .eval-chart-summary-min { color:#dc2626; }
+  .eval-chart-summary-max { color:#16a34a; }
+  .eval-chart-summary-month { font-weight:400; color:#6b7280; margin-left:2px; }
   .dash-scope-note { font-size:12px; color:var(--muted); }
   .dash-export-group { display:inline-flex; gap:8px; margin-left:auto; }
   .dash-export-btn { font-size:12px; padding:6px 14px; background:#0f172a; color:#fff; border:1px solid #0f172a; }
@@ -3536,6 +3540,30 @@ function evalPieChartSvg_(rows, color) {
   return '<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">' + svg + legend + '</div>';
 }
 
+// Sure's request: surface which month scored lowest and which scored
+// highest right on the chart, so the team can see at a glance where to
+// focus improvement efforts. Shown once above the chart regardless of
+// which chart type (bar/line/pie) is currently selected. Skipped entirely
+// when there's only one month of data (min and max would be identical and
+// redundant with the single bar/point already shown).
+function evalChartSummaryHtml_(rows) {
+  if (!rows || rows.length < 2) return '';
+  var minVal = rows[0].avg, maxVal = rows[0].avg;
+  rows.forEach(function(r) {
+    if (r.avg < minVal) minVal = r.avg;
+    if (r.avg > maxVal) maxVal = r.avg;
+  });
+  if (minVal === maxVal) return '';
+  var minRows = rows.filter(function(r) { return r.avg === minVal; });
+  var maxRows = rows.filter(function(r) { return r.avg === maxVal; });
+  var minLabel = minRows.map(function(r) { return escHtml(monthLabelFromKey(r.month)); }).join(', ');
+  var maxLabel = maxRows.map(function(r) { return escHtml(monthLabelFromKey(r.month)); }).join(', ');
+  return '<div class="eval-chart-summary">' +
+    '<span class="eval-chart-summary-min">▼ ต่ำสุด ' + minVal + '/5<span class="eval-chart-summary-month"> (' + minLabel + ')</span></span>' +
+    '<span class="eval-chart-summary-max">▲ สูงสุด ' + maxVal + '/5<span class="eval-chart-summary-month"> (' + maxLabel + ')</span></span>' +
+    '</div>';
+}
+
 function renderEvalCsatChart_(type) {
   var hostId = type === 'survey' ? 'evalCsatSurveyChartHost' : 'evalCsatInstallChartHost';
   var host = document.getElementById(hostId);
@@ -3547,9 +3575,11 @@ function renderEvalCsatChart_(type) {
   }
   var color = EVAL_CHART_COLOR[type];
   var chartType = EVAL_CHART_TYPE[type];
-  if (chartType === 'line') host.innerHTML = evalLineChartSvg_(rows, color);
-  else if (chartType === 'pie') host.innerHTML = evalPieChartSvg_(rows, color);
-  else host.innerHTML = evalBarChartSvg_(rows, color);
+  var chartHtml;
+  if (chartType === 'line') chartHtml = evalLineChartSvg_(rows, color);
+  else if (chartType === 'pie') chartHtml = evalPieChartSvg_(rows, color);
+  else chartHtml = evalBarChartSvg_(rows, color);
+  host.innerHTML = evalChartSummaryHtml_(rows) + chartHtml;
 }
 
 function renderEvalCsatCharts() {

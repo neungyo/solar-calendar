@@ -5523,40 +5523,40 @@ var DASH_SECTIONS = [
     types: ['donut', 'pie', 'bar', 'hbar'], def: 'donut', monthly: false,
     build: dashSpecStatusShare },
 
-  { id: 'contractorOverview', title: '2. ภาพรวมงานแยกตามผู้รับเหมา',
-    sub: 'แยกตามขั้นตอนที่งานอยู่ในปัจจุบัน — รอสำรวจ / สำรวจแล้วรอกำหนดติดตั้ง / มีกำหนดติดตั้งแล้ว / ติดตั้งเสร็จสิ้น',
-    types: ['stacked', 'grouped', 'hbar', 'donut'], def: 'stacked', monthly: false,
-    build: dashSpecContractorOverview },
-
-  { id: 'monthlyByContractor', title: '3. รายละเอียดรายเดือน แยกตามผู้รับเหมา',
-    sub: 'ปริมาณงานที่แต่ละ ผรม. รับผิดชอบในแต่ละเดือน (เลือก "ทุกเดือนที่ผ่านมา" ด้านบนเพื่อดูย้อนหลังทั้งหมด)',
-    types: ['stacked', 'grouped', 'line', 'area'], def: 'stacked', monthly: true,
-    build: function(t) { return dashSpecMonthlyByContractor(t, 'all'); } },
-
-  { id: 'surveyByContractor', title: '4. จำนวนงานเข้าสำรวจของผู้รับเหมา รายเดือน',
+  { id: 'surveyByContractor', title: '2. จำนวนงานเข้าสำรวจของผู้รับเหมา รายเดือน',
     sub: 'ค่าเริ่มต้นแสดง 3 เดือน (เดือนก่อนหน้า / เดือนปัจจุบัน / เดือนถัดไป) เพื่อดูคิวสำรวจที่กำลังจะมาถึง',
     types: ['grouped', 'stacked', 'line', 'area'], def: 'grouped', monthly: true,
     build: dashSpecSurveyByContractor },
 
-  { id: 'installsPerMonth', title: '5. จำนวนงานติดตั้งต่อเดือน (เสร็จสิ้น + รอดำเนินการ)',
+  { id: 'installsPerMonth', title: '3. จำนวนงานติดตั้งต่อเดือน (เสร็จสิ้น + รอดำเนินการ)',
     sub: 'เทียบสัดส่วนงานที่ปิดจบแล้วกับงานที่ยังค้างอยู่ในแต่ละเดือน',
     types: ['stacked', 'grouped', 'line', 'area'], def: 'stacked', monthly: true,
     build: dashSpecInstallsPerMonth },
 
-  { id: 'slaTrend', title: '6. คะแนนคุณภาพ SLA รายผู้รับเหมา (พัฒนาการรายเดือน)',
-    sub: 'คะแนน 0-100 ถ่วงน้ำหนักจากผลการติดตั้งจริง (ดีมาก=100, ตรงตาม SLA=80, เกิน SLA=40) เฉลี่ยต่อเดือน — กด "จำนวนงาน" เพื่อดูเป็นจำนวนงานแยกตามผล SLA แทนคะแนน',
-    types: ['line', 'area', 'grouped', 'tiers'], def: 'line', monthly: true,
-    build: dashSpecSlaTrend, note: dashSlaTrendNote },
-
-  { id: 'completedByContractor', title: '7. ปริมาณงานติดตั้งเสร็จสิ้นต่อเดือน แยกตามผู้รับเหมา',
+  { id: 'completedByContractor', title: '4. ปริมาณงานติดตั้งเสร็จสิ้นต่อเดือน แยกตามผู้รับเหมา',
     sub: 'นับเฉพาะงานที่สถานะเป็น "ดำเนินการเสร็จสิ้น" แล้วเท่านั้น',
     types: ['stacked', 'grouped', 'line', 'area'], def: 'stacked', monthly: true,
     build: function(t) { return dashSpecMonthlyByContractor(t, 'completed'); } },
 
-  { id: 'manualRating', title: '8. คะแนนประเมินคุณภาพจากทีมงาน',
+  { id: 'manualRating', title: '5. คะแนนประเมินคุณภาพจากทีมงาน',
     sub: 'คะแนนเฉลี่ย 5 หัวข้อ (ความปลอดภัย / ตามแบบมาตรฐาน / เก็บงาน / ทดสอบระบบ / เอกสารส่งมอบ) ที่ทีมงานให้ไว้เอง',
     types: ['hbar', 'bar'], def: 'hbar', monthly: false,
     build: dashSpecManualRating, note: dashManualRatingNote },
+
+  { id: 'contractorOverview', title: '6. ภาพรวมงานแยกตามผู้รับเหมา',
+    sub: 'แยกตามขั้นตอนที่งานอยู่ในปัจจุบัน — รอสำรวจ / สำรวจแล้วรอกำหนดติดตั้ง / มีกำหนดติดตั้งแล้ว / ติดตั้งเสร็จสิ้น',
+    types: ['stacked', 'grouped', 'hbar', 'donut'], def: 'stacked', monthly: false,
+    build: dashSpecContractorOverview },
+
+  { id: 'monthlyByContractor', title: '7. รายละเอียดรายเดือน แยกตามผู้รับเหมา',
+    sub: 'ปริมาณงานที่แต่ละ ผรม. รับผิดชอบในแต่ละเดือน (เลือก "ทุกเดือนที่ผ่านมา" ด้านบนเพื่อดูย้อนหลังทั้งหมด)',
+    types: ['stacked', 'grouped', 'line', 'area'], def: 'stacked', monthly: true,
+    build: function(t) { return dashSpecMonthlyByContractor(t, 'all'); } },
+
+  { id: 'slaTrend', title: '8. คะแนนคุณภาพ SLA รายผู้รับเหมา (พัฒนาการรายเดือน)',
+    sub: 'คะแนน 0-100 ถ่วงน้ำหนักจากผลการติดตั้งจริง (ดีมาก=100, ตรงตาม SLA=80, เกิน SLA=40) เฉลี่ยต่อเดือน — กด "จำนวนงาน" เพื่อดูเป็นจำนวนงานแยกตามผล SLA แทนคะแนน',
+    types: ['line', 'area', 'grouped', 'tiers'], def: 'line', monthly: true,
+    build: dashSpecSlaTrend, note: dashSlaTrendNote },
 
   { id: 'tacOverall', title: '9. ความคืบหน้าเอกสารขนานไฟฟ้า (ทุกงาน)',
     sub: 'นับเฉพาะงานที่ติดตั้งเสร็จแล้วเท่านั้น ตั้งแต่ยังไม่เริ่มยื่นเรื่อง จนถึงได้เลขขนานไฟแล้ว',

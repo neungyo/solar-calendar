@@ -833,7 +833,7 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่บันทึก</label><input type="date" id="pcReportDate" style="width:100%;box-sizing:border-box;"></div>
-        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่กำหนดเข้าแก้ไข</label><input type="date" id="pcOnsiteStart" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่กำหนดเข้าแก้ไข (และเวลานัด)</label><div style="display:flex;gap:6px;"><input type="date" id="pcOnsiteStart" style="flex:1.4;min-width:0;box-sizing:border-box;"><input type="time" id="pcOnsiteTime" style="flex:1;min-width:0;box-sizing:border-box;"></div></div>
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่คาดว่าจะแล้วเสร็จ</label><input type="date" id="pcOnsiteEnd" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่เสร็จสิ้น</label><input type="date" id="pcCompletedDate" style="width:100%;box-sizing:border-box;"></div>
       </div>
@@ -6377,8 +6377,9 @@ function problemOnsiteRangeText_(c) {
   var start = c.onsite_start_date || c.appointment_date || '';
   var end = c.onsite_end_date || '';
   if (!start) return '-';
-  if (!end || end === start) return start;
-  return start + ' — ' + end;
+  var startTxt = start + (c.onsite_start_time ? (' ' + c.onsite_start_time) : '');
+  if (!end || end === start) return startTxt;
+  return startTxt + ' — ' + end;
 }
 
 function renderProblemCaseList() {
@@ -6492,7 +6493,7 @@ function renderProblemDetail_(c) {
   body.innerHTML =
     '<div>ลูกค้า: ' + escHtml(c.customer || '-') + ' &nbsp;·&nbsp; ผู้แจ้ง: ' + escHtml(c.reported_by || '-') + '</div>' +
     '<div style="margin-top:4px;">อาการที่เกิดขึ้น: ' + escHtml(c.symptom || '-') + '</div>' +
-    '<div style="margin-top:6px;">วันที่กำหนดเข้าแก้ไข: ' + escHtml(c.onsite_start_date || '-') + ' &nbsp;·&nbsp; วันที่คาดว่าจะแล้วเสร็จ: ' + escHtml(c.onsite_end_date || '-') + '</div>' +
+    '<div style="margin-top:6px;">วันที่กำหนดเข้าแก้ไข: ' + escHtml(c.onsite_start_date || '-') + escHtml(c.onsite_start_time ? (' ' + c.onsite_start_time + ' น.') : '') + ' &nbsp;·&nbsp; วันที่คาดว่าจะแล้วเสร็จ: ' + escHtml(c.onsite_end_date || '-') + '</div>' +
     '<div style="margin-top:4px;">วันที่เสร็จสิ้น: ' + escHtml(c.completed_date || '-') + '</div>' +
     '<div style="margin-top:6px;">สถานะ: ' + problemStatusBadgeHtml_(c) + '</div>' +
     '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">' +
@@ -6642,7 +6643,7 @@ function problemJobSearchResults_(q) {
 var problemEditingRow = null;
 
 function resetProblemCaseForm_() {
-  ['pcTsApp', 'pcProblemTsJob', 'pcCustomer', 'pcSite', 'pcPhone', 'pcContractor', 'pcSymptom', 'pcOnsiteStart', 'pcOnsiteEnd', 'pcCompletedDate', 'pcReportedBy'].forEach(function(id) {
+  ['pcTsApp', 'pcProblemTsJob', 'pcCustomer', 'pcSite', 'pcPhone', 'pcContractor', 'pcSymptom', 'pcOnsiteStart', 'pcOnsiteTime', 'pcOnsiteEnd', 'pcCompletedDate', 'pcReportedBy'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -6687,6 +6688,7 @@ function openProblemEditForm_(c) {
   // appointment_date field (no onsite_end_date) -- treat that as both the
   // start and end of a 1-day range so old cases still display sensibly.
   document.getElementById('pcOnsiteStart').value = c.onsite_start_date || c.appointment_date || '';
+  document.getElementById('pcOnsiteTime').value = c.onsite_start_time || '';
   document.getElementById('pcOnsiteEnd').value = c.onsite_end_date || c.onsite_start_date || c.appointment_date || '';
   document.getElementById('pcCompletedDate').value = c.completed_date || '';
   var titleEl = document.getElementById('pcFormTitle');
@@ -6708,6 +6710,7 @@ function submitProblemCase_() {
   var isOnsite = !!(document.getElementById('pcResOnsite') && document.getElementById('pcResOnsite').checked);
   var resolutionType = isOnsite ? PROBLEM_RES_TYPE_ONSITE_ : PROBLEM_RES_TYPE_PHONE_;
   var onsiteStart = (document.getElementById('pcOnsiteStart').value || '').trim();
+  var onsiteTime = (document.getElementById('pcOnsiteTime').value || '').trim();
   var onsiteEnd = (document.getElementById('pcOnsiteEnd').value || '').trim();
   var completedDate = (document.getElementById('pcCompletedDate').value || '').trim();
   var reportDate = (document.getElementById('pcReportDate').value || '').trim() || TODAY_ISO;
@@ -6732,7 +6735,8 @@ function submitProblemCase_() {
     type: isEdit ? 'problem_case_update' : 'problem_case_create',
     ts_app: tsApp, problem_ts_job: problemTsJob, customer: customer, site: site, phone: phone, contractor: contractor,
     symptom: symptom, resolution_type: resolutionType,
-    onsite_start_date: isOnsite ? onsiteStart : '', onsite_end_date: isOnsite ? onsiteEnd : '',
+    onsite_start_date: isOnsite ? onsiteStart : '', onsite_start_time: isOnsite ? onsiteTime : '',
+    onsite_end_date: isOnsite ? onsiteEnd : '',
     completed_date: completedDate,
     reported_by: reportedBy, report_date: reportDate
   };
@@ -6758,7 +6762,8 @@ function submitProblemCase_() {
         caseObj.ts_app = tsApp; caseObj.problem_ts_job = problemTsJob; caseObj.customer = customer; caseObj.site = site;
         caseObj.phone = phone; caseObj.contractor = contractor; caseObj.report_date = reportDate;
         caseObj.symptom = symptom; caseObj.resolution_type = resolutionType;
-        caseObj.onsite_start_date = isOnsite ? onsiteStart : ''; caseObj.onsite_end_date = isOnsite ? onsiteEnd : '';
+        caseObj.onsite_start_date = isOnsite ? onsiteStart : ''; caseObj.onsite_start_time = isOnsite ? onsiteTime : '';
+        caseObj.onsite_end_date = isOnsite ? onsiteEnd : '';
         caseObj.completed_date = completedDate;
         caseObj.reported_by = reportedBy;
       }
@@ -6766,7 +6771,8 @@ function submitProblemCase_() {
       caseObj = {
         row: res.row, ts_app: tsApp, problem_ts_job: problemTsJob, customer: customer, site: site, phone: phone, contractor: contractor,
         report_date: reportDate, symptom: symptom, resolution_type: resolutionType,
-        onsite_start_date: isOnsite ? onsiteStart : '', onsite_end_date: isOnsite ? onsiteEnd : '',
+        onsite_start_date: isOnsite ? onsiteStart : '', onsite_start_time: isOnsite ? onsiteTime : '',
+        onsite_end_date: isOnsite ? onsiteEnd : '',
         completed_date: completedDate,
         resolved: false, reported_by: reportedBy, logs: []
       };
@@ -7045,6 +7051,20 @@ function renderProblemTab() {
     }
 
     var dayEvs = monthEvents.filter(function(e) { return e.date === dateIso; });
+    // Sort by scheduled arrival time (Sure's request, 2026-09-17: "อยาก
+    // ให้เรียงเรื่องเวลาด้วยว่าต้องเข้า site ไหนก่อนหน้าหลัง") -- only the
+    // FIRST day of a multi-day onsite range carries a meaningful arrival
+    // time, so later days (and phone/oncall cases, and any case with no
+    // time set) sort after every timed entry, keeping their original
+    // relative order (Array#sort is a stable sort).
+    dayEvs = dayEvs.slice().sort(function(a, b) {
+      var ka = (a.day_index === 1 && a.c.onsite_start_time) ? a.c.onsite_start_time : null;
+      var kb = (b.day_index === 1 && b.c.onsite_start_time) ? b.c.onsite_start_time : null;
+      if (ka === null && kb === null) return 0;
+      if (ka === null) return 1;
+      if (kb === null) return -1;
+      return ka < kb ? -1 : (ka > kb ? 1 : 0);
+    });
     dayEvs.forEach(function(e) {
       var c = e.c;
       var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
@@ -7067,7 +7087,10 @@ function renderProblemTab() {
       // day_total > 1 = this is one day of a multi-day onsite range -- tag
       // it (วันที่ 1/3 etc.) so it's clear at a glance which day this is.
       var dayTag = (e.day_total > 1) ? (' (' + e.day_index + '/' + e.day_total + ')') : '';
-      txt.textContent = prefix + label.slice(0, 18) + dayTag;
+      // Show the scheduled time up front on the arrival day so the sort
+      // order above is visible at a glance, not just implied.
+      var timeTag = (e.day_index === 1 && c.onsite_start_time) ? (c.onsite_start_time + ' ') : '';
+      txt.textContent = timeTag + prefix + label.slice(0, 18) + dayTag;
       pill.appendChild(txt);
       pill.title = (e.day_total > 1) ? ('วันที่ ' + e.day_index + ' จาก ' + e.day_total + ' — คลิกดูรายละเอียด') : 'คลิกดูรายละเอียด';
       pill.onclick = function() { renderProblemDetail_(c); };

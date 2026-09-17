@@ -815,7 +815,8 @@
         <div id="problemJobSearchResults" style="display:none;max-height:180px;overflow:auto;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#fff;"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">เลข TS Job</label><input type="text" id="pcTsApp" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">TS Job (งานติดตั้ง)</label><input type="text" id="pcTsApp" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">TS Job (งานแก้ปัญหา) <span style="color:var(--muted);font-weight:400;">— กรอกใหม่ทุกครั้ง</span></label><input type="text" id="pcProblemTsJob" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ชื่อลูกค้า</label><input type="text" id="pcCustomer" style="width:100%;box-sizing:border-box;"></div>
         <div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Site / ที่อยู่</label><input type="text" id="pcSite" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">เบอร์โทร</label><input type="text" id="pcPhone" style="width:100%;box-sizing:border-box;"></div>
@@ -823,20 +824,21 @@
       </div>
       <div style="margin-bottom:10px;">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">อาการที่เกิดขึ้น</label>
-        <textarea id="pcSymptom" rows="2" style="width:100%;box-sizing:border-box;" placeholder="เช่น มิเตอร์อ่านค่าไม่ได้, ค่า GND ไม่ได้, น้ำรั่วซึม..."></textarea>
+        <textarea id="pcSymptom" rows="5" style="width:100%;box-sizing:border-box;" placeholder="เช่น มิเตอร์อ่านค่าไม่ได้, ค่า GND ไม่ได้, น้ำรั่วซึม..."></textarea>
       </div>
       <div style="margin-bottom:10px;">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">รูปแบบการแก้ไข</label>
         <label style="margin-right:16px;"><input type="radio" name="pcResType" id="pcResPhone" value="โทรศัพท์" checked> 📞 ทางโทรศัพท์ (oncall)</label>
         <label><input type="radio" name="pcResType" id="pcResOnsite" value="Onsite"> 🚗 Onsite</label>
       </div>
-      <div id="pcAppointmentRow" style="display:none;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่นัดหมาย</label><input type="date" id="pcApptDate" style="width:100%;box-sizing:border-box;"></div>
-        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">เวลานัดหมาย</label><input type="time" id="pcApptTime" style="width:100%;box-sizing:border-box;"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่บันทึก</label><input type="date" id="pcReportDate" style="width:100%;box-sizing:border-box;"></div>
-        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ผู้แจ้ง/ผู้สร้างเคส</label><input type="text" id="pcReportedBy" style="width:100%;box-sizing:border-box;" placeholder="ชื่อผู้บันทึกเคสนี้"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่กำหนดเข้าแก้ไข</label><input type="date" id="pcOnsiteStart" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่คาดว่าจะแล้วเสร็จ</label><input type="date" id="pcOnsiteEnd" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่เสร็จสิ้น</label><input type="date" id="pcCompletedDate" style="width:100%;box-sizing:border-box;"></div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ผู้แจ้ง/ผู้สร้างเคส</label><input type="text" id="pcReportedBy" style="width:100%;box-sizing:border-box;" placeholder="ชื่อผู้บันทึกเคสนี้">
       </div>
       <div id="pcError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;">
@@ -864,7 +866,7 @@
     <div class="doc-table-toolbar" style="margin-top:20px;">รายการเคสทั้งหมด (<span id="problemCaseCount">0</span>)</div>
     <div style="overflow-x:auto;margin-bottom:20px;">
       <table class="doc-table">
-        <thead><tr><th>Site / ลูกค้า</th><th>TS App</th><th>ติดตั้งเสร็จ</th><th>ผรม.ติดตั้ง</th><th>เบอร์โทร</th><th>อาการ</th><th>รูปแบบ</th><th>นัดหมาย</th><th>สถานะ</th><th></th></tr></thead>
+        <thead><tr><th>Site / ลูกค้า</th><th>TS Job (ติดตั้ง)</th><th>TS Job (แก้ปัญหา)</th><th>ติดตั้งเสร็จ</th><th>ผรม.ติดตั้ง</th><th>เบอร์โทร</th><th>อาการ</th><th>รูปแบบ</th><th>นัดหมาย</th><th>สถานะ</th><th>วันที่เสร็จสิ้น</th><th></th></tr></thead>
         <tbody id="problemCaseListBody"></tbody>
       </table>
     </div>
@@ -880,7 +882,8 @@
   <div class="modal-box">
     <h2 id="pvTitle"></h2>
     <div class="modal-row"><div class="k">ประเภท:</div><div class="v" id="pvType"></div></div>
-    <div class="modal-row"><div class="k">เลขงาน:</div><div class="v" id="pvJobCode"></div></div>
+    <div class="modal-row"><div class="k">TS Job (งานติดตั้ง):</div><div class="v" id="pvJobCode"></div></div>
+    <div class="modal-row"><div class="k">TS Job (งานแก้ปัญหา):</div><div class="v" id="pvProblemTsJob"></div></div>
     <div class="modal-row"><div class="k">ผรม.:</div><div class="v" id="pvContractor"></div></div>
     <div class="modal-row"><div class="k">อุปกรณ์:</div><div class="v" id="pvEquipment"></div></div>
     <div class="modal-row"><div class="k">ที่อยู่:</div><div class="v" id="pvAddress"></div></div>
@@ -6317,16 +6320,6 @@ function problemCases() {
   return (RATINGS_SUMMARY && RATINGS_SUMMARY.problems) || [];
 }
 
-// Calendar date logic (Sure's 2nd clarifying answer, 2026-09-07): ALL cases
-// show on the calendar as soon as they're reported -- oncall or onsite
-// alike. Once an onsite case has an appointment date, the calendar switches
-// to showing it under THAT date instead (the day someone will actually go
-// fix it), not the original report date.
-function problemDisplayDate_(c) {
-  if (c.resolution_type === PROBLEM_RES_TYPE_ONSITE_ && c.appointment_date) return c.appointment_date;
-  return c.report_date;
-}
-
 function problemMatchesSearch_(c, q) {
   if (!q) return true;
   q = q.toLowerCase();
@@ -6374,6 +6367,20 @@ function problemMatchedJob_(c) {
   return null;
 }
 
+// Plain-text (unescaped) rendering of an onsite case's schedule as a date
+// RANGE (replacing the old single appointment_date + appointment_time
+// display, 2026-09-17). Falls back to a legacy single date for cases saved
+// before the range fields existed. Shared by the case-list table and the
+// case-detail popup so both stay consistent.
+function problemOnsiteRangeText_(c) {
+  if (c.resolution_type !== PROBLEM_RES_TYPE_ONSITE_) return '-';
+  var start = c.onsite_start_date || c.appointment_date || '';
+  var end = c.onsite_end_date || '';
+  if (!start) return '-';
+  if (!end || end === start) return start;
+  return start + ' — ' + end;
+}
+
 function renderProblemCaseList() {
   var body = document.getElementById('problemCaseListBody');
   var countEl = document.getElementById('problemCaseCount');
@@ -6382,19 +6389,18 @@ function renderProblemCaseList() {
   var cases = problemCases().filter(function(c) { return problemMatchesSearch_(c, q); });
   if (countEl) countEl.textContent = cases.length;
   if (!cases.length) {
-    body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);">ไม่พบเคส</td></tr>';
+    body.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--muted);">ไม่พบเคส</td></tr>';
     return;
   }
   body.innerHTML = cases.map(function(c) {
-    var apptText = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_
-      ? (escHtml(c.appointment_date || '-') + (c.appointment_time ? (' ' + escHtml(c.appointment_time)) : ''))
-      : '-';
+    var apptText = escHtml(problemOnsiteRangeText_(c));
     var mJob = problemMatchedJob_(c);
     var installDoneText = (mJob && jobFinishIso_(mJob)) || '-';
     var installContractorText = mJob ? (contractorDisplayName(mJob.contractor) || mJob.contractor || '-') : '-';
     return '<tr>' +
       '<td>' + escHtml(c.site || c.customer || '-') + (c.site && c.customer ? ('<div style="font-size:11px;color:var(--muted);">' + escHtml(c.customer) + '</div>') : '') + '</td>' +
       '<td>' + escHtml(c.ts_app || '-') + '</td>' +
+      '<td>' + escHtml(c.problem_ts_job || '-') + '</td>' +
       '<td>' + escHtml(installDoneText) + '</td>' +
       '<td>' + escHtml(installContractorText) + '</td>' +
       '<td>' + escHtml(c.phone || '-') + '</td>' +
@@ -6402,6 +6408,7 @@ function renderProblemCaseList() {
       '<td>' + problemTypeBadgeHtml_(c) + '</td>' +
       '<td>' + apptText + '</td>' +
       '<td>' + problemStatusBadgeHtml_(c) + '</td>' +
+      '<td>' + escHtml(c.completed_date || '-') + '</td>' +
       '<td style="white-space:nowrap;">' +
         '<button type="button" class="secondary problem-view-btn" data-row="' + c.row + '" style="padding:4px 8px;font-size:12px;">ดูรายละเอียด</button> ' +
         '<button type="button" class="secondary problem-edit-btn" data-row="' + c.row + '" style="padding:4px 8px;font-size:12px;">แก้ไข</button> ' +
@@ -6461,9 +6468,10 @@ function renderProblemDetail_(c) {
 
   document.getElementById('pvTitle').textContent = c.customer || c.site || '(ไม่มีชื่อ)';
   document.getElementById('pvType').textContent = isOnsite
-    ? ('🚗 Onsite — นัดหมาย ' + (c.appointment_date || '-') + (c.appointment_time ? (' ' + c.appointment_time) : ''))
+    ? ('🚗 Onsite — เข้าแก้ไข ' + problemOnsiteRangeText_(c))
     : ('📞 ทางโทรศัพท์ (oncall) — บันทึกวันที่ ' + (c.report_date || '-'));
   document.getElementById('pvJobCode').textContent = c.ts_app || '-';
+  document.getElementById('pvProblemTsJob').textContent = c.problem_ts_job || '-';
   document.getElementById('pvContractor').textContent = c.contractor || (mJob ? contractorDisplayName(mJob.contractor) : '') || '-';
   document.getElementById('pvEquipment').textContent = (mJob && mJob.equipment) || '-';
   document.getElementById('pvAddress').textContent = c.site || (mJob && mJob.address) || '-';
@@ -6484,6 +6492,8 @@ function renderProblemDetail_(c) {
   body.innerHTML =
     '<div>ลูกค้า: ' + escHtml(c.customer || '-') + ' &nbsp;·&nbsp; ผู้แจ้ง: ' + escHtml(c.reported_by || '-') + '</div>' +
     '<div style="margin-top:4px;">อาการที่เกิดขึ้น: ' + escHtml(c.symptom || '-') + '</div>' +
+    '<div style="margin-top:6px;">วันที่กำหนดเข้าแก้ไข: ' + escHtml(c.onsite_start_date || '-') + ' &nbsp;·&nbsp; วันที่คาดว่าจะแล้วเสร็จ: ' + escHtml(c.onsite_end_date || '-') + '</div>' +
+    '<div style="margin-top:4px;">วันที่เสร็จสิ้น: ' + escHtml(c.completed_date || '-') + '</div>' +
     '<div style="margin-top:6px;">สถานะ: ' + problemStatusBadgeHtml_(c) + '</div>' +
     '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">' +
       '<div style="font-weight:600;margin-bottom:6px;">บันทึกการแก้ไข</div>' +
@@ -6491,10 +6501,12 @@ function renderProblemDetail_(c) {
     '</div>' +
     '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">' +
       '<div style="font-weight:600;margin-bottom:6px;">+ เพิ่มบันทึกการแก้ไข</div>' +
+      '<label style="display:block;font-size:11px;color:var(--muted);margin-bottom:2px;">วันที่เข้าแก้ไข/บันทึก</label>' +
+      '<input type="date" id="plLogDate" value="' + TODAY_ISO + '" style="width:100%;box-sizing:border-box;margin-bottom:6px;">' +
       '<input type="text" id="plLoggedBy" placeholder="ชื่อผู้บันทึก/ผู้เข้าแก้ไข" style="width:100%;box-sizing:border-box;margin-bottom:6px;">' +
       '<textarea id="plDetail" rows="2" placeholder="รายละเอียดการแก้ไข..." style="width:100%;box-sizing:border-box;margin-bottom:6px;"></textarea>' +
       '<input type="file" id="plPhotoFile" accept="image/*" multiple style="margin-bottom:6px;">' +
-      '<label style="display:block;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="plResolved"' + (c.resolved ? ' checked disabled' : '') + '> ทำเครื่องหมายว่าแก้ไขเสร็จสิ้นแล้ว (ปิดเคส)</label>' +
+      '<label style="display:block;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="plResolved"' + (c.resolved ? ' checked disabled' : '') + '> ทำเครื่องหมายว่าแก้ไขเสร็จสิ้นแล้ว (ปิดเคส) <span style="color:var(--muted);">— จะใช้วันที่ข้างบนเป็นวันที่เสร็จสิ้นของเคสนี้</span></label>' +
       '<div id="plError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:6px;"></div>' +
       '<button type="button" class="secondary" id="plSubmitBtn">+ เพิ่มบันทึก</button>' +
     '</div>';
@@ -6523,10 +6535,12 @@ function fileToBase64_(blob) {
 
 function submitProblemLog_(c) {
   var errEl = document.getElementById('plError');
+  var logDateEl = document.getElementById('plLogDate');
   var loggedByEl = document.getElementById('plLoggedBy');
   var detailEl = document.getElementById('plDetail');
   var fileEl = document.getElementById('plPhotoFile');
   var resolvedEl = document.getElementById('plResolved');
+  var logDate = (logDateEl.value || '').trim() || TODAY_ISO;
   var loggedBy = (loggedByEl.value || '').trim();
   var detail = (detailEl.value || '').trim();
   var files = fileEl.files ? Array.prototype.slice.call(fileEl.files) : [];
@@ -6553,6 +6567,7 @@ function submitProblemLog_(c) {
       key: RATINGS_ACCESS_KEY,
       type: 'problem_log_add',
       caseRow: c.row,
+      log_date: logDate,
       logged_by: loggedBy,
       detail: detail,
       photos: photos
@@ -6572,8 +6587,8 @@ function submitProblemLog_(c) {
       return;
     }
     c.logs = c.logs || [];
-    c.logs.push({ row: res.row, logDate: '', loggedBy: loggedBy, detail: detail, photos: res.photoUrls || [] });
-    if (resolvedEl && resolvedEl.checked) c.resolved = true;
+    c.logs.push({ row: res.row, logDate: logDate, loggedBy: loggedBy, detail: detail, photos: res.photoUrls || [] });
+    if (resolvedEl && resolvedEl.checked) { c.resolved = true; c.completed_date = logDate; }
     renderProblemDetail_(c);
     renderProblemCaseList();
     renderProblemTab();
@@ -6627,7 +6642,7 @@ function problemJobSearchResults_(q) {
 var problemEditingRow = null;
 
 function resetProblemCaseForm_() {
-  ['pcTsApp', 'pcCustomer', 'pcSite', 'pcPhone', 'pcContractor', 'pcSymptom', 'pcApptDate', 'pcApptTime', 'pcReportedBy'].forEach(function(id) {
+  ['pcTsApp', 'pcProblemTsJob', 'pcCustomer', 'pcSite', 'pcPhone', 'pcContractor', 'pcSymptom', 'pcOnsiteStart', 'pcOnsiteEnd', 'pcCompletedDate', 'pcReportedBy'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -6637,8 +6652,6 @@ function resetProblemCaseForm_() {
   var onsiteRadioReset = document.getElementById('pcResOnsite');
   if (phoneRadio) phoneRadio.checked = true;
   if (onsiteRadioReset) onsiteRadioReset.checked = false;
-  var apptRow = document.getElementById('pcAppointmentRow');
-  if (apptRow) apptRow.style.display = 'none';
   var errEl = document.getElementById('pcError');
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
   var jobResults = document.getElementById('problemJobSearchResults');
@@ -6659,6 +6672,7 @@ function openProblemEditForm_(c) {
   resetProblemCaseForm_();
   problemEditingRow = c.row;
   document.getElementById('pcTsApp').value = c.ts_app || '';
+  document.getElementById('pcProblemTsJob').value = c.problem_ts_job || '';
   document.getElementById('pcCustomer').value = c.customer || '';
   document.getElementById('pcSite').value = c.site || '';
   document.getElementById('pcPhone').value = c.phone || '';
@@ -6669,9 +6683,12 @@ function openProblemEditForm_(c) {
   var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
   document.getElementById('pcResPhone').checked = !isOnsite;
   document.getElementById('pcResOnsite').checked = isOnsite;
-  document.getElementById('pcAppointmentRow').style.display = isOnsite ? 'grid' : 'none';
-  document.getElementById('pcApptDate').value = c.appointment_date || '';
-  document.getElementById('pcApptTime').value = c.appointment_time || '';
+  // Backward-compat: cases saved before 2026-09-17 only have the old single
+  // appointment_date field (no onsite_end_date) -- treat that as both the
+  // start and end of a 1-day range so old cases still display sensibly.
+  document.getElementById('pcOnsiteStart').value = c.onsite_start_date || c.appointment_date || '';
+  document.getElementById('pcOnsiteEnd').value = c.onsite_end_date || c.onsite_start_date || c.appointment_date || '';
+  document.getElementById('pcCompletedDate').value = c.completed_date || '';
   var titleEl = document.getElementById('pcFormTitle');
   if (titleEl) titleEl.textContent = 'แก้ไขเคส';
   var submitBtn = document.getElementById('pcSubmitBtn');
@@ -6682,6 +6699,7 @@ function openProblemEditForm_(c) {
 function submitProblemCase_() {
   var errEl = document.getElementById('pcError');
   var tsApp = (document.getElementById('pcTsApp').value || '').trim();
+  var problemTsJob = (document.getElementById('pcProblemTsJob').value || '').trim();
   var customer = (document.getElementById('pcCustomer').value || '').trim();
   var site = (document.getElementById('pcSite').value || '').trim();
   var phone = (document.getElementById('pcPhone').value || '').trim();
@@ -6689,14 +6707,17 @@ function submitProblemCase_() {
   var symptom = (document.getElementById('pcSymptom').value || '').trim();
   var isOnsite = !!(document.getElementById('pcResOnsite') && document.getElementById('pcResOnsite').checked);
   var resolutionType = isOnsite ? PROBLEM_RES_TYPE_ONSITE_ : PROBLEM_RES_TYPE_PHONE_;
-  var apptDate = (document.getElementById('pcApptDate').value || '').trim();
-  var apptTime = (document.getElementById('pcApptTime').value || '').trim();
+  var onsiteStart = (document.getElementById('pcOnsiteStart').value || '').trim();
+  var onsiteEnd = (document.getElementById('pcOnsiteEnd').value || '').trim();
+  var completedDate = (document.getElementById('pcCompletedDate').value || '').trim();
   var reportDate = (document.getElementById('pcReportDate').value || '').trim() || TODAY_ISO;
   var reportedBy = (document.getElementById('pcReportedBy').value || '').trim();
 
-  if (!tsApp && !customer && !site) { errEl.textContent = 'กรุณาระบุอย่างน้อยหนึ่งอย่าง: เลข TS Job / ชื่อลูกค้า / Site'; errEl.style.display = ''; return; }
+  if (!tsApp && !customer && !site) { errEl.textContent = 'กรุณาระบุอย่างน้อยหนึ่งอย่าง: TS Job (งานติดตั้ง) / ชื่อลูกค้า / Site'; errEl.style.display = ''; return; }
+  if (!problemTsJob) { errEl.textContent = 'กรุณาใส่เลข TS Job (งานแก้ปัญหา)'; errEl.style.display = ''; return; }
   if (!symptom) { errEl.textContent = 'กรุณาใส่อาการที่เกิดขึ้น'; errEl.style.display = ''; return; }
-  if (isOnsite && !apptDate) { errEl.textContent = 'งาน Onsite ต้องระบุวันที่นัดหมาย'; errEl.style.display = ''; return; }
+  if (isOnsite && (!onsiteStart || !onsiteEnd)) { errEl.textContent = 'งาน Onsite ต้องระบุวันที่เริ่มเข้าแก้ไขและวันที่คาดว่าจะเสร็จ'; errEl.style.display = ''; return; }
+  if (isOnsite && onsiteEnd < onsiteStart) { errEl.textContent = 'วันที่คาดว่าจะเสร็จต้องไม่ก่อนวันที่เริ่มเข้าแก้ไข'; errEl.style.display = ''; return; }
   if (!reportedBy) { errEl.textContent = 'กรุณาใส่ชื่อผู้แจ้ง/ผู้สร้างเคส'; errEl.style.display = ''; return; }
   if (!ratingsConfigured()) { errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางอัปโหลด (RATINGS_WEBAPP_URL)'; errEl.style.display = ''; return; }
   errEl.style.display = 'none';
@@ -6709,9 +6730,10 @@ function submitProblemCase_() {
   var payload = {
     key: RATINGS_ACCESS_KEY,
     type: isEdit ? 'problem_case_update' : 'problem_case_create',
-    ts_app: tsApp, customer: customer, site: site, phone: phone, contractor: contractor,
+    ts_app: tsApp, problem_ts_job: problemTsJob, customer: customer, site: site, phone: phone, contractor: contractor,
     symptom: symptom, resolution_type: resolutionType,
-    appointment_date: isOnsite ? apptDate : '', appointment_time: isOnsite ? apptTime : '',
+    onsite_start_date: isOnsite ? onsiteStart : '', onsite_end_date: isOnsite ? onsiteEnd : '',
+    completed_date: completedDate,
     reported_by: reportedBy, report_date: reportDate
   };
   if (isEdit) payload.row = problemEditingRow;
@@ -6733,17 +6755,19 @@ function submitProblemCase_() {
     if (isEdit) {
       caseObj = problemCaseByRow_(problemEditingRow);
       if (caseObj) {
-        caseObj.ts_app = tsApp; caseObj.customer = customer; caseObj.site = site;
+        caseObj.ts_app = tsApp; caseObj.problem_ts_job = problemTsJob; caseObj.customer = customer; caseObj.site = site;
         caseObj.phone = phone; caseObj.contractor = contractor; caseObj.report_date = reportDate;
         caseObj.symptom = symptom; caseObj.resolution_type = resolutionType;
-        caseObj.appointment_date = isOnsite ? apptDate : ''; caseObj.appointment_time = isOnsite ? apptTime : '';
+        caseObj.onsite_start_date = isOnsite ? onsiteStart : ''; caseObj.onsite_end_date = isOnsite ? onsiteEnd : '';
+        caseObj.completed_date = completedDate;
         caseObj.reported_by = reportedBy;
       }
     } else {
       caseObj = {
-        row: res.row, ts_app: tsApp, customer: customer, site: site, phone: phone, contractor: contractor,
+        row: res.row, ts_app: tsApp, problem_ts_job: problemTsJob, customer: customer, site: site, phone: phone, contractor: contractor,
         report_date: reportDate, symptom: symptom, resolution_type: resolutionType,
-        appointment_date: isOnsite ? apptDate : '', appointment_time: isOnsite ? apptTime : '',
+        onsite_start_date: isOnsite ? onsiteStart : '', onsite_end_date: isOnsite ? onsiteEnd : '',
+        completed_date: completedDate,
         resolved: false, reported_by: reportedBy, logs: []
       };
       RATINGS_SUMMARY.problems.unshift(caseObj);
@@ -6834,15 +6858,6 @@ var pcCancelBtnEl = document.getElementById('pcCancelBtn');
 if (pcCancelBtnEl) pcCancelBtnEl.onclick = function() { document.getElementById('problemNewCaseForm').style.display = 'none'; };
 var pcSubmitBtnEl = document.getElementById('pcSubmitBtn');
 if (pcSubmitBtnEl) pcSubmitBtnEl.onclick = function() { submitProblemCase_(); };
-var pcResPhoneEl = document.getElementById('pcResPhone');
-var pcResOnsiteEl = document.getElementById('pcResOnsite');
-[pcResPhoneEl, pcResOnsiteEl].forEach(function(r) {
-  if (!r) return;
-  r.addEventListener('change', function() {
-    var apptRow = document.getElementById('pcAppointmentRow');
-    if (apptRow) apptRow.style.display = (pcResOnsiteEl && pcResOnsiteEl.checked) ? 'grid' : 'none';
-  });
-});
 
 var problemJobSearchInputEl = document.getElementById('problemJobSearchInput');
 if (problemJobSearchInputEl) {
@@ -6861,6 +6876,42 @@ if (problemJobSearchInputEl) {
     }).join('');
   });
 }
+// Shared autofill: fills customer/site/phone/contractor (and, unless
+// skipTsApp, the TS Job (งานติดตั้ง) field itself) from a JOBS[] entry.
+// Used both by the separate search-box click AND by typing directly into
+// pcTsApp (Sure's request, 2026-09-17: "อยากให้ เลข TS Job (งานติดตั้ง) เวลา
+// กรอกเข้ามาแล้วให้ไปดึงข้อมูลหลักมาแสดงเลย").
+function fillProblemJobFields_(j, opts) {
+  opts = opts || {};
+  if (!opts.skipTsApp) document.getElementById('pcTsApp').value = j.ts_app || j.job_code || '';
+  document.getElementById('pcCustomer').value = j.customer || '';
+  document.getElementById('pcSite').value = j.address || '';
+  document.getElementById('pcPhone').value = j.phone || '';
+  document.getElementById('pcContractor').value = contractorDisplayName(j.contractor) || j.contractor || '';
+}
+
+// Exact-match lookup (case/whitespace-insensitive) against ts_app/job_code,
+// used for the "type directly into pcTsApp" autofill path -- deliberately
+// stricter than problemJobSearchResults_'s fuzzy substring match, so it
+// only fires once the user has typed a complete, existing job number.
+function problemJobExactMatch_(q) {
+  q = String(q || '').trim().toLowerCase();
+  if (!q) return null;
+  return (JOBS || []).filter(function(j) {
+    return String(j.ts_app || j.job_code || '').trim().toLowerCase() === q;
+  })[0] || null;
+}
+
+var pcTsAppEl = document.getElementById('pcTsApp');
+if (pcTsAppEl) {
+  ['input', 'blur'].forEach(function(evt) {
+    pcTsAppEl.addEventListener(evt, function() {
+      var j = problemJobExactMatch_(this.value);
+      if (j) fillProblemJobFields_(j, { skipTsApp: true });
+    });
+  });
+}
+
 var problemJobSearchResultsEl = document.getElementById('problemJobSearchResults');
 if (problemJobSearchResultsEl) {
   problemJobSearchResultsEl.addEventListener('click', function(ev) {
@@ -6870,11 +6921,7 @@ if (problemJobSearchResultsEl) {
     var results = this._results || [];
     var j = results[idx];
     if (!j) return;
-    document.getElementById('pcTsApp').value = j.ts_app || j.job_code || '';
-    document.getElementById('pcCustomer').value = j.customer || '';
-    document.getElementById('pcSite').value = j.address || '';
-    document.getElementById('pcPhone').value = j.phone || '';
-    document.getElementById('pcContractor').value = contractorDisplayName(j.contractor) || j.contractor || '';
+    fillProblemJobFields_(j);
     this.style.display = 'none';
     document.getElementById('problemJobSearchInput').value = '';
   });
@@ -6901,12 +6948,45 @@ function renderProblemSummary_(monthEvents) {
   }).join('');
 }
 
+// Calendar date logic (Sure's 2nd clarifying answer, 2026-09-07): ALL cases
+// show on the calendar as soon as they're reported -- oncall or onsite
+// alike. Once an onsite case has a start/end date range, the calendar
+// switches to showing it under THOSE dates instead (the days someone will
+// actually go fix it), not the original report date.
+//
+// Multi-day spread (Sure's request, 2026-09-17): when both onsite_start_date
+// and onsite_end_date are set, the case appears on EVERY day in that range
+// -- a 3-day range makes 3 calendar entries, a 2-day range makes 2 -- each
+// tagged with day_index/day_total (same pattern as the main calendar's
+// multi-day install_actual events). Per Sure's confirmed answer, this
+// multi-day spread applies ONLY here, to the Problem tab's own mini
+// calendar (#problemCalGrid via renderProblemTab below) -- NOT the main
+// "ปฏิทิน" tab, which doesn't touch Problem Cases at all.
 function buildProblemEvents_() {
   var evs = [];
   problemCases().forEach(function(c) {
-    var d = problemDisplayDate_(c);
-    if (!d) return;
-    evs.push({ date: d, c: c });
+    var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
+    if (isOnsite && c.onsite_start_date && c.onsite_end_date) {
+      var start = new Date(c.onsite_start_date + 'T00:00:00');
+      var end = new Date(c.onsite_end_date + 'T00:00:00');
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end >= start) {
+        var totalDays = Math.round((end - start) / 86400000) + 1;
+        for (var i = 0; i < totalDays; i++) {
+          var d = new Date(start);
+          d.setDate(start.getDate() + i);
+          var iso = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+          evs.push({ date: iso, c: c, day_index: i + 1, day_total: totalDays });
+        }
+        return;
+      }
+    }
+    // Fallback single-day: a phone/oncall case, a legacy onsite case saved
+    // before 2026-09-17 (only has the old single appointment_date), or any
+    // case whose range hasn't been filled in yet -- still show it once, on
+    // its best-known date, rather than dropping it off the calendar.
+    var fallbackDate = (isOnsite && (c.onsite_start_date || c.appointment_date)) || c.report_date;
+    if (!fallbackDate) return;
+    evs.push({ date: fallbackDate, c: c, day_index: 1, day_total: 1 });
   });
   return evs;
 }
@@ -6984,9 +7064,12 @@ function renderProblemTab() {
       // rather than replacing it, so the type stays visible at a glance.
       var label = (c.customer || c.site || '-');
       var prefix = (isOnsite ? '🚗' : '📞') + (c.resolved ? ' ✅' : '') + ' ';
-      txt.textContent = prefix + label.slice(0, 18);
+      // day_total > 1 = this is one day of a multi-day onsite range -- tag
+      // it (วันที่ 1/3 etc.) so it's clear at a glance which day this is.
+      var dayTag = (e.day_total > 1) ? (' (' + e.day_index + '/' + e.day_total + ')') : '';
+      txt.textContent = prefix + label.slice(0, 18) + dayTag;
       pill.appendChild(txt);
-      pill.title = 'คลิกดูรายละเอียด';
+      pill.title = (e.day_total > 1) ? ('วันที่ ' + e.day_index + ' จาก ' + e.day_total + ' — คลิกดูรายละเอียด') : 'คลิกดูรายละเอียด';
       pill.onclick = function() { renderProblemDetail_(c); };
       cell.appendChild(pill);
     });

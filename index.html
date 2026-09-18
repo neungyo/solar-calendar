@@ -1115,6 +1115,12 @@ var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrR
 var LOGIN_KEY_STORAGE_NAME = 'solarLoginAccessKey';
 var urlParams = new URLSearchParams(window.location.search);
 var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || localStorage.getItem(LOGIN_KEY_STORAGE_NAME) || '';
+// Contractor-scoped links should only ever show the ปฏิทิน tab -- Sure's
+// request, 2026-09-18: "ตอนนี้ เค้าสามารถดูได้ทุกแท็บที่ผมสร้างเลย...
+// อยากให้เค้าดูได้แค่หน้า ปฏิทิน เท่านั้น". Defaults optimistically to
+// 'admin' (so nothing flashes hidden before the first fetchData() response)
+// and is corrected to the real value in fetchData()'s success handler below.
+var CURRENT_SCOPE = 'admin';
 
 var JOBS = [];
 var EVENTS = [];
@@ -7157,7 +7163,27 @@ document.getElementById('problemNextMonth').onclick = function() {
   renderProblemTab();
 };
 
+// Hides every tab button except ปฏิทิน for a non-admin (contractor) scope,
+// and forces the view back to the calendar if it's somehow anywhere else
+// (stale click before the DOM updated, browser back/forward, etc.). Called
+// from fetchData()'s success handler once CURRENT_SCOPE is known; also
+// safe to call again on re-login. Admin scope restores every tab.
+var SCOPE_RESTRICTED_TAB_IDS = ['tabDocBtn', 'tabOverviewBtn', 'tabEvalBtn', 'tabSlaBtn', 'tabAllocBtn', 'tabDashBtn', 'tabProblemBtn'];
+function applyScopeRestriction(scope) {
+  CURRENT_SCOPE = scope || 'admin';
+  var restricted = CURRENT_SCOPE !== 'admin';
+  SCOPE_RESTRICTED_TAB_IDS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = restricted ? 'none' : '';
+  });
+  if (restricted) switchView('calendar');
+}
+
 function switchView(view) {
+  // Belt-and-suspenders: even if a hidden tab button's onclick fires some
+  // other way, a contractor-scoped session can never actually switch away
+  // from the calendar.
+  if (CURRENT_SCOPE !== 'admin' && view !== 'calendar') view = 'calendar';
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
   document.getElementById('tabOverviewBtn').classList.toggle('active', view === 'overview');
@@ -7896,7 +7922,7 @@ function fetchData(isManualClick) {
   }
   var url = WEBAPP_URL + (WEBAPP_URL.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(ACCESS_KEY) + '&_t=' + Date.now();
   fetchJsonWithRetry(url, 3, 1500, function() {
-    if (statusEl) statusEl.textContent = '⏳ เซิร์ฟเวอร์ตอบไม่สมบูรณ์ กำลังลองใหม่อัตโนมัติ...';
+    if (statusEl) statusEl.textContent = '⏳ เซิร์ฟเวอร��เวอร์ตอบไม่สมบูรณ์ กำลังลองใหม่อัตโนมัติ...';
   })
     .then(function(data) {
       if (data.error === 'unauthorized') {
@@ -7918,6 +7944,7 @@ function fetchData(isManualClick) {
         'อัปเดตล่าสุด: ' + new Date(LAST_UPDATED_ISO).toLocaleString('th-TH') +
         ' &middot; งานทั้งหมด ' + (data.total_jobs||0) + ' งาน &middot; การเปลี่ยนแปลงตั้งแต่รอบก่อน: ' + (data.changed_jobs||[]).length + ' รายการ';
       renderScopeBadge(data.scope, data.contractor);
+      applyScopeRestriction(data.scope);
       renderServiceLegend();
       rebuildFilterOptions();
       renderBanner(data.changed_jobs, data.new_jobs);
@@ -8009,5 +8036,4 @@ if (ACCESS_KEY) {
   showLoginOverlay();
 }
 </script>
-</body>
-</html>
+<

@@ -818,6 +818,7 @@
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">TS Job (งานติดตั้ง)</label><input type="text" id="pcTsApp" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">TS Job (งานแก้ปัญหา) <span style="color:var(--muted);font-weight:400;">— กรอกใหม่ทุกครั้ง</span></label><input type="text" id="pcProblemTsJob" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ชื่อลูกค้า</label><input type="text" id="pcCustomer" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Location <span style="color:var(--muted);font-weight:400;">— ลิงก์แผนที่ (ถ้ามี)</span></label><input type="text" id="pcLocation" placeholder="วางลิงก์ Google Maps ที่นี่" style="width:100%;box-sizing:border-box;"></div>
         <div style="grid-column:1/-1;"><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Site / ที่อยู่</label><input type="text" id="pcSite" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">เบอร์โทร</label><input type="text" id="pcPhone" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">ผรม.</label><input type="text" id="pcContractor" style="width:100%;box-sizing:border-box;"></div>
@@ -829,7 +830,8 @@
       <div style="margin-bottom:10px;">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">รูปแบบการแก้ไข</label>
         <label style="margin-right:16px;"><input type="radio" name="pcResType" id="pcResPhone" value="โทรศัพท์" checked> 📞 ทางโทรศัพท์ (oncall)</label>
-        <label><input type="radio" name="pcResType" id="pcResOnsite" value="Onsite"> 🚗 Onsite</label>
+        <label style="margin-right:16px;"><input type="radio" name="pcResType" id="pcResOnsite" value="Onsite"> 🚗 Onsite (งานติดตั้ง)</label>
+        <label><input type="radio" name="pcResType" id="pcResOnsiteMk" value="Onsite (Support MK)"> 🔧 Onsite (Support MK)</label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
         <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">วันที่บันทึก</label><input type="date" id="pcReportDate" style="width:100%;box-sizing:border-box;"></div>
@@ -6313,6 +6315,22 @@ function dashExportPdf() {
 // pipeline, which can't support interactive case creation or photo uploads.
 var PROBLEM_RES_TYPE_PHONE_ = 'โทรศัพท์';
 var PROBLEM_RES_TYPE_ONSITE_ = 'Onsite';
+// Onsite (Support MK) -- added 2026-09-18, Sure's request: a second onsite
+// sub-type for cases with NO matching install job on file (no TS Job number
+// to autofill from), so the resolution-type radio group now has three
+// options instead of two. Kept as a distinct resolution_type VALUE (not just
+// a UI label) so the calendar/list can color it differently (a dark/black
+// pill, vs the existing red for regular install-onsite) -- see
+// problemIsOnsite_/problemIsMk_ below, used everywhere the old boolean
+// `resolution_type === PROBLEM_RES_TYPE_ONSITE_` check used to gate onsite-
+// only behavior (date range fields, calendar multi-day spread, etc).
+var PROBLEM_RES_TYPE_ONSITE_MK_ = 'Onsite (Support MK)';
+function problemIsOnsite_(c) {
+  return c.resolution_type === PROBLEM_RES_TYPE_ONSITE_ || c.resolution_type === PROBLEM_RES_TYPE_ONSITE_MK_;
+}
+function problemIsMk_(c) {
+  return c.resolution_type === PROBLEM_RES_TYPE_ONSITE_MK_;
+}
 var problemCur = { y: TODAY.getFullYear(), m: TODAY.getMonth() + 1 };
 var currentProblemCase = null;
 
@@ -6330,10 +6348,11 @@ function problemMatchesSearch_(c, q) {
 }
 
 function problemTypeBadgeHtml_(c) {
-  var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
-  var bg = isOnsite ? '#fee2e2' : '#dbeafe';
-  var fg = isOnsite ? '#991b1b' : '#1e40af';
-  var label = isOnsite ? '🚗 Onsite' : '📞 โทรศัพท์';
+  var isMk = problemIsMk_(c);
+  var isOnsite = problemIsOnsite_(c);
+  var bg = isMk ? '#1f2937' : (isOnsite ? '#fee2e2' : '#dbeafe');
+  var fg = isMk ? '#f9fafb' : (isOnsite ? '#991b1b' : '#1e40af');
+  var label = isMk ? '🔧 Onsite (MK)' : (isOnsite ? '🚗 Onsite (ติดตั้ง)' : '📞 โทรศัพท์');
   return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:' + bg + ';color:' + fg + ';white-space:nowrap;">' + label + '</span>';
 }
 
@@ -6373,7 +6392,7 @@ function problemMatchedJob_(c) {
 // before the range fields existed. Shared by the case-list table and the
 // case-detail popup so both stay consistent.
 function problemOnsiteRangeText_(c) {
-  if (c.resolution_type !== PROBLEM_RES_TYPE_ONSITE_) return '-';
+  if (!problemIsOnsite_(c)) return '-';
   var start = c.onsite_start_date || c.appointment_date || '';
   var end = c.onsite_end_date || '';
   if (!start) return '-';
@@ -6465,19 +6484,26 @@ function renderProblemLogEntry_(log) {
 function renderProblemDetail_(c) {
   currentProblemCase = c;
   var mJob = problemMatchedJob_(c);
-  var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
+  var isMk = problemIsMk_(c);
+  var isOnsite = problemIsOnsite_(c);
 
   document.getElementById('pvTitle').textContent = c.customer || c.site || '(ไม่มีชื่อ)';
-  document.getElementById('pvType').textContent = isOnsite
-    ? ('🚗 Onsite — เข้าแก้ไข ' + problemOnsiteRangeText_(c))
-    : ('📞 ทางโทรศัพท์ (oncall) — บันทึกวันที่ ' + (c.report_date || '-'));
+  document.getElementById('pvType').textContent = isMk
+    ? ('🔧 Onsite (Support MK) — เข้าแก้ไข ' + problemOnsiteRangeText_(c))
+    : (isOnsite
+      ? ('🚗 Onsite (งานติดตั้ง) — เข้าแก้ไข ' + problemOnsiteRangeText_(c))
+      : ('📞 ทางโทรศัพท์ (oncall) — บันทึกวันที่ ' + (c.report_date || '-')));
   document.getElementById('pvJobCode').textContent = c.ts_app || '-';
   document.getElementById('pvProblemTsJob').textContent = c.problem_ts_job || '-';
   document.getElementById('pvContractor').textContent = c.contractor || (mJob ? contractorDisplayName(mJob.contractor) : '') || '-';
   document.getElementById('pvEquipment').textContent = (mJob && mJob.equipment) || '-';
   document.getElementById('pvAddress').textContent = c.site || (mJob && mJob.address) || '-';
   var pvLocEl = document.getElementById('pvLocation');
-  var locUrl = mJob && mJob.location;
+  // Prefer the case's own saved location (manually pasted or autofilled at
+  // save time, Sure's request 2026-09-18) over the matched install job's
+  // location -- covers Onsite (Support MK) cases, which often have no
+  // matched job at all.
+  var locUrl = c.location || (mJob && mJob.location);
   if (locUrl) {
     pvLocEl.innerHTML = '<a class="loc-link" href="' + locUrl + '" target="_blank" rel="noopener">เปิดแผนที่</a>';
   } else {
@@ -6643,7 +6669,7 @@ function problemJobSearchResults_(q) {
 var problemEditingRow = null;
 
 function resetProblemCaseForm_() {
-  ['pcTsApp', 'pcProblemTsJob', 'pcCustomer', 'pcSite', 'pcPhone', 'pcContractor', 'pcSymptom', 'pcOnsiteStart', 'pcOnsiteTime', 'pcOnsiteEnd', 'pcCompletedDate', 'pcReportedBy'].forEach(function(id) {
+  ['pcTsApp', 'pcProblemTsJob', 'pcCustomer', 'pcLocation', 'pcSite', 'pcPhone', 'pcContractor', 'pcSymptom', 'pcOnsiteStart', 'pcOnsiteTime', 'pcOnsiteEnd', 'pcCompletedDate', 'pcReportedBy'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -6651,8 +6677,10 @@ function resetProblemCaseForm_() {
   if (reportDateEl) reportDateEl.value = TODAY_ISO;
   var phoneRadio = document.getElementById('pcResPhone');
   var onsiteRadioReset = document.getElementById('pcResOnsite');
+  var onsiteMkRadioReset = document.getElementById('pcResOnsiteMk');
   if (phoneRadio) phoneRadio.checked = true;
   if (onsiteRadioReset) onsiteRadioReset.checked = false;
+  if (onsiteMkRadioReset) onsiteMkRadioReset.checked = false;
   var errEl = document.getElementById('pcError');
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
   var jobResults = document.getElementById('problemJobSearchResults');
@@ -6675,15 +6703,16 @@ function openProblemEditForm_(c) {
   document.getElementById('pcTsApp').value = c.ts_app || '';
   document.getElementById('pcProblemTsJob').value = c.problem_ts_job || '';
   document.getElementById('pcCustomer').value = c.customer || '';
+  document.getElementById('pcLocation').value = c.location || '';
   document.getElementById('pcSite').value = c.site || '';
   document.getElementById('pcPhone').value = c.phone || '';
   document.getElementById('pcContractor').value = c.contractor || '';
   document.getElementById('pcSymptom').value = c.symptom || '';
   document.getElementById('pcReportDate').value = c.report_date || TODAY_ISO;
   document.getElementById('pcReportedBy').value = c.reported_by || '';
-  var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
-  document.getElementById('pcResPhone').checked = !isOnsite;
-  document.getElementById('pcResOnsite').checked = isOnsite;
+  document.getElementById('pcResPhone').checked = c.resolution_type === PROBLEM_RES_TYPE_PHONE_;
+  document.getElementById('pcResOnsite').checked = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
+  document.getElementById('pcResOnsiteMk').checked = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_MK_;
   // Backward-compat: cases saved before 2026-09-17 only have the old single
   // appointment_date field (no onsite_end_date) -- treat that as both the
   // start and end of a 1-day range so old cases still display sensibly.
@@ -6703,12 +6732,15 @@ function submitProblemCase_() {
   var tsApp = (document.getElementById('pcTsApp').value || '').trim();
   var problemTsJob = (document.getElementById('pcProblemTsJob').value || '').trim();
   var customer = (document.getElementById('pcCustomer').value || '').trim();
+  var location = (document.getElementById('pcLocation').value || '').trim();
   var site = (document.getElementById('pcSite').value || '').trim();
   var phone = (document.getElementById('pcPhone').value || '').trim();
   var contractor = (document.getElementById('pcContractor').value || '').trim();
   var symptom = (document.getElementById('pcSymptom').value || '').trim();
-  var isOnsite = !!(document.getElementById('pcResOnsite') && document.getElementById('pcResOnsite').checked);
-  var resolutionType = isOnsite ? PROBLEM_RES_TYPE_ONSITE_ : PROBLEM_RES_TYPE_PHONE_;
+  var isOnsiteMk = !!(document.getElementById('pcResOnsiteMk') && document.getElementById('pcResOnsiteMk').checked);
+  var isOnsiteInstall = !!(document.getElementById('pcResOnsite') && document.getElementById('pcResOnsite').checked);
+  var isOnsite = isOnsiteInstall || isOnsiteMk;
+  var resolutionType = isOnsiteMk ? PROBLEM_RES_TYPE_ONSITE_MK_ : (isOnsiteInstall ? PROBLEM_RES_TYPE_ONSITE_ : PROBLEM_RES_TYPE_PHONE_);
   var onsiteStart = (document.getElementById('pcOnsiteStart').value || '').trim();
   var onsiteTime = (document.getElementById('pcOnsiteTime').value || '').trim();
   var onsiteEnd = (document.getElementById('pcOnsiteEnd').value || '').trim();
@@ -6717,7 +6749,16 @@ function submitProblemCase_() {
   var reportedBy = (document.getElementById('pcReportedBy').value || '').trim();
 
   if (!tsApp && !customer && !site) { errEl.textContent = 'กรุณาระบุอย่างน้อยหนึ่งอย่าง: TS Job (งานติดตั้ง) / ชื่อลูกค้า / Site'; errEl.style.display = ''; return; }
-  if (!problemTsJob) { errEl.textContent = 'กรุณาใส่เลข TS Job (งานแก้ปัญหา)'; errEl.style.display = ''; return; }
+  // Onsite (Support MK) often has no matched install job at all -- Sure's
+  // request, 2026-09-18: "จะไม่มี TS Job (งานติดตั้ง)หรือ TS Job (งานแก้ปัญหา)
+  // ก็ได้นะครับ แต่ต้องมีอย่างใดอย่างหนึ่ง" -- so relax the normally-mandatory
+  // problem_ts_job field to "at least one of the two TS Job numbers" for
+  // this type only; every other type still requires problem_ts_job outright.
+  if (isOnsiteMk) {
+    if (!tsApp && !problemTsJob) { errEl.textContent = 'Onsite (Support MK) ต้องมี TS Job (งานติดตั้ง) หรือ TS Job (งานแก้ปัญหา) อย่างน้อยหนึ่งอย่าง'; errEl.style.display = ''; return; }
+  } else if (!problemTsJob) {
+    errEl.textContent = 'กรุณาใส่เลข TS Job (งานแก้ปัญหา)'; errEl.style.display = ''; return;
+  }
   if (!symptom) { errEl.textContent = 'กรุณาใส่อาการที่เกิดขึ้น'; errEl.style.display = ''; return; }
   if (isOnsite && (!onsiteStart || !onsiteEnd)) { errEl.textContent = 'งาน Onsite ต้องระบุวันที่เริ่มเข้าแก้ไขและวันที่คาดว่าจะเสร็จ'; errEl.style.display = ''; return; }
   if (isOnsite && onsiteEnd < onsiteStart) { errEl.textContent = 'วันที่คาดว่าจะเสร็จต้องไม่ก่อนวันที่เริ่มเข้าแก้ไข'; errEl.style.display = ''; return; }
@@ -6733,7 +6774,7 @@ function submitProblemCase_() {
   var payload = {
     key: RATINGS_ACCESS_KEY,
     type: isEdit ? 'problem_case_update' : 'problem_case_create',
-    ts_app: tsApp, problem_ts_job: problemTsJob, customer: customer, site: site, phone: phone, contractor: contractor,
+    ts_app: tsApp, problem_ts_job: problemTsJob, customer: customer, location: location, site: site, phone: phone, contractor: contractor,
     symptom: symptom, resolution_type: resolutionType,
     onsite_start_date: isOnsite ? onsiteStart : '', onsite_start_time: isOnsite ? onsiteTime : '',
     onsite_end_date: isOnsite ? onsiteEnd : '',
@@ -6759,7 +6800,7 @@ function submitProblemCase_() {
     if (isEdit) {
       caseObj = problemCaseByRow_(problemEditingRow);
       if (caseObj) {
-        caseObj.ts_app = tsApp; caseObj.problem_ts_job = problemTsJob; caseObj.customer = customer; caseObj.site = site;
+        caseObj.ts_app = tsApp; caseObj.problem_ts_job = problemTsJob; caseObj.customer = customer; caseObj.location = location; caseObj.site = site;
         caseObj.phone = phone; caseObj.contractor = contractor; caseObj.report_date = reportDate;
         caseObj.symptom = symptom; caseObj.resolution_type = resolutionType;
         caseObj.onsite_start_date = isOnsite ? onsiteStart : ''; caseObj.onsite_start_time = isOnsite ? onsiteTime : '';
@@ -6769,7 +6810,7 @@ function submitProblemCase_() {
       }
     } else {
       caseObj = {
-        row: res.row, ts_app: tsApp, problem_ts_job: problemTsJob, customer: customer, site: site, phone: phone, contractor: contractor,
+        row: res.row, ts_app: tsApp, problem_ts_job: problemTsJob, customer: customer, location: location, site: site, phone: phone, contractor: contractor,
         report_date: reportDate, symptom: symptom, resolution_type: resolutionType,
         onsite_start_date: isOnsite ? onsiteStart : '', onsite_start_time: isOnsite ? onsiteTime : '',
         onsite_end_date: isOnsite ? onsiteEnd : '',
@@ -6894,6 +6935,9 @@ function fillProblemJobFields_(j, opts) {
   document.getElementById('pcSite').value = j.address || '';
   document.getElementById('pcPhone').value = j.phone || '';
   document.getElementById('pcContractor').value = contractorDisplayName(j.contractor) || j.contractor || '';
+  // Location (added 2026-09-18, Sure's request): pull the job's saved Maps
+  // link along with everything else, if it has one.
+  document.getElementById('pcLocation').value = j.location || '';
 }
 
 // Exact-match lookup (case/whitespace-insensitive) against ts_app/job_code,
@@ -6937,7 +6981,7 @@ function renderProblemSummary_(monthEvents) {
   var counts = { total: 0, phone: 0, onsite: 0, resolved: 0 };
   monthEvents.forEach(function(e) {
     counts.total++;
-    if (e.c.resolution_type === PROBLEM_RES_TYPE_ONSITE_) counts.onsite++; else counts.phone++;
+    if (problemIsOnsite_(e.c)) counts.onsite++; else counts.phone++;
     if (e.c.resolved) counts.resolved++;
   });
   var defs = [
@@ -6971,7 +7015,7 @@ function renderProblemSummary_(monthEvents) {
 function buildProblemEvents_() {
   var evs = [];
   problemCases().forEach(function(c) {
-    var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
+    var isOnsite = problemIsOnsite_(c);
     if (isOnsite && c.onsite_start_date && c.onsite_end_date) {
       var start = new Date(c.onsite_start_date + 'T00:00:00');
       var end = new Date(c.onsite_end_date + 'T00:00:00');
@@ -7067,10 +7111,14 @@ function renderProblemTab() {
     });
     dayEvs.forEach(function(e) {
       var c = e.c;
-      var isOnsite = c.resolution_type === PROBLEM_RES_TYPE_ONSITE_;
-      var bg = c.resolved ? '#f1f5f9' : (isOnsite ? '#fee2e2' : '#dbeafe');
-      var fg = c.resolved ? '#94a3b8' : (isOnsite ? '#991b1b' : '#1e40af');
-      var dot = c.resolved ? '#94a3b8' : (isOnsite ? '#dc2626' : '#2563eb');
+      var isMk = problemIsMk_(c);
+      var isOnsite = problemIsOnsite_(c);
+      // Onsite (Support MK) gets its own dark/black pill (Sure's request,
+      // 2026-09-18: "ให้เป็นแทบสีดำ...เพื่อให้ทีมงานเห็นชัดเจน") so it stands
+      // out from the regular red install-onsite pill at a glance.
+      var bg = c.resolved ? '#f1f5f9' : (isMk ? '#1f2937' : (isOnsite ? '#fee2e2' : '#dbeafe'));
+      var fg = c.resolved ? '#94a3b8' : (isMk ? '#f9fafb' : (isOnsite ? '#991b1b' : '#1e40af'));
+      var dot = c.resolved ? '#94a3b8' : (isMk ? '#111827' : (isOnsite ? '#dc2626' : '#2563eb'));
       var pill = document.createElement('div');
       pill.style.cssText = 'border-radius:4px;padding:2px 4px;margin-bottom:2px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;background:' +
         bg + ';color:' + fg + ';' + (c.resolved ? 'text-decoration:line-through;' : '');
@@ -7083,7 +7131,7 @@ function renderProblemTab() {
       // visible even once resolved -- just add a checkmark alongside it
       // rather than replacing it, so the type stays visible at a glance.
       var label = (c.customer || c.site || '-');
-      var prefix = (isOnsite ? '🚗' : '📞') + (c.resolved ? ' ✅' : '') + ' ';
+      var prefix = (isMk ? '🔧' : (isOnsite ? '🚗' : '📞')) + (c.resolved ? ' ✅' : '') + ' ';
       // day_total > 1 = this is one day of a multi-day onsite range -- tag
       // it (วันที่ 1/3 etc.) so it's clear at a glance which day this is.
       var dayTag = (e.day_total > 1) ? (' (' + e.day_index + '/' + e.day_total + ')') : '';

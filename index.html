@@ -105,6 +105,11 @@
   .evt.install { background:#fffbeb; color:#92400e; }
   .evt.survey-stalled { background:#fff7ed; color:#9a3412; font-weight:600; }
   .evt.survey-scheduled { background:#f5f3ff; color:#6d28d9; }
+  /* Panel-cleaning reminders (Sure's request, 2026-09-18) -- distinct teal so
+     they read apart from the black "ล้างแผง" status-visit pill (.evt.service,
+     a manually-logged one-off visit) even though both are about cleaning. */
+  .dot.cleaning { background:#0d9488; }
+  .evt.cleaning { background:#ccfbf1; color:#115e59; }
   .view-tabs { display:flex; gap:8px; margin-bottom:12px; }
   .view-tab-btn.active { background:var(--accent); color:#fff; }
   .view-tab-btn:not(.active) { background:#fff; color:var(--text); border:1px solid var(--border); }
@@ -1640,9 +1645,95 @@ function passesFilters(e) {
   return true;
 }
 
+// Panel-cleaning schedule (Sure's request, 2026-09-18): V/W/X/Y in the
+// "Progress Modern trade" sheet hold "กำหนดล้างแผงครั้งที่ 1/2/3/4" -- if a
+// cell is filled in manually, that date wins outright; if it's left blank,
+// the calendar computes a default due date itself (install date + 6/12/18/
+// 24 months, rolled forward past weekends and Thai public holidays) so the
+// team always sees a reminder on the calendar even before anyone fills in
+// an override. Computed CLIENT-SIDE only (Sure chose this over a Sheets
+// formula) so the one THAI_HOLIDAYS list stays the single source of truth
+// -- no risk of the sheet's own holiday list drifting out of sync with it.
+var CLEANING_INTERVALS_MONTHS_ = [6, 12, 18, 24];
+
+function addMonthsClamped_(iso, months) {
+  var d = new Date(iso + 'T00:00:00');
+  var day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  var lastDayOfTarget = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDayOfTarget));
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+function rollToNextBusinessDay_(iso) {
+  var d = new Date(iso + 'T00:00:00');
+  for (var guard = 0; guard < 30; guard++) {
+    var wd = d.getDay();
+    var curIso = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    if (wd !== 0 && wd !== 6 && !THAI_HOLIDAYS[curIso]) return curIso;
+    d.setDate(d.getDate() + 1);
+  }
+  return iso;
+}
+
+function computeCleaningDueDate_(baseIso, months) {
+  if (!baseIso) return null;
+  return rollToNextBusinessDay_(addMonthsClamped_(baseIso, months));
+}
+
+// Only a job that's actually finished installing gets an auto-computed
+// cleaning schedule -- same authoritative finish-date logic as jobSlaInfo()
+// above (install_complete_date first, falling back to the latest actual
+// install day), so "6 เดือนหลังติดตั้ง" always counts from a real finish,
+// never a still-changeable appointment date. A manually-typed override in
+// V-Y still shows regardless of this gate (see jobCleaningSchedule_ below).
+function jobCleaningBaseDate_(job) {
+  if (!job || job.status !== 'ดำเนินการเสร็จสิ้น') return null;
+  if (job.install_complete_date) return job.install_complete_date;
+  var dates = (job.actual_install_dates || []).slice().sort();
+  return dates.length ? dates[dates.length - 1] : null;
+}
+
+function jobCleaningSchedule_(job) {
+  var overrideFields = [job.cleaning_due_1, job.cleaning_due_2, job.cleaning_due_3, job.cleaning_due_4];
+  var baseIso = jobCleaningBaseDate_(job);
+  var out = [];
+  for (var i = 0; i < 4; i++) {
+    var override = overrideFields[i];
+    var date = override || (baseIso ? computeCleaningDueDate_(baseIso, CLEANING_INTERVALS_MONTHS_[i]) : null);
+    if (date) out.push({ n: i + 1, date: date, isOverride: !!override });
+  }
+  return out;
+}
+
+// Synthesized entirely on the client from JOBS -- unlike survey/install
+// events, these never come from the server's EVENTS list (refresh_calendar.py
+// / Apps Script only carry the raw cleaning_due_N values on each job; see
+// jobCleaningSchedule_ above for why the actual due-date math lives here).
+function buildCleaningEvents_() {
+  var out = [];
+  (JOBS || []).forEach(function(job) {
+    jobCleaningSchedule_(job).forEach(function(sch) {
+      out.push({
+        date: sch.date, type: 'cleaning', cleaning_index: sch.n, isOverride: sch.isOverride,
+        job_key: job._key, job_code: job.ts_app || job.job_code, customer: job.customer,
+        contractor: job.contractor, address: job.address, phone: job.phone,
+        status: job.status, equipment: job.equipment, location: job.location, doc_tac: job.doc_tac
+      });
+    });
+  });
+  return out;
+}
+
 function eventsByDate() {
   var map = {};
   EVENTS.forEach(function(e) {
+    if (!e.date) return;
+    if (!map[e.date]) map[e.date] = [];
+    map[e.date].push(e);
+  });
+  buildCleaningEvents_().forEach(function(e) {
     if (!e.date) return;
     if (!map[e.date]) map[e.date] = [];
     map[e.date].push(e);
@@ -1873,10 +1964,13 @@ function renderCalendar() {
       // A date in the survey column is only really a survey when the status
       // says so -- service statuses share that column (see SERVICE_STATUSES).
       var svc = (e.type === 'survey') ? serviceInfo(e.status) : null;
-      var cls = e.type === 'survey' ? 'survey' : 'install';
+      var cls = e.type === 'survey' ? 'survey' : (e.type === 'cleaning' ? 'cleaning' : 'install');
       var dotCls = cls;
       var changed = jobIsChanged(e);
-      if (svc) {
+      if (e.type === 'cleaning') {
+        // Always its own teal pill -- no completed/changed override, so a
+        // cleaning reminder is never confused with an install-status pill.
+      } else if (svc) {
         cls = 'service'; dotCls = 'service';
         if (changed) { cls = 'changed'; dotCls = 'changed'; }
       } else if (e.type !== 'survey') {
@@ -1891,15 +1985,17 @@ function renderCalendar() {
       }
       var dayTag = e.type === 'install_actual' ? (' (' + e.day_index + '/' + e.day_total + ')') : '';
       var abbr = contractorAbbr(e.contractor);
-      var label = svc
-        ? (svc.label + ' ' + abbr + ': ' + (e.customer || ''))
-        : e.type === 'survey'
-          ? ('สำรวจ ' + abbr + ': ' + (e.customer || ''))
-          : ('ติดตั้ง ' + abbr + dayTag + ': ' + (e.customer || ''));
+      var label = e.type === 'cleaning'
+        ? ('🧹 ล้างแผง ครั้งที่ ' + e.cleaning_index + ' ' + abbr + ': ' + (e.customer || ''))
+        : svc
+          ? (svc.label + ' ' + abbr + ': ' + (e.customer || ''))
+          : e.type === 'survey'
+            ? ('สำรวจ ' + abbr + ': ' + (e.customer || ''))
+            : ('ติดตั้ง ' + abbr + dayTag + ': ' + (e.customer || ''));
       var svcStyle = svc ? ' style="background:' + svc.bg + ';color:' + svc.fg + ';"' : '';
       var svcDotStyle = svc ? ' style="background:' + (svc.dotOn || svc.dot) + ';"' : '';
       var tacHtml = '';
-      if (e.type !== 'survey') {
+      if (e.type !== 'survey' && e.type !== 'cleaning') {
         var tacRaw = e.doc_tac ? String(e.doc_tac).trim() : '';
         var tacGot = tacLooksLikeNumber(tacRaw);
         var tacCls = tacGot ? 'got' : (tacRaw ? 'pending' : 'not');
@@ -1908,7 +2004,7 @@ function renderCalendar() {
         tacHtml = '<span class="tac-dot ' + tacCls + '" title="' + tacTitle + '"></span>';
       }
       var slaHtml = '';
-      if (e.type !== 'survey') {
+      if (e.type !== 'survey' && e.type !== 'cleaning') {
         var slaInfo = jobSlaInfo(jobByKey(e.job_key));
         if (slaInfo && slaInfo.met) {
           var slaTierTh = slaInfo.tier === 'excellent' ? 'ดีมาก' : 'ตรงตาม SLA';
@@ -1944,6 +2040,9 @@ function openModalForEvent(e) {
     typeLabel = (svcModal ? svcModal.label : 'วันเข้าสำรวจ') + ' — ' + e.date + (e.time ? (' (' + e.time + ')') : '');
   } else if (e.type === 'install_actual') {
     typeLabel = 'วันเข้าติดตั้ง (วันที่ ' + e.day_index + ' จาก ' + e.day_total + ') — ' + e.date;
+  } else if (e.type === 'cleaning') {
+    typeLabel = '🧹 กำหนดล้างแผง ครั้งที่ ' + e.cleaning_index + ' — ' + e.date +
+      (e.isOverride ? '' : ' (คำนวณอัตโนมัติจากวันติดตั้ง)');
   } else {
     typeLabel = 'วันนัดติดตั้ง — ' + e.date;
   }
@@ -1983,6 +2082,21 @@ function openModalForEvent(e) {
       mSurveyLogRow.style.display = 'none';
       currentSurveyLogJob = null;
     }
+  } else if (e.type === 'cleaning') {
+    // A panel-cleaning reminder is neither a survey nor an install visit --
+    // none of the SLA/checklist/day-log sections apply, so hide all of them
+    // (Sure's request, 2026-09-18: "อยากให้นำไปขึ้นในปฏิทินด้วย" -- just the
+    // basic job info plus the cleaning-round label from typeLabel above).
+    if (tacRow) tacRow.style.display = 'none';
+    if (mInstallLogRow) mInstallLogRow.style.display = 'none';
+    currentLogJob = null;
+    var mChecklistRowCleaning = document.getElementById('mChecklistRow');
+    if (mChecklistRowCleaning) mChecklistRowCleaning.style.display = 'none';
+    currentChecklistJob = null;
+    if (mSurveyLogRow) mSurveyLogRow.style.display = 'none';
+    currentSurveyLogJob = null;
+    var mSlaRowCleaning = document.getElementById('mSlaRow');
+    if (mSlaRowCleaning) mSlaRowCleaning.style.display = 'none';
   } else {
     if (mSurveyLogRow) mSurveyLogRow.style.display = 'none';
     currentSurveyLogJob = null;

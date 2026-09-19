@@ -989,7 +989,7 @@
 <div id="usersWrap" style="display:none;">
   <div class="card-box">
     <div class="overview-section-title">จัดการผู้ใช้งาน</div>
-    <div class="doc-table-toolbar">สร้าง/แก้ไขบัญชีผู้ใช้งาน กำหนดสิทธิ์ (แอดมิน / ผู้ดูอย่างเดียว / ผรม.) ตั้งค่า avatar และดูประวัติการเข้าใช้งาน/แก้ไข — เห็นเฉพาะบัญชีแอดมินเท่านั้น</div>
+    <div class="doc-table-toolbar">สร้าง/แก้ไขบัญชีผู้ใช้งาน กำหนดสิทธิ์ (แอดมิน / ทีมงาน / ผู้ดูอย่างเดียว / ผู้รับเหมา) ตั้งค่า avatar และดูประวัติการเข้าใช้งาน/แก้ไข — เห็นเฉพาะบัญชีแอดมินเท่านั้น</div>
 
     <button class="secondary" id="userNewBtn" style="margin:12px 0 16px;">+ สร้างบัญชีใหม่</button>
 
@@ -1020,16 +1020,16 @@
         <select id="ufRole">
           <option value="admin">แอดมิน (แก้ไข/บันทึกได้ทุกอย่าง + จัดการผู้ใช้งานได้)</option>
           <option value="staff">ทีมงาน (แก้ไข/บันทึกได้เหมือนแอดมิน แต่จัดการผู้ใช้งานไม่ได้)</option>
-          <option value="viewer">ผู้ดูอย่างเดียว (เห็นทุกแท็บ ทุกผรม. แต่แก้ไขไม่ได้)</option>
-          <option value="contractor">ผรม. (เห็นเฉพาะปฏิทินงานของตัวเอง)</option>
+          <option value="viewer">ผู้ดูอย่างเดียว (เห็นทุกแท็บ ทุกผู้รับเหมา แต่แก้ไขไม่ได้)</option>
+          <option value="contractor">ผู้รับเหมา (เห็นเฉพาะปฏิทินงานของตัวเอง)</option>
         </select>
       </div>
       <div class="field" id="ufContractorField" style="display:none;">
-        <label for="ufContractor">ชื่อ ผรม. (ต้องตรงกับในระบบ)</label>
-        <input type="text" id="ufContractor">
+        <label for="ufContractor">ชื่อผู้รับเหมา (เลือกจากรายชื่อที่มีอยู่ในระบบ)</label>
+        <select id="ufContractor"><option value="">— เลือกผู้รับเหมา —</option></select>
       </div>
       <div class="field" id="ufAccessKeyField">
-        <label for="ufAccessKey">กุญแจสิทธิ์ (access key) <span style="font-weight:400;">— แอดมิน/ผู้ดูอย่างเดียว: กรอกครั้งเดียวแล้วเบราว์เซอร์นี้จะจำไว้ให้ครั้งถัดไป, ผรม.ต้องระบุกุญแจของผรม.รายนั้นทุกครั้ง</span></label>
+        <label for="ufAccessKey">กุญแจสิทธิ์ (access key) <span style="font-weight:400;">— แอดมิน/ผู้ดูอย่างเดียว: กรอกครั้งเดียวแล้วเบราว์เซอร์นี้จะจำไว้ให้ครั้งถัดไป, ผู้รับเหมาต้องระบุกุญแจของผู้รับเหมารายนั้นทุกครั้ง</span></label>
         <input type="text" id="ufAccessKey">
       </div>
       <div class="field">
@@ -1047,7 +1047,7 @@
 
     <div style="overflow-x:auto;margin-bottom:24px;">
       <table class="users-table">
-        <thead><tr><th></th><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>เบอร์/อีเมล์</th><th>สิทธิ์</th><th>ผรม.</th><th>แก้ไขล่าสุด</th><th></th></tr></thead>
+        <thead><tr><th></th><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>เบอร์/อีเมล์</th><th>สิทธิ์</th><th>ผู้รับเหมา</th><th>แก้ไขล่าสุด</th><th></th></tr></thead>
         <tbody id="usersListBody"></tbody>
       </table>
     </div>
@@ -8795,9 +8795,36 @@ document.getElementById('ufAvatarUpload').addEventListener('change', function(ev
   ev.target.value = '';
 });
 
+// 2026-09-19 (Sure's request): ufContractor used to be a free-text field
+// ("ต้องตรงกับในระบบ" -- had to match exactly, by hand, with zero help) --
+// now a dropdown built from the same distinct contractor names already
+// computed from live job data in rebuildFilterOptions() (the JOBS global),
+// so an admin can only pick a name that actually exists, instead of typing
+// something that looks right but doesn't match (which would silently
+// create a contractor account that never sees any of its own jobs).
+// If editing an account whose saved contractor name no longer matches any
+// current job (e.g. renamed/removed from the sheet since), that value is
+// still kept as a selectable option -- so opening the edit form doesn't
+// silently blank out or change what's already saved.
+function populateUfContractorOptions_(preserveValue) {
+  var sel = document.getElementById('ufContractor');
+  var current = (preserveValue !== undefined && preserveValue !== null) ? preserveValue : sel.value;
+  var contractors = Array.from(new Set((JOBS || []).map(function(j) { return j.contractor; }).filter(Boolean))).sort();
+  var html = '<option value="">— เลือกผู้รับเหมา —</option>';
+  contractors.forEach(function(c) {
+    html += '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>';
+  });
+  if (current && contractors.indexOf(current) === -1) {
+    html += '<option value="' + escHtml(current) + '">' + escHtml(current) + ' (ไม่พบในระบบตอนนี้)</option>';
+  }
+  sel.innerHTML = html;
+  sel.value = current || '';
+}
+
 document.getElementById('ufRole').addEventListener('change', function() {
   var role = this.value;
   document.getElementById('ufContractorField').style.display = (role === 'contractor') ? '' : 'none';
+  if (role === 'contractor') populateUfContractorOptions_(document.getElementById('ufContractor').value);
 });
 
 // Remembers the last admin/ผู้ดูอย่างเดียว access key typed into the Users
@@ -8840,7 +8867,7 @@ function openUserForm_(user) {
   document.getElementById('ufEmail').value = user ? (user.email || '') : '';
   document.getElementById('ufRole').value = user ? (user.role || 'admin') : 'admin';
   document.getElementById('ufContractorField').style.display = (user && user.role === 'contractor') ? '' : 'none';
-  document.getElementById('ufContractor').value = user ? (user.contractor || '') : '';
+  populateUfContractorOptions_(user ? (user.contractor || '') : '');
   // Editing an existing account: leave blank (only overwrite the key if
   // Sure actually types a new one). Creating new admin/viewer: pre-fill
   // with whatever key this browser remembers from last time.
@@ -8855,58 +8882,98 @@ document.getElementById('userNewBtn').onclick = function() { openUserForm_(null)
 document.getElementById('userFormCancelBtn').onclick = function() { document.getElementById('userFormBox').style.display = 'none'; };
 document.getElementById('ufRole').addEventListener('change', autofillUfAccessKey_);
 
+// 2026-09-19 (Sure's request: "กดบันทึกไม่ได้ ไม่เกิดอะไรขึ้น"): the most
+// likely real cause is the ผู้รับเหมา (contractor) role's access key --
+// unlike admin/staff/viewer, it has NO server-side default fallback (see
+// handleUserCreate_ in Contractor_Ratings_Code_v2.gs.txt), so leaving it
+// blank got rejected by the backend with a small, easy-to-miss red error
+// line below the button -- which reads as "nothing happened" if you're not
+// staring right at that spot. Two changes here: (1) catch the missing
+// contractor-name / missing access-key cases client-side, before ever
+// hitting the network, with a message impossible to miss (scrolled into
+// view, not just a quiet inline color change); (2) guard against a non-JSON
+// response (an HTML error/auth page from Apps Script, same failure mode
+// fetchJsonWithRetry already handles for the main data fetch) so a server-
+// side hiccup shows a clear message instead of a silent, uncaught parse
+// failure that truly would look like nothing happened at all.
+function showUserFormError_(msg) {
+  var errEl = document.getElementById('userFormError');
+  errEl.textContent = msg;
+  errEl.style.display = '';
+  errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 document.getElementById('userFormSaveBtn').onclick = function() {
   if (!CAN_EDIT) { alert('บัญชีนี้เป็นแบบดูอย่างเดียว ไม่สามารถบันทึกได้'); return; }
   var errEl = document.getElementById('userFormError');
   errEl.style.display = 'none';
-  var userId = (document.getElementById('ufUserId').value || '').trim();
-  var name = (document.getElementById('ufName').value || '').trim();
-  var role = document.getElementById('ufRole').value;
-  var accessKeyTyped = (document.getElementById('ufAccessKey').value || '').trim();
-  var payload = {
-    key: RATINGS_ACCESS_KEY, username: CURRENT_USER.username,
-    user_id: userId, name: name, phone: (document.getElementById('ufPhone').value || '').trim(),
-    email: (document.getElementById('ufEmail').value || '').trim(), role: role,
-    contractor: (document.getElementById('ufContractor').value || '').trim(),
-    access_key: accessKeyTyped,
-    avatar: document.getElementById('ufAvatarValue').value || ''
-  };
-  if (!userId) { errEl.textContent = 'กรุณากรอกชื่อผู้ใช้'; errEl.style.display = ''; return; }
-  if (!EDITING_USER_ID) {
-    payload.type = 'user_create';
-    payload.password = document.getElementById('ufPassword').value || '';
-    if (!payload.password) { errEl.textContent = 'กรุณาตั้งรหัสผ่าน'; errEl.style.display = ''; return; }
-  } else {
-    payload.type = 'user_update';
-  }
-  var btn = document.getElementById('userFormSaveBtn');
-  btn.disabled = true;
-  fetch(RATINGS_WEBAPP_URL, {
-    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload)
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data || !data.success) {
-        errEl.textContent = (data && data.error) ? data.error : 'บันทึกไม่สำเร็จ';
-        errEl.style.display = '';
-        return;
-      }
-      // Remember this key in the browser so the field is pre-filled next
-      // time an admin/ผู้ดูอย่างเดียว account is created (only for those two
-      // roles -- a ผรม. key is specific to one contractor, never reused).
-      if ((role === 'admin' || role === 'staff' || role === 'viewer') && accessKeyTyped) rememberAdminAccessKey_(accessKeyTyped);
-      document.getElementById('userFormBox').style.display = 'none';
-      fetchUsersList_();
+  try {
+    var userId = (document.getElementById('ufUserId').value || '').trim();
+    var name = (document.getElementById('ufName').value || '').trim();
+    var role = document.getElementById('ufRole').value;
+    var contractorName = (document.getElementById('ufContractor').value || '').trim();
+    var accessKeyTyped = (document.getElementById('ufAccessKey').value || '').trim();
+    var payload = {
+      key: RATINGS_ACCESS_KEY, username: CURRENT_USER.username,
+      user_id: userId, name: name, phone: (document.getElementById('ufPhone').value || '').trim(),
+      email: (document.getElementById('ufEmail').value || '').trim(), role: role,
+      contractor: contractorName,
+      access_key: accessKeyTyped,
+      avatar: document.getElementById('ufAvatarValue').value || ''
+    };
+    if (!userId) { showUserFormError_('กรุณากรอกชื่อผู้ใช้'); return; }
+    if (role === 'contractor' && !contractorName) { showUserFormError_('กรุณาเลือกชื่อผู้รับเหมาจากรายการ'); return; }
+    if (role === 'contractor' && !accessKeyTyped) { showUserFormError_('บัญชีผู้รับเหมาต้องกรอกกุญแจสิทธิ์ (access key) ของผู้รับเหมารายนั้นด้วย ไม่มีค่าเริ่มต้นให้เหมือนแอดมิน/ผู้ดูอย่างเดียว'); return; }
+    if (!EDITING_USER_ID) {
+      payload.type = 'user_create';
+      payload.password = document.getElementById('ufPassword').value || '';
+      if (!payload.password) { showUserFormError_('กรุณาตั้งรหัสผ่าน'); return; }
+    } else {
+      payload.type = 'user_update';
+    }
+    var btn = document.getElementById('userFormSaveBtn');
+    btn.disabled = true;
+    fetch(RATINGS_WEBAPP_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload)
     })
-    .catch(function() { errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'; errEl.style.display = ''; })
-    .finally(function() { btn.disabled = false; });
+      .then(function(r) { return r.text(); })
+      .then(function(txt) {
+        var t = String(txt || '').replace(/^﻿/, '').trim();
+        if (t.charAt(0) !== '{' && t.charAt(0) !== '[') {
+          throw new Error('เซิร์ฟเวอร์ตอบกลับไม่สมบูรณ์ (ไม่ใช่ข้อมูล JSON) — มักเป็นปัญหาชั่วคราวของ Apps Script ลองกดบันทึกอีกครั้ง');
+        }
+        var data;
+        try { data = JSON.parse(t); }
+        catch (parseErr) { throw new Error('เซิร์ฟเวอร์ตอบกลับไม่สมบูรณ์ (แปลงข้อมูลไม่ได้) — ลองกดบันทึกอีกครั้ง'); }
+        if (!data || !data.success) {
+          showUserFormError_((data && data.error) ? data.error : 'บันทึกไม่สำเร็จ');
+          return;
+        }
+        // Remember this key in the browser so the field is pre-filled next
+        // time an admin/ผู้ดูอย่างเดียว account is created (only for those
+        // two roles -- a ผู้รับเหมา key is specific to one contractor,
+        // never reused).
+        if ((role === 'admin' || role === 'staff' || role === 'viewer') && accessKeyTyped) rememberAdminAccessKey_(accessKeyTyped);
+        document.getElementById('userFormBox').style.display = 'none';
+        fetchUsersList_();
+      })
+      .catch(function(err) { showUserFormError_((err && err.message) ? err.message : 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'); })
+      .finally(function() { btn.disabled = false; });
+  } catch (unexpectedErr) {
+    // Should never happen, but if some future edit introduces a bug here,
+    // this guarantees Sure always sees SOMETHING instead of the button
+    // just quietly doing nothing.
+    showUserFormError_('เกิดข้อผิดพลาดที่ไม่คาดคิด: ' + (unexpectedErr && unexpectedErr.message || unexpectedErr));
+    var btn2 = document.getElementById('userFormSaveBtn');
+    if (btn2) btn2.disabled = false;
+  }
 };
 
 function userRoleLabel_(role) {
   if (role === 'admin') return 'แอดมิน';
   if (role === 'staff') return 'ทีมงาน';
   if (role === 'viewer') return 'ผู้ดูอย่างเดียว';
-  return 'ผรม.';
+  return 'ผู้รับเหมา';
 }
 
 function renderUsersList_() {

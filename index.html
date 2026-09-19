@@ -709,6 +709,7 @@
      Each table also gets a coverage bar showing how many jobs in it already
      have a CSAT entry recorded vs how many are still outstanding. -->
 <div id="evalWrap" style="display:none;">
+  <div id="evalLoadingBanner" class="csat-status-banner" style="display:none;margin-bottom:12px;">⏳ กำลังโหลดข้อมูลคะแนนความพึงพอใจ/checklist จากระบบ Contractor Ratings — บางครั้งอาจใช้เวลาถึง 15-20 วินาที (คนละระบบกับข้อมูลปฏิทินหลัก)</div>
   <div class="card-box chart-card">
     <div class="overview-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <span>แนวโน้มคะแนนความพึงพอใจ (สำรวจ) รายเดือน</span>
@@ -951,6 +952,7 @@
 <div id="problemWrap" style="display:none;">
   <div class="card-box">
     <div class="overview-section-title">Problem — บันทึกปัญหาหน้างานหลังติดตั้ง</div>
+    <div id="problemLoadingBanner" class="csat-status-banner" style="display:none;margin-bottom:10px;">⏳ กำลังโหลดรายการเคสจากระบบ Contractor Ratings — บางครั้งอาจใช้เวลาถึง 15-20 วินาที (คนละระบบกับข้อมูลปฏิทินหลัก) ถ้ารอแล้วยังไม่ขึ้น ลองกด "อ่านข้อมูลล่าสุดอีกครั้ง" ด้านบน</div>
     <div class="doc-table-toolbar">บันทึกปัญหาหน้างานที่ติดตั้งไปแล้ว (มิเตอร์อ่านค่าไม่ได้ ค่า GND ไม่ได้ น้ำรั่วซึม ฯลฯ) ค้นหาเคสด้วยชื่อ Site / เบอร์โทรลูกค้า / เลข TS Job หรือสร้างเคสใหม่ทันทีที่มีการแจ้งปัญหาเข้ามา แล้วค่อยเข้ามาเพิ่มบันทึกการแก้ไขทีหลังได้</div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 14px;">
@@ -1491,6 +1493,20 @@ var RATINGS_CRITERIA = [
   { key: 'handover', label: 'ส่งมอบพร้อมเอกสาร (Documentation & Handover)', hint: 'ถ่ายรูป Before/After, ส่งรายงานติดตั้ง และอธิบายการใช้งานให้ลูกค้า' }
 ];
 var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} }, checklist: { byJob: {} }, csat: { install: { byJob: {} }, survey: { byJob: {} } }, jobDocs: { byJob: {} }, cleaningLogs: { byJob: {} }, settings: { cleaningBaseMonths: 6 } };
+// 2026-09-19 (Sure's report: Problem tab / การประเมิน showed nothing --
+// "ข้อมูลทั้งหมดหายไป"): investigated live and this ISN'T a viewer-role bug,
+// a data-loss bug, or a broken key -- fetchRatingsSummary() below hits a
+// SEPARATE Apps Script (Contractor_Ratings) that bundles ratings + install/
+// survey logs + checklist + CSAT + job docs + Problem cases + cleaning logs
+// into ONE doGet call, and that combined call can genuinely take 5-15+
+// seconds (Apps Script cold start + reading several sheet tabs at once) --
+// confirmed by directly calling it and timing the response. Nothing in the
+// UI previously said "still loading" during that window, so opening the
+// Problem/Evaluation tab right after a page load or refresh looked exactly
+// like "no data at all" even though it was just still in flight. This flag
+// plus the two banners (#problemLoadingBanner / #evalLoadingBanner) give
+// honest "loading" feedback instead of a false "empty" one.
+var RATINGS_LOADED_ONCE = false;
 var currentRatingJob = null;
 var currentRatingScores = {};
 var currentLogJob = null;
@@ -1613,6 +1629,11 @@ function fetchRatingsSummary() {
   fetch(url).then(function(r) { return r.json(); }).then(function(data) {
     if (data && !data.error) {
       RATINGS_SUMMARY = data;
+      RATINGS_LOADED_ONCE = true;
+      var problemBannerEl = document.getElementById('problemLoadingBanner');
+      if (problemBannerEl) problemBannerEl.style.display = 'none';
+      var evalBannerEl = document.getElementById('evalLoadingBanner');
+      if (evalBannerEl) evalBannerEl.style.display = 'none';
       // Panel-cleaning base interval (Sure's request, 2026-09-19): keep the
       // local computed value + legend text in sync with whatever's stored
       // centrally, and re-render the calendar if it's the active tab so a
@@ -8007,11 +8028,20 @@ function switchView(view) {
   document.getElementById('usersWrap').style.display = (view === 'users') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderStalledContractorChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
-  if (view === 'eval') { renderEvalTable(); }
+  if (view === 'eval') {
+    renderEvalTable();
+    var evalBannerEl2 = document.getElementById('evalLoadingBanner');
+    if (evalBannerEl2) evalBannerEl2.style.display = RATINGS_LOADED_ONCE ? 'none' : '';
+  }
   if (view === 'sla') { renderSlaStats(); renderDurationChart(); renderDurationTable(); renderTacDocChart(); renderTacDocTable(); renderSlaContractorChart(); renderSlaContractorTable(); renderSlaMonthlyChart(); renderSlaTable(); renderManualRatingChart(); renderManualRatingTable(); }
   if (view === 'alloc') { renderAllocTable(); }
   if (view === 'dash') { renderDashboard(); }
-  if (view === 'problem') { renderProblemCaseList(); renderProblemTab(); }
+  if (view === 'problem') {
+    renderProblemCaseList();
+    renderProblemTab();
+    var problemBannerEl2 = document.getElementById('problemLoadingBanner');
+    if (problemBannerEl2) problemBannerEl2.style.display = RATINGS_LOADED_ONCE ? 'none' : '';
+  }
   if (view === 'users') { fetchUsersList_(); fetchAuditLog_(); }
 }
 
@@ -8994,6 +9024,24 @@ document.getElementById('userFormSaveBtn').onclick = function() {
     if (!userId) { showUserFormError_('กรุณากรอกชื่อผู้ใช้'); return; }
     if (role === 'contractor' && !contractorName) { showUserFormError_('กรุณาเลือกชื่อผู้รับเหมาจากรายการ'); return; }
     if (role === 'contractor' && !accessKeyTyped) { showUserFormError_('บัญชีผู้รับเหมาต้องกรอกกุญแจสิทธิ์ (access key) ของผู้รับเหมารายนั้นด้วย ไม่มีค่าเริ่มต้นให้เหมือนแอดมิน/ผู้ดูอย่างเดียว'); return; }
+    // 2026-09-19 guardrail (Sure's request, after a real mix-up: he pasted
+    // the admin key into a contractor account and that contractor could
+    // then see every job from every contractor): this can't be validated
+    // for real client-side -- only the OTHER Apps Script project's
+    // ACCESS_KEYS_JSON knows which key belongs to which contractor -- but
+    // this browser DOES remember the one admin-scope key (see
+    // rememberedAdminAccessKey_ / autofillUfAccessKey_ above), so at least
+    // catch the exact mistake that just happened: typing that SAME
+    // remembered admin key into a contractor account.
+    if (role === 'contractor' && accessKeyTyped && rememberedAdminAccessKey_() && accessKeyTyped === rememberedAdminAccessKey_()) {
+      var confirmSameKey = confirm(
+        'กุญแจ (access key) ที่กรอกนี้เหมือนกับกุญแจของแอดมิน/ผู้ดูอย่างเดียวที่เบราว์เซอร์นี้จำไว้ทุกประการ\n\n' +
+        'ถ้าใช้กุญแจนี้ ผู้รับเหมารายนี้จะเห็นงานของผู้รับเหมาทุกรายในระบบ (ไม่ใช่แค่ของตัวเอง)\n\n' +
+        'กุญแจของผู้รับเหมาต้องเป็นคนละตัวกับกุญแจแอดมิน (ดูได้จาก ACCESS_KEYS_JSON ในสคริปต์ฝั่งดึงข้อมูลปฏิทิน)\n\n' +
+        'ยืนยันว่าต้องการใช้กุญแจนี้ต่อไปหรือไม่?'
+      );
+      if (!confirmSameKey) return;
+    }
     if (!EDITING_USER_ID) {
       payload.type = 'user_create';
       payload.password = document.getElementById('ufPassword').value || '';

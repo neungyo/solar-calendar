@@ -53,7 +53,7 @@
   body.focus-mode .legend { font-size:11px; margin-bottom:8px; }
   body.focus-mode h1 { font-size:16px; margin-bottom:6px; }
   body.focus-mode .month-nav { margin-bottom:8px; }
-  body.focus-mode .day { min-height:150px; font-size:13px; }
+  body.focus-mode .day { min-height:190px; font-size:13px; }
   body.focus-mode .evt { font-size:12px; padding:3px 5px; }
   .month-nav { display:flex; align-items:center; gap:10px; margin-bottom:10px; justify-content:flex-end; }
   /* Per-month summary chips in the calendar header (Sure's request, 2026-08-05).
@@ -88,7 +88,20 @@
   #calendarWrap { transform-origin: top left; }
   .calendar-grid { display:grid; grid-template-columns: repeat(7,1fr); gap:6px; }
   .dow { font-size:12px; color:var(--muted); text-align:center; padding:4px; font-weight:600; }
-  .day { background:var(--card); border:1px solid var(--border); border-radius:8px; min-height:96px; padding:6px; font-size:12px; }
+  .day { background:var(--card); border:1px solid var(--border); border-radius:8px; min-height:140px; padding:6px; font-size:12px; display:flex; flex-direction:column; }
+  /* Split layout for main (survey/install) vs panel-cleaning events within a
+     day cell (Sure's request, 2026-09-19): "แนวตั้ง" stacks cleaning below
+     the main events (default); "แนวนอน" places cleaning in its own column to
+     the right. Toggled via #calLayoutToggle, persisted per-browser. */
+  .day-body { display:flex; flex-direction:column; flex:1; min-height:0; gap:4px; }
+  .day-main { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .day-clean { display:flex; flex-direction:column; gap:2px; min-width:0; border-top:1px dashed var(--border); padding-top:4px; }
+  #calGrid.split-h .day-body { flex-direction:row; }
+  #calGrid.split-h .day-main { flex:1.6; }
+  #calGrid.split-h .day-clean { flex:1; border-top:none; padding-top:0; border-left:1px dashed var(--border); padding-left:6px; }
+  .cal-layout-toggle { display:flex; gap:4px; margin-right:8px; }
+  .cal-layout-btn { padding:4px 10px; font-size:12px; }
+  .cal-layout-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   .day.other-month { opacity:0.35; }
   .day.weekend { background:#fdf1f4; }
   .day.holiday { background:#f2ecff; border-color:#c7b6f5; }
@@ -384,6 +397,10 @@
 </div>
 
 <div class="month-nav" id="monthNavRow">
+  <div class="cal-layout-toggle" id="calLayoutToggle">
+    <button type="button" class="secondary cal-layout-btn" data-layout="vertical" title="แยกงานล้างแผงไว้ด้านล่างของแต่ละวัน">⬍ แนวตั้ง</button>
+    <button type="button" class="secondary cal-layout-btn" data-layout="horizontal" title="แยกงานล้างแผงไว้ด้านขวาของแต่ละวัน">⬌ แนวนอน</button>
+  </div>
   <div class="month-summary" id="monthSummary"></div>
   <button class="secondary" id="prevMonth">‹ เดือนก่อน</button>
   <strong id="monthLabel"></strong>
@@ -1847,6 +1864,34 @@ var DOW = ['จ','อ','พ','พฤ','ศ','ส','อา'];
 var currentRenderedEvents = [];
 var expandedDays = {};
 
+// Split layout for main (survey/install) vs panel-cleaning events within a
+// day cell (Sure's request, 2026-09-19): "แนวตั้ง" (default) stacks cleaning
+// below the main events; "แนวนอน" places cleaning in a separate column to
+// the right. This is a per-browser display preference, not shared data, so
+// it's kept in localStorage rather than synced through the backend.
+var CAL_SPLIT_LAYOUT = (function() {
+  try { return localStorage.getItem('calSplitLayout') || 'vertical'; } catch (e) { return 'vertical'; }
+})();
+function applyCalLayoutButtons_() {
+  var btns = document.querySelectorAll('.cal-layout-btn');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.toggle('active', btns[i].getAttribute('data-layout') === CAL_SPLIT_LAYOUT);
+  }
+  if (calGrid) calGrid.classList.toggle('split-h', CAL_SPLIT_LAYOUT === 'horizontal');
+}
+(function() {
+  var btns = document.querySelectorAll('.cal-layout-btn');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener('click', function() {
+      CAL_SPLIT_LAYOUT = this.getAttribute('data-layout');
+      try { localStorage.setItem('calSplitLayout', CAL_SPLIT_LAYOUT); } catch (e) {}
+      applyCalLayoutButtons_();
+      renderCalendar();
+    });
+  }
+})();
+applyCalLayoutButtons_();
+
 // Thai public holidays as announced by the Bank of Thailand (สถาบันการเงิน
 // ตามประกาศ ธปท.) -- Sure's request, 2026-08-02: shade these cells light
 // purple on the calendar and list them under the grid each month. Sourced
@@ -2045,17 +2090,25 @@ function renderCalendar() {
   var evtByDate = eventsByDate();
   currentRenderedEvents = [];
 
+  calGrid.classList.toggle('split-h', CAL_SPLIT_LAYOUT === 'horizontal');
   calGrid.innerHTML = cells.map(function(d) {
     if (!d) return '<div class="day other-month"></div>';
     var iso = y + '-' + pad(m+1) + '-' + pad(d);
     var allEvts = evtByDate[iso] || [];
     var evts = allEvts.filter(passesFilters);
+    // Panel-cleaning events (Sure's request, 2026-09-19) render in their own
+    // lane, separate from the survey/install "main" events -- kept out of
+    // the main list's truncation/"+N เพิ่มเติม" accounting entirely, since a
+    // job only ever has up to 4 cleaning dates total and they rarely collide
+    // with each other on the same day.
+    var mainEvts = evts.filter(function(e) { return e.type !== 'cleaning'; });
+    var cleaningEvts = evts.filter(function(e) { return e.type === 'cleaning'; });
     var baseMax = document.body.classList.contains('focus-mode') ? 10 : MAX_PER_DAY;
     var isExpanded = !!expandedDays[iso];
-    var maxPerDay = isExpanded ? evts.length : baseMax;
-    var shown = evts.slice(0, maxPerDay);
-    var extra = evts.length - shown.length;
-    var evtHtml = shown.map(function(e) {
+    var maxPerDay = isExpanded ? mainEvts.length : baseMax;
+    var shown = mainEvts.slice(0, maxPerDay);
+    var extra = mainEvts.length - shown.length;
+    function renderEvtPill_(e) {
       var idx = currentRenderedEvents.length;
       currentRenderedEvents.push(e);
       // A date in the survey column is only really a survey when the status
@@ -2113,11 +2166,13 @@ function renderCalendar() {
         }
       }
       return '<div class="evt ' + cls + '"' + svcStyle + ' data-idx="' + idx + '" title="คลิกดูรายละเอียด"><span class="dot ' + dotCls + '"' + svcDotStyle + '></span>' + label + (changed ? ' 🔄' : '') + tacHtml + slaHtml + '</div>';
-    }).join('');
+    }
+    var evtHtml = shown.map(renderEvtPill_).join('');
+    var cleaningHtml = cleaningEvts.map(renderEvtPill_).join('');
     var moreHtml = '';
     if (extra > 0) {
       moreHtml = '<div class="evt-more" data-date="' + iso + '">+' + extra + ' เพิ่มเติม</div>';
-    } else if (isExpanded && evts.length > baseMax) {
+    } else if (isExpanded && mainEvts.length > baseMax) {
       moreHtml = '<div class="evt-more" data-date="' + iso + '">แสดงน้อยลง</div>';
     }
     var todayCls = (iso === TODAY_ISO) ? ' today' : '';
@@ -2127,7 +2182,9 @@ function renderCalendar() {
     var holidayCls = holidayName ? ' holiday' : '';
     var holidayTitle = holidayName ? ' title="' + String(holidayName).replace(/"/g, '&quot;') + '"' : '';
     var holidayLabel = holidayName ? ' <span class="day-holiday-name">' + escHtml(holidayName) + '</span>' : '';
-    return '<div class="day' + todayCls + weekendCls + holidayCls + '"' + holidayTitle + '><div class="day-num">' + d + holidayLabel + '</div>' + evtHtml + moreHtml + '</div>';
+    var bodyHtml = '<div class="day-body"><div class="day-main">' + evtHtml + moreHtml + '</div>' +
+      (cleaningHtml ? '<div class="day-clean">' + cleaningHtml + '</div>' : '') + '</div>';
+    return '<div class="day' + todayCls + weekendCls + holidayCls + '"' + holidayTitle + '><div class="day-num">' + d + holidayLabel + '</div>' + bodyHtml + '</div>';
   }).join('');
 }
 

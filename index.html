@@ -1015,7 +1015,7 @@
         <input type="text" id="ufContractor">
       </div>
       <div class="field" id="ufAccessKeyField">
-        <label for="ufAccessKey">กุญแจสิทธิ์ (access key) <span style="font-weight:400;">— แอดมิน/ผู้ดูอย่างเดียวเว้นว่างได้ (ใช้ค่าเริ่มต้นอัตโนมัติ), ผรม.ต้องระบุกุญแจของผรม.รายนั้น</span></label>
+        <label for="ufAccessKey">กุญแจสิทธิ์ (access key) <span style="font-weight:400;">— แอดมิน/ผู้ดูอย่างเดียว: กรอกครั้งเดียวแล้วเบราว์เซอร์นี้จะจำไว้ให้ครั้งถัดไป, ผรม.ต้องระบุกุญแจของผรม.รายนั้นทุกครั้ง</span></label>
         <input type="text" id="ufAccessKey">
       </div>
       <div class="field">
@@ -8814,6 +8814,32 @@ document.getElementById('ufRole').addEventListener('change', function() {
   document.getElementById('ufContractorField').style.display = (role === 'contractor') ? '' : 'none';
 });
 
+// Remembers the last admin/ผู้ดูอย่างเดียว access key typed into the Users
+// form in THIS browser (Sure's request, 2026-09-19: "ให้ระบบจำไว้หน่อย" --
+// he shouldn't have to paste the same admin key every single time). This is
+// purely a client-side convenience/autofill on top of the server-side
+// DEFAULT_ADMIN_ACCESS_KEY fallback (see handleUserCreate_ in the .gs file)
+// -- setting THAT script property is still the "real" fix that works from
+// any browser/device with the field left blank; this just also pre-fills
+// the box so it's never blank-and-confusing on a browser that's used it
+// before, and still lets Sure edit/override it any time.
+var ADMIN_KEY_STORAGE_NAME = 'solarDefaultAdminAccessKey';
+function rememberedAdminAccessKey_() {
+  try { return localStorage.getItem(ADMIN_KEY_STORAGE_NAME) || ''; } catch (e) { return ''; }
+}
+function rememberAdminAccessKey_(key) {
+  if (!key) return;
+  try { localStorage.setItem(ADMIN_KEY_STORAGE_NAME, key); } catch (e) {}
+}
+
+function autofillUfAccessKey_() {
+  var role = document.getElementById('ufRole').value;
+  var el = document.getElementById('ufAccessKey');
+  if ((role === 'admin' || role === 'viewer') && !el.value) {
+    el.value = rememberedAdminAccessKey_();
+  }
+}
+
 function openUserForm_(user) {
   EDITING_USER_ID = user ? user.user_id : null;
   document.getElementById('userFormTitle').textContent = user ? ('แก้ไขบัญชี: ' + user.user_id) : 'สร้างบัญชีใหม่';
@@ -8829,7 +8855,11 @@ function openUserForm_(user) {
   document.getElementById('ufRole').value = user ? (user.role || 'admin') : 'admin';
   document.getElementById('ufContractorField').style.display = (user && user.role === 'contractor') ? '' : 'none';
   document.getElementById('ufContractor').value = user ? (user.contractor || '') : '';
+  // Editing an existing account: leave blank (only overwrite the key if
+  // Sure actually types a new one). Creating new admin/viewer: pre-fill
+  // with whatever key this browser remembers from last time.
   document.getElementById('ufAccessKey').value = '';
+  if (!user) autofillUfAccessKey_();
   selectAvatar_(user ? (user.avatar || '') : '');
   document.getElementById('userFormBox').style.display = '';
   document.getElementById('userFormBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -8837,6 +8867,7 @@ function openUserForm_(user) {
 
 document.getElementById('userNewBtn').onclick = function() { openUserForm_(null); };
 document.getElementById('userFormCancelBtn').onclick = function() { document.getElementById('userFormBox').style.display = 'none'; };
+document.getElementById('ufRole').addEventListener('change', autofillUfAccessKey_);
 
 document.getElementById('userFormSaveBtn').onclick = function() {
   if (!CAN_EDIT) { alert('บัญชีนี้เป็นแบบดูอย่างเดียว ไม่สามารถบันทึกได้'); return; }
@@ -8845,12 +8876,13 @@ document.getElementById('userFormSaveBtn').onclick = function() {
   var userId = (document.getElementById('ufUserId').value || '').trim();
   var name = (document.getElementById('ufName').value || '').trim();
   var role = document.getElementById('ufRole').value;
+  var accessKeyTyped = (document.getElementById('ufAccessKey').value || '').trim();
   var payload = {
     key: RATINGS_ACCESS_KEY, username: CURRENT_USER.username,
     user_id: userId, name: name, phone: (document.getElementById('ufPhone').value || '').trim(),
     email: (document.getElementById('ufEmail').value || '').trim(), role: role,
     contractor: (document.getElementById('ufContractor').value || '').trim(),
-    access_key: (document.getElementById('ufAccessKey').value || '').trim(),
+    access_key: accessKeyTyped,
     avatar: document.getElementById('ufAvatarValue').value || ''
   };
   if (!userId) { errEl.textContent = 'กรุณากรอกชื่อผู้ใช้'; errEl.style.display = ''; return; }
@@ -8873,6 +8905,10 @@ document.getElementById('userFormSaveBtn').onclick = function() {
         errEl.style.display = '';
         return;
       }
+      // Remember this key in the browser so the field is pre-filled next
+      // time an admin/ผู้ดูอย่างเดียว account is created (only for those two
+      // roles -- a ผรม. key is specific to one contractor, never reused).
+      if ((role === 'admin' || role === 'viewer') && accessKeyTyped) rememberAdminAccessKey_(accessKeyTyped);
       document.getElementById('userFormBox').style.display = 'none';
       fetchUsersList_();
     })

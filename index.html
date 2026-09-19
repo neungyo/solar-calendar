@@ -110,6 +110,8 @@
      a manually-logged one-off visit) even though both are about cleaning. */
   .dot.cleaning { background:#0d9488; }
   .evt.cleaning { background:#ccfbf1; color:#115e59; }
+  .dot.cleaning-confirmed { background:#f97316; }
+  .evt.cleaning-confirmed { background:#ffedd5; color:#9a3412; }
   .view-tabs { display:flex; gap:8px; margin-bottom:12px; }
   .view-tab-btn.active { background:var(--accent); color:#fff; }
   .view-tab-btn:not(.active) { background:#fff; color:var(--text); border:1px solid var(--border); }
@@ -361,6 +363,13 @@
   <span><span class="dot survey-stalled"></span>สำรวจแล้ว ยังไม่มีกำหนดติดตั้ง</span>
   <span><span class="dot survey-scheduled"></span>สำรวจแล้ว มีกำหนดติดตั้งแล้ว</span>
   <span><span class="tac-dot got"></span> มีเลขขนานไฟแล้ว &nbsp;/&nbsp; <span class="tac-dot pending"></span> อยู่ระหว่างดำเนินการ (ยังไม่ได้เลข) &nbsp;/&nbsp; <span class="tac-dot not"></span> ยังไม่มีความคืบหน้า</span>
+  <span><span class="dot cleaning"></span>กำหนดล้างแผง (ประมาณการ) &nbsp;/&nbsp; <span class="dot cleaning-confirmed"></span>กำหนดล้างแผง (ยืนยันแล้วในชีต)</span>
+  <span id="cleaningSettingsRow" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+    <span id="cleaningConditionText"></span>
+    <label style="margin-left:4px;white-space:nowrap;">เดือนตั้งต้น: <input type="number" id="cleaningBaseMonthsInput" min="1" max="60" value="6" style="width:52px;"></label>
+    <button type="button" class="secondary" id="cleaningBaseMonthsUpdateBtn" style="padding:2px 10px;font-size:12px;">อัปเดต</button>
+    <span id="cleaningBaseMonthsMsg" style="font-size:11px;"></span>
+  </span>
 </div>
 
 <div class="view-tabs">
@@ -921,19 +930,31 @@
       <button class="secondary" id="mCopyBtn" style="width:100%;">📋 คัดลอกข้อมูล</button>
     </div>
     <div class="modal-row" id="mDocsRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
-      <div class="k" style="margin-bottom:8px;font-weight:600;">เอกสารประกอบงาน:</div>
+      <div class="k" style="margin-bottom:8px;font-weight:600;" id="mDocsRowTitle">เอกสารประกอบงาน:</div>
       <div id="mDocsList" style="margin-bottom:10px;font-size:13px;"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
         <select id="mDocType" style="flex:1 1 140px;">
           <option value="ใบเสนอราคา">ใบเสนอราคา</option>
           <option value="เอกสารสำรวจ">เอกสารสำรวจ</option>
+          <option value="เอกสารส่งมอบงาน">เอกสารส่งมอบงาน</option>
+          <option value="เอกสาร FAT">เอกสาร FAT</option>
           <option value="อื่นๆ">อื่นๆ</option>
         </select>
         <input type="file" id="mDocFile" accept="application/pdf,.pdf,image/*" style="flex:2 1 200px;">
+        <input type="text" id="mDocUrl" placeholder="วาง URL เอกสารที่แชร์ไว้ใน Google Drive" style="flex:2 1 200px;display:none;">
       </div>
       <input type="text" id="mDocUploader" placeholder="ชื่อผู้อัปโหลด" style="width:100%;box-sizing:border-box;margin-bottom:8px;">
       <div id="mDocError" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none;"></div>
       <button type="button" class="secondary" id="mDocUploadBtn"><span class="iron-spinner" id="mDocUploadSpinner"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,2 22,20 2,20" fill="none" stroke="#00d4ff" stroke-width="2.2" stroke-linejoin="round" style="filter:drop-shadow(0 0 3px #00d4ff);"/></svg></span><span id="mDocUploadBtnLabel">📎 เพิ่มเอกสาร (PDF)</span></button>
+    </div>
+    <div class="modal-row" id="mCleaningPhotoRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+      <div class="k" style="margin-bottom:8px;font-weight:600;" id="mCleaningPhotoTitle">รูปภาพประกอบหน้างาน:</div>
+      <div id="mCleaningPhotoList" style="margin-bottom:10px;font-size:12px;"></div>
+      <input type="text" id="mCleaningLoggedBy" placeholder="ชื่อผู้บันทึก" style="width:100%;box-sizing:border-box;margin-bottom:6px;">
+      <textarea id="mCleaningNote" rows="2" placeholder="บันทึกเพิ่มเติม (ถ้ามี)..." style="width:100%;box-sizing:border-box;margin-bottom:6px;"></textarea>
+      <input type="file" id="mCleaningPhotoFile" accept="image/*" multiple style="margin-bottom:8px;">
+      <div id="mCleaningPhotoError" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none;"></div>
+      <button type="button" class="secondary" id="mCleaningPhotoSubmitBtn">📷 บันทึกรูปภาพ</button>
     </div>
     <div class="modal-row" id="mChecklistRow" style="display:none;flex-direction:column;align-items:stretch;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
       <div class="k" style="margin-bottom:8px;font-weight:600;">Installation progress checklist:</div>
@@ -1182,7 +1203,7 @@ var RATINGS_CRITERIA = [
   { key: 'testing', label: 'ทดสอบระบบก่อนส่งมอบ (Testing & Commissioning)', hint: 'ตรวจสอบแรงดัน ขั้วสาย การสื่อสาร Monitoring และทดสอบการทำงานครบทุกฟังก์ชัน' },
   { key: 'handover', label: 'ส่งมอบพร้อมเอกสาร (Documentation & Handover)', hint: 'ถ่ายรูป Before/After, ส่งรายงานติดตั้ง และอธิบายการใช้งานให้ลูกค้า' }
 ];
-var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} }, checklist: { byJob: {} }, csat: { install: { byJob: {} }, survey: { byJob: {} } }, jobDocs: { byJob: {} } };
+var RATINGS_SUMMARY = { byJob: {}, byContractor: {}, installLogs: { byJob: {} }, surveyLogs: { byJob: {} }, checklist: { byJob: {} }, csat: { install: { byJob: {} }, survey: { byJob: {} } }, jobDocs: { byJob: {} }, cleaningLogs: { byJob: {} }, settings: { cleaningBaseMonths: 6 } };
 var currentRatingJob = null;
 var currentRatingScores = {};
 var currentLogJob = null;
@@ -1197,6 +1218,12 @@ var currentSurveyCsatJob = null;
 var currentSurveyCsatScores = {};
 var currentSurveyCsatOutcome = null;
 var currentDocsJob = null;
+// Set to ['เอกสารส่งมอบงาน','เอกสาร FAT'] when the modal was opened for a
+// cleaning event, so the doc list/dropdown stay scoped to just those two
+// types; null (unrestricted) for install/survey events. (2026-09-19)
+var currentDocsRestrictTypes = null;
+var currentCleaningJob = null;
+var currentCleaningIndex = null;
 
 // Call-outcome options for CSAT (Sure's request, 2026-09-03): when staff
 // can't get a real score out of the customer this attempt. These three
@@ -1217,7 +1244,7 @@ var CSAT_OUTCOME_CLOSE_ = 'ปิดเคส';
 // job as a whole, not to one specific visit. Files are stored in a shared
 // Drive folder by the Contracor_ratings Apps Script; only the resulting
 // view link + metadata are kept in this app's own data model.
-var JOB_DOC_TYPES_ = ['ใบเสนอราคา', 'เอกสารสำรวจ', 'อื่นๆ'];
+var JOB_DOC_TYPES_ = ['ใบเสนอราคา', 'เอกสารสำรวจ', 'เอกสารส่งมอบงาน', 'เอกสาร FAT', 'อื่นๆ'];
 
 // Customer Satisfaction survey (Sure's request, 2026-08-24): staff call the
 // customer after install and score 6 fixed questions 1-5 each. Multiple
@@ -1299,6 +1326,15 @@ function fetchRatingsSummary() {
   fetch(url).then(function(r) { return r.json(); }).then(function(data) {
     if (data && !data.error) {
       RATINGS_SUMMARY = data;
+      // Panel-cleaning base interval (Sure's request, 2026-09-19): keep the
+      // local computed value + legend text in sync with whatever's stored
+      // centrally, and re-render the calendar if it's the active tab so a
+      // change made from another browser/session shows up here too.
+      var newBaseMonths = (data.settings && data.settings.cleaningBaseMonths) || CLEANING_BASE_MONTHS;
+      var baseMonthsChanged = newBaseMonths !== CLEANING_BASE_MONTHS;
+      CLEANING_BASE_MONTHS = newBaseMonths;
+      updateCleaningConditionText_();
+      if (baseMonthsChanged && document.getElementById('tabCalendarBtn').classList.contains('active')) renderCalendar();
       if (document.getElementById('tabOverviewBtn').classList.contains('active')) renderOverviewTable();
       if (document.getElementById('tabEvalBtn').classList.contains('active')) renderEvalTable();
       if (document.getElementById('tabSlaBtn').classList.contains('active')) { renderManualRatingChart(); renderManualRatingTable(); renderSlaTable(); }
@@ -1318,6 +1354,58 @@ function fetchRatingsSummary() {
     // working normally, so this failure is silent.
   });
 }
+
+// Keeps the legend condition text and the base-months input box in sync
+// with the current CLEANING_BASE_MONTHS value (Sure's request, 2026-09-19).
+function updateCleaningConditionText_() {
+  var el = document.getElementById('cleaningConditionText');
+  var n = CLEANING_BASE_MONTHS || 6;
+  if (el) {
+    el.textContent = 'เงื่อนไขกำหนดล้างแผง: ทุก ' + n + '/' + (n * 2) + '/' + (n * 3) + '/' + (n * 4) +
+      ' เดือนหลังวันติดตั้งเสร็จ (เว้นเสาร์-อาทิตย์และวันหยุดนักขัตฤกษ์) — ถ้ามีวันที่ระบุไว้ในชีต Progress Modern trade ' +
+      '(คอลัมน์กำหนดล้างแผงครั้งที่ 1-4) จะยึดวันนั้นเป็นหลักเสมอ ระบบจะไม่ปรับเปลี่ยนให้';
+  }
+  var input = document.getElementById('cleaningBaseMonthsInput');
+  if (input && document.activeElement !== input) input.value = n;
+}
+
+var cleaningBaseMonthsUpdateBtnEl_ = document.getElementById('cleaningBaseMonthsUpdateBtn');
+if (cleaningBaseMonthsUpdateBtnEl_) cleaningBaseMonthsUpdateBtnEl_.onclick = function() {
+  var input = document.getElementById('cleaningBaseMonthsInput');
+  var msgEl = document.getElementById('cleaningBaseMonthsMsg');
+  var months = parseInt(input.value, 10);
+  if (!months || months < 1 || months > 60) {
+    if (msgEl) { msgEl.textContent = 'กรุณาใส่ตัวเลข 1-60'; msgEl.style.color = 'var(--red)'; }
+    return;
+  }
+  if (!ratingsConfigured()) {
+    if (msgEl) { msgEl.textContent = 'ยังไม่ได้ตั้งค่า RATINGS_WEBAPP_URL'; msgEl.style.color = 'var(--red)'; }
+    return;
+  }
+  cleaningBaseMonthsUpdateBtnEl_.disabled = true;
+  if (msgEl) { msgEl.textContent = 'กำลังบันทึก...'; msgEl.style.color = 'var(--muted)'; }
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'cleaning_settings_update', baseMonths: months })
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    cleaningBaseMonthsUpdateBtnEl_.disabled = false;
+    if (!res || !res.success) {
+      if (msgEl) { msgEl.textContent = (res && res.error) || 'บันทึกไม่สำเร็จ'; msgEl.style.color = 'var(--red)'; }
+      return;
+    }
+    CLEANING_BASE_MONTHS = res.baseMonths;
+    RATINGS_SUMMARY.settings = RATINGS_SUMMARY.settings || {};
+    RATINGS_SUMMARY.settings.cleaningBaseMonths = res.baseMonths;
+    updateCleaningConditionText_();
+    if (msgEl) { msgEl.textContent = 'บันทึกแล้ว ✓ (มีผลกับทุกคน)'; msgEl.style.color = '#16a34a'; }
+    if (document.getElementById('tabCalendarBtn').classList.contains('active')) renderCalendar();
+  }).catch(function(err) {
+    cleaningBaseMonthsUpdateBtnEl_.disabled = false;
+    if (msgEl) { msgEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message; msgEl.style.color = 'var(--red)'; }
+  });
+};
+updateCleaningConditionText_();
 
 function openRatingModal(jobKey) {
   var job = jobByKey(jobKey);
@@ -1654,7 +1742,15 @@ function passesFilters(e) {
 // an override. Computed CLIENT-SIDE only (Sure chose this over a Sheets
 // formula) so the one THAI_HOLIDAYS list stays the single source of truth
 // -- no risk of the sheet's own holiday list drifting out of sync with it.
-var CLEANING_INTERVALS_MONTHS_ = [6, 12, 18, 24];
+// Adjustable base interval (Sure's request, 2026-09-19): default 6 months,
+// giving 4 due dates at N/2N/3N/4N months after install-complete. Synced
+// from the backend's PropertiesService setting in fetchRatingsSummary() so
+// every viewer sees the same value; updated via cleaningBaseMonthsUpdateBtn.
+var CLEANING_BASE_MONTHS = 6;
+function cleaningIntervalsMonths_() {
+  var n = CLEANING_BASE_MONTHS || 6;
+  return [n, n * 2, n * 3, n * 4];
+}
 
 function addMonthsClamped_(iso, months) {
   var d = new Date(iso + 'T00:00:00');
@@ -1698,10 +1794,11 @@ function jobCleaningBaseDate_(job) {
 function jobCleaningSchedule_(job) {
   var overrideFields = [job.cleaning_due_1, job.cleaning_due_2, job.cleaning_due_3, job.cleaning_due_4];
   var baseIso = jobCleaningBaseDate_(job);
+  var intervals = cleaningIntervalsMonths_();
   var out = [];
   for (var i = 0; i < 4; i++) {
     var override = overrideFields[i];
-    var date = override || (baseIso ? computeCleaningDueDate_(baseIso, CLEANING_INTERVALS_MONTHS_[i]) : null);
+    var date = override || (baseIso ? computeCleaningDueDate_(baseIso, intervals[i]) : null);
     if (date) out.push({ n: i + 1, date: date, isOverride: !!override });
   }
   return out;
@@ -1964,12 +2061,14 @@ function renderCalendar() {
       // A date in the survey column is only really a survey when the status
       // says so -- service statuses share that column (see SERVICE_STATUSES).
       var svc = (e.type === 'survey') ? serviceInfo(e.status) : null;
-      var cls = e.type === 'survey' ? 'survey' : (e.type === 'cleaning' ? 'cleaning' : 'install');
+      var cls = e.type === 'survey' ? 'survey' : (e.type === 'cleaning' ? (e.isOverride ? 'cleaning-confirmed' : 'cleaning') : 'install');
       var dotCls = cls;
       var changed = jobIsChanged(e);
       if (e.type === 'cleaning') {
-        // Always its own teal pill -- no completed/changed override, so a
-        // cleaning reminder is never confused with an install-status pill.
+        // Teal = system-estimated date; orange = confirmed in the sheet
+        // (Progress Modern trade, กำหนดล้างแผงครั้งที่ 1-4). No completed/
+        // changed override on top of that, so a cleaning reminder is never
+        // confused with an install-status pill.
       } else if (svc) {
         cls = 'service'; dotCls = 'service';
         if (changed) { cls = 'changed'; dotCls = 'changed'; }
@@ -2159,16 +2258,38 @@ function openModalForEvent(e) {
   // Job documents (Sure's request, 2026-08-29): shown for BOTH survey and
   // install events, unlike the checklist/day-log sections above, since a
   // quotation or survey PDF is relevant to the job as a whole regardless of
-  // which visit type the modal happens to be opened from.
+  // which visit type the modal happens to be opened from. Cleaning events
+  // (2026-09-19) are restricted to just เอกสารส่งมอบงาน/เอกสาร FAT -- URL-
+  // paste links to per-job handover docs, not per-visit uploads.
   var mDocsRow = document.getElementById('mDocsRow');
+  var mDocsRowTitle = document.getElementById('mDocsRowTitle');
+  currentDocsRestrictTypes = (e.type === 'cleaning') ? JOB_DOC_TYPES_URL_ONLY_ : null;
+  if (mDocsRowTitle) mDocsRowTitle.textContent = (e.type === 'cleaning') ? 'เอกสารส่งมอบงาน / เอกสาร FAT:' : 'เอกสารประกอบงาน:';
   if (mDocsRow && mJob) {
     mDocsRow.style.display = 'flex';
     currentDocsJob = mJob;
-    resetDocForm_();
-    renderJobDocs(mJob);
+    resetDocForm_(currentDocsRestrictTypes);
+    renderJobDocs(mJob, currentDocsRestrictTypes);
   } else if (mDocsRow) {
     mDocsRow.style.display = 'none';
     currentDocsJob = null;
+  }
+  // Cleaning-visit photo log (Sure's request, 2026-09-19): only for cleaning
+  // events, keyed by (job, cleaning_index) since each of the 4 visits needs
+  // its own on-site photo evidence, separate from the job-level docs above.
+  var mCleaningPhotoRow = document.getElementById('mCleaningPhotoRow');
+  if (mCleaningPhotoRow && mJob && e.type === 'cleaning') {
+    mCleaningPhotoRow.style.display = 'flex';
+    currentCleaningJob = mJob;
+    currentCleaningIndex = e.cleaning_index;
+    var mCleaningPhotoTitle = document.getElementById('mCleaningPhotoTitle');
+    if (mCleaningPhotoTitle) mCleaningPhotoTitle.textContent = 'รูปภาพประกอบหน้างาน (ล้างแผง ครั้งที่ ' + e.cleaning_index + '):';
+    resetCleaningLogForm_();
+    renderCleaningPhotos_(mJob, e.cleaning_index);
+  } else if (mCleaningPhotoRow) {
+    mCleaningPhotoRow.style.display = 'none';
+    currentCleaningJob = null;
+    currentCleaningIndex = null;
   }
   // Contractor-scoped links should only see the same basic identity/status
   // fields shown in this modal's top section -- Sure's request, 2026-09-18:
@@ -2179,7 +2300,7 @@ function openModalForEvent(e) {
   // from the SAME unscoped ratings key every contractor link shares, so
   // hiding them here also closes off seeing another contractor's job data.
   if (CURRENT_SCOPE !== 'admin') {
-    ['mSlaRow', 'mDocsRow', 'mChecklistRow', 'mInstallLogRow', 'mSurveyLogRow'].forEach(function(id) {
+    ['mSlaRow', 'mDocsRow', 'mChecklistRow', 'mInstallLogRow', 'mSurveyLogRow', 'mCleaningPhotoRow'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
@@ -2361,22 +2482,54 @@ function prepareDocUploadFile_(file, onProgress) {
   return compressImageIfNeeded_(file);
 }
 
-function resetDocForm_() {
+// Cleaning-event popups only want the two URL-paste-only doc types (job
+// docs generated once at handover, not per visit); install/survey popups
+// keep the original full set. (Sure's request, 2026-09-19.)
+var JOB_DOC_TYPES_URL_ONLY_ = ['เอกสารส่งมอบงาน', 'เอกสาร FAT'];
+
+function toggleDocInputMode_() {
   var typeEl = document.getElementById('mDocType');
   var fileEl = document.getElementById('mDocFile');
+  var urlEl = document.getElementById('mDocUrl');
+  if (!typeEl || !fileEl || !urlEl) return;
+  var isUrlOnly = JOB_DOC_TYPES_URL_ONLY_.indexOf(typeEl.value) !== -1;
+  fileEl.style.display = isUrlOnly ? 'none' : '';
+  urlEl.style.display = isUrlOnly ? '' : 'none';
+}
+var mDocTypeEl_ = document.getElementById('mDocType');
+if (mDocTypeEl_) mDocTypeEl_.addEventListener('change', toggleDocInputMode_);
+
+// restrictToTypes: optional array of allowed docType option values -- used
+// to limit the cleaning-event modal's dropdown to just the handover/FAT
+// link types, leaving the install/survey modal's dropdown untouched.
+function resetDocForm_(restrictToTypes) {
+  var typeEl = document.getElementById('mDocType');
+  var fileEl = document.getElementById('mDocFile');
+  var urlEl = document.getElementById('mDocUrl');
   var uploaderEl = document.getElementById('mDocUploader');
   var errEl = document.getElementById('mDocError');
-  if (typeEl) typeEl.value = JOB_DOC_TYPES_[0];
+  if (typeEl) {
+    Array.prototype.forEach.call(typeEl.options || [], function(opt) {
+      opt.style.display = (!restrictToTypes || restrictToTypes.indexOf(opt.value) !== -1) ? '' : 'none';
+    });
+    typeEl.value = (restrictToTypes && restrictToTypes[0]) || JOB_DOC_TYPES_[0];
+  }
   if (fileEl) fileEl.value = '';
+  if (urlEl) urlEl.value = '';
   if (uploaderEl) uploaderEl.value = '';
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  toggleDocInputMode_();
 }
 
-function renderJobDocs(job) {
+// allowedTypes: optional array to filter which uploaded docs are shown --
+// used so the cleaning-event modal's doc list only shows เอกสารส่งมอบงาน/
+// เอกสาร FAT entries, not every doc ever uploaded for the job.
+function renderJobDocs(job, allowedTypes) {
   var host = document.getElementById('mDocsList');
   if (!host) return;
   var key = job && (job.ts_app || job.job_code || job._key) || '';
   var docs = (RATINGS_SUMMARY.jobDocs && RATINGS_SUMMARY.jobDocs.byJob && RATINGS_SUMMARY.jobDocs.byJob[key]) || [];
+  if (allowedTypes) docs = docs.filter(function(d) { return allowedTypes.indexOf(d.docType) !== -1; });
   if (!docs.length) {
     host.innerHTML = '<div style="color:var(--muted);">ยังไม่มีเอกสารที่อัปโหลด</div>';
     return;
@@ -2434,7 +2587,161 @@ function deleteJobDoc(row) {
     if (RATINGS_SUMMARY.jobDocs && RATINGS_SUMMARY.jobDocs.byJob && RATINGS_SUMMARY.jobDocs.byJob[key]) {
       RATINGS_SUMMARY.jobDocs.byJob[key] = RATINGS_SUMMARY.jobDocs.byJob[key].filter(function(d) { return d.row !== row; });
     }
-    if (currentDocsJob === job) renderJobDocs(job);
+    if (currentDocsJob === job) renderJobDocs(job, currentDocsRestrictTypes);
+    fetchRatingsSummary();
+  }).catch(function(err) {
+    alert('เชื่อมต่อไม่สำเร็จ: ' + err.message);
+  });
+}
+
+// Panel-cleaning visit photo log (Sure's request, 2026-09-19): a small
+// gallery + add form scoped to (job, cleaning_index), shown only in the
+// cleaning-event modal. Reuses the same compressImageIfNeeded_/
+// fileToBase64_/openProblemLightbox_ helpers as the Problem tab's
+// resolution-log photos -- same compression + click-to-enlarge behavior.
+function resetCleaningLogForm_() {
+  var loggedByEl = document.getElementById('mCleaningLoggedBy');
+  var noteEl = document.getElementById('mCleaningNote');
+  var fileEl = document.getElementById('mCleaningPhotoFile');
+  var errEl = document.getElementById('mCleaningPhotoError');
+  if (loggedByEl) loggedByEl.value = '';
+  if (noteEl) noteEl.value = '';
+  if (fileEl) fileEl.value = '';
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+}
+
+function renderCleaningPhotos_(job, idx) {
+  var host = document.getElementById('mCleaningPhotoList');
+  if (!host) return;
+  var key = job && (job.ts_app || job.job_code || job._key) || '';
+  var entries = (RATINGS_SUMMARY.cleaningLogs && RATINGS_SUMMARY.cleaningLogs.byJob &&
+    RATINGS_SUMMARY.cleaningLogs.byJob[key] && RATINGS_SUMMARY.cleaningLogs.byJob[key][idx]) || [];
+  if (!entries.length) {
+    host.innerHTML = '<div style="color:var(--muted);">ยังไม่มีรูปภาพ/บันทึก</div>';
+    return;
+  }
+  host.innerHTML = entries.map(function(en) {
+    var photosHtml = (en.photos && en.photos.length)
+      ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' +
+        en.photos.map(function(url) {
+          return '<img src="' + escHtml(problemPhotoImgSrc_(url, 200)) + '" class="cleaning-log-photo" data-url="' + escHtml(url) + '" ' +
+            'style="width:64px;height:64px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--border);">';
+        }).join('') + '</div>'
+      : '';
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border);">' +
+      '<div style="font-size:11px;color:var(--muted);">' + escHtml(en.logDate || '-') + ' &nbsp;·&nbsp; โดย ' + escHtml(en.loggedBy || '-') +
+      '<button type="button" class="cleaning-log-delete-btn" data-row="' + en.row + '" title="ลบบันทึกนี้" style="float:right;border:none;background:none;cursor:pointer;">🗑</button></div>' +
+      (en.detail ? ('<div style="margin-top:2px;">' + escHtml(en.detail) + '</div>') : '') +
+      photosHtml +
+      '</div>';
+  }).join('');
+}
+
+var mCleaningPhotoListEl_ = document.getElementById('mCleaningPhotoList');
+if (mCleaningPhotoListEl_) {
+  mCleaningPhotoListEl_.addEventListener('click', function(ev) {
+    var img = ev.target.closest && ev.target.closest('.cleaning-log-photo');
+    if (img) { openProblemLightbox_(img.getAttribute('data-url')); return; }
+    var delBtn = ev.target.closest && ev.target.closest('.cleaning-log-delete-btn');
+    if (delBtn) { deleteCleaningLog_(parseInt(delBtn.getAttribute('data-row'), 10)); }
+  });
+}
+
+function submitCleaningLog_() {
+  var errEl = document.getElementById('mCleaningPhotoError');
+  var loggedByEl = document.getElementById('mCleaningLoggedBy');
+  var noteEl = document.getElementById('mCleaningNote');
+  var fileEl = document.getElementById('mCleaningPhotoFile');
+  if (!currentCleaningJob || !currentCleaningIndex) return;
+  var loggedBy = (loggedByEl.value || '').trim();
+  var note = (noteEl.value || '').trim();
+  var files = fileEl.files ? Array.prototype.slice.call(fileEl.files) : [];
+  if (!loggedBy) { errEl.textContent = 'กรุณาใส่ชื่อผู้บันทึก'; errEl.style.display = ''; return; }
+  if (!note && !files.length) { errEl.textContent = 'กรุณาใส่บันทึก หรือแนบรูปภาพอย่างน้อยหนึ่งรูป'; errEl.style.display = ''; return; }
+  for (var i = 0; i < files.length; i++) {
+    if (!isImageFile_(files[i])) { errEl.textContent = 'แนบได้เฉพาะไฟล์รูปภาพเท่านั้น'; errEl.style.display = ''; return; }
+  }
+  if (!ratingsConfigured()) { errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทางอัปโหลด (RATINGS_WEBAPP_URL)'; errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+
+  var job = currentCleaningJob, idx = currentCleaningIndex;
+  var submitBtn = document.getElementById('mCleaningPhotoSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = files.length ? 'กำลังอัปโหลดรูปภาพ...' : 'กำลังบันทึก...';
+
+  Promise.all(files.map(function(f) {
+    return compressImageIfNeeded_(f).then(function(prepared) {
+      return fileToBase64_(prepared.blob).then(function(b64) {
+        return { fileName: prepared.fileName, mimeType: prepared.mimeType, fileData: b64 };
+      });
+    });
+  })).then(function(photos) {
+    var payload = {
+      key: RATINGS_ACCESS_KEY,
+      type: 'cleaning_log_add',
+      ts_app: (job.ts_app || job.job_code || job._key || ''),
+      customer: job.customer || '',
+      contractor: job.contractor || '',
+      cleaning_index: idx,
+      log_date: TODAY_ISO,
+      logged_by: loggedBy,
+      detail: note,
+      photos: photos
+    };
+    return fetch(RATINGS_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '📷 บันทึกรูปภาพ';
+    if (!res || !res.success) {
+      errEl.textContent = (res && res.error) || 'บันทึกไม่สำเร็จ';
+      errEl.style.display = '';
+      return;
+    }
+    var key = job.ts_app || job.job_code || job._key || '';
+    if (!RATINGS_SUMMARY.cleaningLogs) RATINGS_SUMMARY.cleaningLogs = { byJob: {} };
+    if (!RATINGS_SUMMARY.cleaningLogs.byJob[key]) RATINGS_SUMMARY.cleaningLogs.byJob[key] = {};
+    if (!RATINGS_SUMMARY.cleaningLogs.byJob[key][idx]) RATINGS_SUMMARY.cleaningLogs.byJob[key][idx] = [];
+    RATINGS_SUMMARY.cleaningLogs.byJob[key][idx].unshift({
+      row: res.row, cleaning_index: idx, logDate: TODAY_ISO, loggedBy: loggedBy, detail: note, photos: res.photoUrls || []
+    });
+    resetCleaningLogForm_();
+    if (currentCleaningJob === job && currentCleaningIndex === idx) renderCleaningPhotos_(job, idx);
+    fetchRatingsSummary();
+  }).catch(function(err) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '📷 บันทึกรูปภาพ';
+    errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+    errEl.style.display = '';
+  });
+}
+var mCleaningPhotoSubmitBtnEl_ = document.getElementById('mCleaningPhotoSubmitBtn');
+if (mCleaningPhotoSubmitBtnEl_) mCleaningPhotoSubmitBtnEl_.onclick = function() { submitCleaningLog_(); };
+
+function deleteCleaningLog_(row) {
+  if (!currentCleaningJob || !row || row < 2) return;
+  if (!confirm('ยืนยันลบบันทึกนี้หรือไม่? (จะลบรูปภาพออกจาก Google Drive ด้วย)')) return;
+  var job = currentCleaningJob, idx = currentCleaningIndex;
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'cleaning_log_delete', ts_app: (job.ts_app || job.job_code || job._key || ''), row: row })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (!data || !data.success) {
+      var msg = data && data.error === 'row_mismatch'
+        ? 'ข้อมูลมีการเปลี่ยนแปลงตั้งแต่โหลดหน้านี้ กรุณาปิดและเปิดหน้าต่างนี้ใหม่แล้วลองอีกครั้ง'
+        : ((data && data.error) || 'ลบไม่สำเร็จ');
+      alert(msg);
+      return;
+    }
+    var key = job.ts_app || job.job_code || job._key || '';
+    if (RATINGS_SUMMARY.cleaningLogs && RATINGS_SUMMARY.cleaningLogs.byJob && RATINGS_SUMMARY.cleaningLogs.byJob[key] && RATINGS_SUMMARY.cleaningLogs.byJob[key][idx]) {
+      RATINGS_SUMMARY.cleaningLogs.byJob[key][idx] = RATINGS_SUMMARY.cleaningLogs.byJob[key][idx].filter(function(en) { return en.row !== row; });
+    }
+    if (currentCleaningJob === job && currentCleaningIndex === idx) renderCleaningPhotos_(job, idx);
     fetchRatingsSummary();
   }).catch(function(err) {
     alert('เชื่อมต่อไม่สำเร็จ: ' + err.message);
@@ -7304,6 +7611,10 @@ function applyScopeRestriction(scope) {
     var el = document.getElementById(id);
     if (el) el.style.display = restricted ? 'none' : '';
   });
+  // The panel-cleaning base-interval control is an internal testing knob,
+  // not something contractor-scoped viewers should see or touch.
+  var cleaningSettingsRowEl = document.getElementById('cleaningSettingsRow');
+  if (cleaningSettingsRowEl) cleaningSettingsRowEl.style.display = restricted ? 'none' : '';
   if (restricted) switchView('calendar');
 }
 
@@ -7710,12 +8021,81 @@ document.getElementById('surveyCsatCloseCaseBtn').onclick = function() { submitS
 document.getElementById('mDocUploadBtn').onclick = function() {
   var errEl = document.getElementById('mDocError');
   var fileEl = document.getElementById('mDocFile');
+  var urlEl = document.getElementById('mDocUrl');
   var typeEl = document.getElementById('mDocType');
   var uploaderEl = document.getElementById('mDocUploader');
   var uploader = uploaderEl.value.trim();
   var docType = typeEl.value;
-  var file = fileEl.files && fileEl.files[0];
   if (!currentDocsJob) return;
+
+  // URL-only doc types (เอกสารส่งมอบงาน/เอกสาร FAT): just paste an existing
+  // Drive share link, no file upload/compression needed at all.
+  if (JOB_DOC_TYPES_URL_ONLY_.indexOf(docType) !== -1) {
+    var docUrl = (urlEl.value || '').trim();
+    if (!docUrl) {
+      errEl.textContent = 'กรุณาวาง URL เอกสาร';
+      errEl.style.display = '';
+      return;
+    }
+    if (!/^https?:\/\//i.test(docUrl)) {
+      errEl.textContent = 'URL ต้องขึ้นต้นด้วย http:// หรือ https://';
+      errEl.style.display = '';
+      return;
+    }
+    if (!uploader) {
+      errEl.textContent = 'กรุณาใส่ชื่อผู้บันทึก';
+      errEl.style.display = '';
+      return;
+    }
+    if (!ratingsConfigured()) {
+      errEl.textContent = 'ยังไม่ได้ตั้งค่าปลายทาง (RATINGS_WEBAPP_URL)';
+      errEl.style.display = '';
+      return;
+    }
+    errEl.style.display = 'none';
+    var submitBtnUrl = document.getElementById('mDocUploadBtn');
+    var jobForUrl = currentDocsJob;
+    var restrictAfterUrl = (currentDocsRestrictTypes || null);
+    submitBtnUrl.disabled = true;
+    setDocUploadBtnLabel_('กำลังบันทึก...', true);
+    fetch(RATINGS_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        key: RATINGS_ACCESS_KEY, type: 'job_doc_upload',
+        ts_app: (jobForUrl.ts_app || jobForUrl.job_code || jobForUrl._key || ''),
+        customer: jobForUrl.customer || '', contractor: jobForUrl.contractor || '',
+        docType: docType, fileName: docType, docUrl: docUrl, uploadedBy: uploader
+      })
+    }).then(function(r) { return r.json(); }).then(function(res) {
+      submitBtnUrl.disabled = false;
+      setDocUploadBtnLabel_('📎 เพิ่มเอกสาร (PDF)', false);
+      if (res && res.success) {
+        var keyUrl = jobForUrl.ts_app || jobForUrl.job_code || jobForUrl._key || '';
+        if (!RATINGS_SUMMARY.jobDocs) RATINGS_SUMMARY.jobDocs = { byJob: {} };
+        if (!RATINGS_SUMMARY.jobDocs.byJob[keyUrl]) RATINGS_SUMMARY.jobDocs.byJob[keyUrl] = [];
+        RATINGS_SUMMARY.jobDocs.byJob[keyUrl].unshift({
+          row: res.row, docType: docType, fileName: docType, url: res.url || docUrl, uploadedBy: uploader, timestamp: ''
+        });
+        if (currentDocsJob === jobForUrl) {
+          resetDocForm_(restrictAfterUrl);
+          renderJobDocs(jobForUrl, restrictAfterUrl);
+        }
+        fetchRatingsSummary();
+      } else {
+        errEl.textContent = 'บันทึกไม่สำเร็จ: ' + ((res && res.error) || 'unknown error');
+        errEl.style.display = '';
+      }
+    }).catch(function(err) {
+      submitBtnUrl.disabled = false;
+      setDocUploadBtnLabel_('📎 เพิ่มเอกสาร (PDF)', false);
+      errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
+      errEl.style.display = '';
+    });
+    return;
+  }
+
+  var file = fileEl.files && fileEl.files[0];
   if (!file) {
     errEl.textContent = 'กรุณาเลือกไฟล์ PDF';
     errEl.style.display = '';
@@ -7790,8 +8170,8 @@ document.getElementById('mDocUploadBtn').onclick = function() {
             row: res.row, docType: docType, fileName: uploadFileName, url: res.url || '', uploadedBy: uploader, timestamp: ''
           });
           if (currentDocsJob === jobForUpload) {
-            resetDocForm_();
-            renderJobDocs(jobForUpload);
+            resetDocForm_(currentDocsRestrictTypes);
+            renderJobDocs(jobForUpload, currentDocsRestrictTypes);
           }
           fetchRatingsSummary();
         } else {

@@ -412,6 +412,9 @@
   body.view-only-role #problemNewCaseForm input,
   body.view-only-role #problemNewCaseForm textarea,
   body.view-only-role #problemNewCaseForm select,
+  body.view-only-role #problemViewOverlay input,
+  body.view-only-role #problemViewOverlay textarea,
+  body.view-only-role #problemViewOverlay select,
   body.view-only-role #userFormBox input,
   body.view-only-role #userFormBox textarea,
   body.view-only-role #userFormBox select,
@@ -423,6 +426,11 @@
   body.view-only-role #csatModalOverlay button:not(.secondary),
   body.view-only-role #surveyCsatModalOverlay button:not(.secondary),
   body.view-only-role #problemNewCaseForm button:not(.secondary),
+  /* #problemViewOverlay's own "+ เพิ่มบันทึก" submit button (id=plSubmitBtn)
+     happens to also use the "secondary" class here (unlike every other
+     modal's save button), so ":not(.secondary)" alone would have missed
+     it -- exclude only the real close button (#pvCloseBtn) by id instead. */
+  body.view-only-role #problemViewOverlay button:not(#pvCloseBtn),
   body.view-only-role #userFormBox button:not(.secondary),
   body.view-only-role #resetPasswordModal button:not(.secondary) {
     pointer-events:none; opacity:0.5; filter:grayscale(0.5); cursor:not-allowed;

@@ -386,6 +386,47 @@
      gate) and each JS submit function's own CAN_EDIT guard; this class is
      just so a viewer doesn't see dead buttons. */
   body.view-only-role .edit-only { display:none !important; }
+  /* 2026-09-19 (Sure's request): ".edit-only" above was never actually put
+     on any element, so in practice no button was ever hidden for a viewer
+     -- every field and button looked fully live even though each submit
+     handler's own CAN_EDIT check silently blocks the network call. Sure
+     wants it visibly greyed out instead, not just silently rejected. Rather
+     than hunting down every input across every tab, this greys out every
+     actual data-entry control (typed fields, checkboxes, file pickers,
+     dropdowns, and buttons other than the cancel/close/copy ones, which all
+     consistently use the "secondary" class in this codebase) inside the
+     known data-entry containers: the main job-detail modal, the rating/CSAT
+     popups, the Problem tab's case form, the user-account form, and the
+     reset-password modal. Filter/search controls in the page toolbars sit
+     outside all of these containers, so viewers can still filter and browse
+     normally -- only the actual "write something" surfaces get greyed. */
+  body.view-only-role #modalOverlay input,
+  body.view-only-role #modalOverlay textarea,
+  body.view-only-role #modalOverlay select,
+  body.view-only-role #ratingModalOverlay input,
+  body.view-only-role #ratingModalOverlay textarea,
+  body.view-only-role #csatModalOverlay input,
+  body.view-only-role #csatModalOverlay textarea,
+  body.view-only-role #surveyCsatModalOverlay input,
+  body.view-only-role #surveyCsatModalOverlay textarea,
+  body.view-only-role #problemNewCaseForm input,
+  body.view-only-role #problemNewCaseForm textarea,
+  body.view-only-role #problemNewCaseForm select,
+  body.view-only-role #userFormBox input,
+  body.view-only-role #userFormBox textarea,
+  body.view-only-role #userFormBox select,
+  body.view-only-role #resetPasswordModal input {
+    pointer-events:none; opacity:0.55; filter:grayscale(0.5); background:#eef0f2 !important; cursor:not-allowed;
+  }
+  body.view-only-role #modalOverlay button:not(.secondary),
+  body.view-only-role #ratingModalOverlay button:not(.secondary),
+  body.view-only-role #csatModalOverlay button:not(.secondary),
+  body.view-only-role #surveyCsatModalOverlay button:not(.secondary),
+  body.view-only-role #problemNewCaseForm button:not(.secondary),
+  body.view-only-role #userFormBox button:not(.secondary),
+  body.view-only-role #resetPasswordModal button:not(.secondary) {
+    pointer-events:none; opacity:0.5; filter:grayscale(0.5); cursor:not-allowed;
+  }
   /* Upload "arc reactor" spinner (Sure's request, 2026-09-02): a glowing
      rotating triangle shown on the upload button while a document is being
      checked/compressed/sent, so it's obvious the system is working. */
@@ -2586,7 +2627,17 @@ function openModalForEvent(e) {
   // whatever the code above just set them to. These sections also pull
   // from the SAME unscoped ratings key every contractor link shares, so
   // hiding them here also closes off seeing another contractor's job data.
-  if (CURRENT_SCOPE !== 'admin') {
+  // 2026-09-19 fix: this used to key off CURRENT_SCOPE (the OLD access-key
+  // based scoping from before real per-account login existed). That scope
+  // string comes straight from the backend's ACCESS_KEYS_JSON lookup for
+  // whatever key this account's login happens to be tied to -- it has no
+  // idea what "role" means, so a ผู้ดูอย่างเดียว (viewer) account whose key
+  // wasn't (or isn't) registered as the admin-scope key would get treated
+  // exactly like a contractor here, and lose these detail sections even
+  // though a viewer is supposed to see everything. role is the real,
+  // reliable signal now that every account logs in for real -- only an
+  // actual contractor-role account should have these hidden.
+  if (CURRENT_USER.role === 'contractor') {
     ['mSlaRow', 'mDocsRow', 'mChecklistRow', 'mInstallLogRow', 'mSurveyLogRow', 'mCleaningPhotoRow'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.style.display = 'none';
@@ -7904,7 +7955,16 @@ document.getElementById('problemNextMonth').onclick = function() {
 var SCOPE_RESTRICTED_TAB_IDS = ['tabDocBtn', 'tabOverviewBtn', 'tabEvalBtn', 'tabSlaBtn', 'tabAllocBtn', 'tabDashBtn', 'tabProblemBtn'];
 function applyScopeRestriction(scope) {
   CURRENT_SCOPE = scope || 'admin';
-  var restricted = CURRENT_SCOPE !== 'admin';
+  // 2026-09-19 fix (Sure's request: viewer accounts saw an empty Problem
+  // tab / lost tabs entirely): this used to restrict based on CURRENT_SCOPE,
+  // the backend's OLD access-key scope lookup from before real per-account
+  // login existed. That lookup only ever returns 'admin' or 'contractor'
+  // for a KEY, with no concept of "role" -- so a ผู้ดูอย่างเดียว (viewer)
+  // account whose stored access_key doesn't happen to resolve to the
+  // admin-scope key on the backend got wrongly treated as contractor-scoped
+  // here, hiding every tab except ปฏิทิน. role is the reliable signal now:
+  // only an actual contractor-role login should ever be calendar-only.
+  var restricted = CURRENT_USER.role === 'contractor';
   SCOPE_RESTRICTED_TAB_IDS.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = restricted ? 'none' : '';
@@ -7920,7 +7980,7 @@ function switchView(view) {
   // Belt-and-suspenders: even if a hidden tab button's onclick fires some
   // other way, a contractor-scoped session can never actually switch away
   // from the calendar.
-  if (CURRENT_SCOPE !== 'admin' && view !== 'calendar') view = 'calendar';
+  if (CURRENT_USER.role === 'contractor' && view !== 'calendar') view = 'calendar';
   // Users management is admin-role only -- a ผู้ดูอย่างเดียว/ผรม. account
   // must never reach it even by calling switchView() directly (the tab
   // button itself is already hidden for them, see renderUserBadge_()).
@@ -8627,7 +8687,10 @@ function showLoginOverlay(errorMsg) {
   var ov = document.getElementById('loginOverlay');
   ov.style.display = '';
   var errEl = document.getElementById('loginError');
-  if (errorMsg) { errEl.textContent = errorMsg; errEl.style.display = ''; }
+  // 2026-09-19: #loginError uses the ".login-error" CSS class (display:none
+  // in the stylesheet), so style.display = '' can't override it -- only an
+  // explicit 'block' can. Same underlying bug as showUserFormError_ below.
+  if (errorMsg) { errEl.textContent = errorMsg; errEl.style.display = 'block'; }
   else { errEl.style.display = 'none'; }
 }
 
@@ -8899,7 +8962,14 @@ document.getElementById('ufRole').addEventListener('change', autofillUfAccessKey
 function showUserFormError_(msg) {
   var errEl = document.getElementById('userFormError');
   errEl.textContent = msg;
-  errEl.style.display = '';
+  // 2026-09-19 fix: #userFormError uses the shared ".login-error" CSS class,
+  // which sets display:none in the stylesheet (not as an inline style).
+  // Setting style.display = '' only clears an inline override -- it does
+  // NOT beat a class-level rule -- so the box stayed hidden no matter what
+  // this function did. That's the real reason "กดบันทึกไม่ได้ ไม่เกิดอะไรขึ้น":
+  // the validation was firing correctly, the message was just invisible.
+  // 'block' actually overrides the class rule.
+  errEl.style.display = 'block';
   errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -9048,18 +9118,20 @@ document.getElementById('resetPasswordCancelBtn').onclick = function() {
 document.getElementById('resetPasswordSaveBtn').onclick = function() {
   if (!CAN_EDIT) { alert('บัญชีนี้เป็นแบบดูอย่างเดียว ไม่สามารถแก้ไขได้'); return; }
   var errEl = document.getElementById('resetPasswordError');
+  // 2026-09-19: same ".login-error" class-vs-inline-style bug as loginError /
+  // userFormError -- style.display = '' never actually showed this box.
   var newPassword = document.getElementById('resetPasswordInput').value || '';
-  if (!newPassword) { errEl.textContent = 'กรุณากรอกรหัสผ่านใหม่'; errEl.style.display = ''; return; }
+  if (!newPassword) { errEl.textContent = 'กรุณากรอกรหัสผ่านใหม่'; errEl.style.display = 'block'; return; }
   fetch(RATINGS_WEBAPP_URL, {
     method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'user_reset_password', username: CURRENT_USER.username, user_id: RESET_PASSWORD_TARGET, password: newPassword })
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (!data || !data.success) { errEl.textContent = (data && data.error) || 'ทำรายการไม่สำเร็จ'; errEl.style.display = ''; return; }
+      if (!data || !data.success) { errEl.textContent = (data && data.error) || 'ทำรายการไม่สำเร็จ'; errEl.style.display = 'block'; return; }
       document.getElementById('resetPasswordModal').classList.remove('open');
     })
-    .catch(function() { errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'; errEl.style.display = ''; });
+    .catch(function() { errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'; errEl.style.display = 'block'; });
 };
 
 function fetchAuditLog_() {

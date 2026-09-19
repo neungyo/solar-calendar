@@ -310,6 +310,48 @@
   .login-box button { width:100%; margin-top:18px; padding:10px; font-size:14px; }
   .login-error { color:var(--red); font-size:13px; margin-top:10px; display:none; }
   .logout-link { font-size:12px; color:var(--muted); text-decoration:underline; cursor:pointer; margin-left:10px; }
+  /* First-admin bootstrap (2026-09-19): shown on the login screen only when
+     the Users sheet has no accounts yet, so Sure can create his own first
+     admin account without anyone needing to hand-edit a spreadsheet. */
+  .bootstrap-link { display:block; text-align:center; margin-top:14px; font-size:12px; color:var(--muted); text-decoration:underline; cursor:pointer; }
+  .bootstrap-box { display:none; margin-top:16px; padding-top:16px; border-top:1px dashed var(--border); }
+  .bootstrap-box .sub { margin-bottom:10px; }
+  /* Logged-in user badge (avatar + name + role) shown under the scope badge
+     on every page, and the account-avatar building blocks reused in the
+     admin Users tab's list/picker. */
+  .user-badge { display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .avatar-circle { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; overflow:hidden; }
+  .avatar-circle img { width:100%; height:100%; object-fit:cover; }
+  .user-badge .avatar-circle { width:32px; height:32px; font-size:17px; }
+  .user-badge-name { font-size:13px; font-weight:600; }
+  .user-badge-role { font-size:11px; color:var(--muted); }
+  .role-pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; }
+  .role-pill.admin { background:#eef2ff; color:#4338ca; }
+  .role-pill.viewer { background:#fef3c7; color:#92400e; }
+  .role-pill.contractor { background:#ecfdf5; color:#047857; }
+  /* Admin "จัดการผู้ใช้งาน" tab */
+  .users-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .users-table th, .users-table td { padding:8px 10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:middle; }
+  .users-table td.disabled-row, .users-table tr.disabled-row td { opacity:0.5; }
+  .user-form-box { max-width:480px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:20px; margin-bottom:18px; }
+  .user-form-box .field { margin-top:12px; }
+  .user-form-box label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  .user-form-box input, .user-form-box select { width:100%; border:1px solid var(--border); border-radius:6px; padding:8px 9px; font-size:14px; box-sizing:border-box; }
+  .avatar-picker { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .avatar-pick-btn { width:44px; height:44px; border-radius:50%; border:2px solid transparent; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:20px; padding:0; }
+  .avatar-pick-btn.selected { border-color:var(--accent); }
+  .avatar-pick-upload { width:44px; height:44px; border-radius:50%; border:1px dashed var(--border); background:#fafafa; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--muted); }
+  .user-row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .user-row-actions button { font-size:12px; padding:4px 9px; }
+  .audit-log-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .audit-log-table th, .audit-log-table td { padding:6px 8px; border-bottom:1px solid var(--border); text-align:left; }
+  /* view-only role (2026-09-19): body gets this class whenever the logged-in
+     account's role isn't admin, hiding every write/edit/delete/upload
+     trigger across the whole app in one place instead of chasing each one
+     individually -- the real enforcement is server-side (see doPost's role
+     gate) and each JS submit function's own CAN_EDIT guard; this class is
+     just so a viewer doesn't see dead buttons. */
+  body.view-only-role .edit-only { display:none !important; }
   /* Upload "arc reactor" spinner (Sure's request, 2026-09-02): a glowing
      rotating triangle shown on the upload button while a document is being
      checked/compressed/sent, so it's obvious the system is working. */
@@ -337,12 +379,31 @@
     </div>
     <div class="login-error" id="loginError"></div>
     <button id="loginSubmitBtn">เข้าสู่ระบบ</button>
+    <span class="bootstrap-link" id="bootstrapLinkBtn">ยังไม่มีบัญชีในระบบ? ตั้งค่าบัญชีแอดมินคนแรก</span>
+    <div class="bootstrap-box" id="bootstrapBox">
+      <div class="sub">ใช้ครั้งแรกครั้งเดียวตอนยังไม่มีผู้ใช้งานในระบบเลย ถ้ามีบัญชีอยู่แล้วจะสร้างไม่ได้</div>
+      <div class="field">
+        <label for="bsUserId">ชื่อผู้ใช้ (user id)</label>
+        <input type="text" id="bsUserId" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="bsName">ชื่อที่แสดง</label>
+        <input type="text" id="bsName">
+      </div>
+      <div class="field">
+        <label for="bsPassword">ตั้งรหัสผ่าน</label>
+        <input type="password" id="bsPassword" autocomplete="new-password">
+      </div>
+      <div class="login-error" id="bootstrapError"></div>
+      <button id="bootstrapSubmitBtn">สร้างบัญชีแอดมิน</button>
+    </div>
   </div>
 </div>
 <div class="brand-badge">☀️ NeuNgyo!26</div>
 <h1>ปฏิทินงานติดตั้ง Solar Cell — Progress Modern Trade</h1>
 <div class="sub">ข้อมูลจาก Google Sheet: SVP_Solar Cell Order Residential (sheet: Progress Modern trade) — ผ่าน Apps Script API</div>
 <div id="scopeBadge"></div>
+<div id="userBadge"></div>
 <div class="sub2" id="subLine2">อัปเดตล่าสุด: - &middot; งานทั้งหมด - งาน &middot; การเปลี่ยนแปลงตั้งแต่รอบก่อน: - รายการ</div>
 <div class="today-note">วันนี้: <span id="todayLabel"></span></div>
 <div class="status-bar" id="statusBar"><span class="status-dot" id="statusDot"></span><span id="statusText">กำลังตรวจสอบ...</span></div>
@@ -394,6 +455,7 @@
   <button class="secondary view-tab-btn" id="tabAllocBtn">🧭 แนะนำ ผรม. งานใหม่</button>
   <button class="secondary view-tab-btn" id="tabDashBtn">📈 Dashboard</button>
   <button class="secondary view-tab-btn" id="tabProblemBtn">🛠️ Problem</button>
+  <button class="secondary view-tab-btn" id="tabUsersBtn">👤 จัดการผู้ใช้งาน</button>
 </div>
 
 <div class="month-nav" id="monthNavRow">
@@ -907,6 +969,94 @@
   </div>
 </div>
 
+<div id="usersWrap" style="display:none;">
+  <div class="card-box">
+    <div class="overview-section-title">จัดการผู้ใช้งาน</div>
+    <div class="doc-table-toolbar">สร้าง/แก้ไขบัญชีผู้ใช้งาน กำหนดสิทธิ์ (แอดมิน / ผู้ดูอย่างเดียว / ผรม.) ตั้งค่า avatar และดูประวัติการเข้าใช้งาน/แก้ไข — เห็นเฉพาะบัญชีแอดมินเท่านั้น</div>
+
+    <button class="secondary" id="userNewBtn" style="margin:12px 0 16px;">+ สร้างบัญชีใหม่</button>
+
+    <div class="user-form-box" id="userFormBox" style="display:none;">
+      <div style="font-weight:600;margin-bottom:6px;" id="userFormTitle">สร้างบัญชีใหม่</div>
+      <div class="field">
+        <label for="ufUserId">ชื่อผู้ใช้ (user id)</label>
+        <input type="text" id="ufUserId">
+      </div>
+      <div class="field">
+        <label for="ufPassword" id="ufPasswordLabel">ตั้งรหัสผ่าน</label>
+        <input type="password" id="ufPassword" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label for="ufName">ชื่อที่แสดง</label>
+        <input type="text" id="ufName">
+      </div>
+      <div class="field">
+        <label for="ufPhone">เบอร์โทร</label>
+        <input type="text" id="ufPhone">
+      </div>
+      <div class="field">
+        <label for="ufEmail">อีเมล์</label>
+        <input type="text" id="ufEmail">
+      </div>
+      <div class="field">
+        <label for="ufRole">สิทธิ์การใช้งาน</label>
+        <select id="ufRole">
+          <option value="admin">แอดมิน (แก้ไข/บันทึกได้ทุกอย่าง)</option>
+          <option value="viewer">ผู้ดูอย่างเดียว (เห็นทุกแท็บ ทุกผรม. แต่แก้ไขไม่ได้)</option>
+          <option value="contractor">ผรม. (เห็นเฉพาะปฏิทินงานของตัวเอง)</option>
+        </select>
+      </div>
+      <div class="field" id="ufContractorField" style="display:none;">
+        <label for="ufContractor">ชื่อ ผรม. (ต้องตรงกับในระบบ)</label>
+        <input type="text" id="ufContractor">
+      </div>
+      <div class="field" id="ufAccessKeyField">
+        <label for="ufAccessKey">กุญแจสิทธิ์ (access key) <span style="font-weight:400;">— แอดมิน/ผู้ดูอย่างเดียวเว้นว่างได้ (ใช้ค่าเริ่มต้นอัตโนมัติ), ผรม.ต้องระบุกุญแจของผรม.รายนั้น</span></label>
+        <input type="text" id="ufAccessKey">
+      </div>
+      <div class="field">
+        <label>รูปโปรไฟล์ (avatar)</label>
+        <div class="avatar-picker" id="ufAvatarPicker"></div>
+        <input type="file" id="ufAvatarUpload" accept="image/*" style="display:none;">
+        <input type="hidden" id="ufAvatarValue">
+      </div>
+      <div class="login-error" id="userFormError"></div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button id="userFormSaveBtn">บันทึก</button>
+        <button class="secondary" id="userFormCancelBtn" type="button">ยกเลิก</button>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;margin-bottom:24px;">
+      <table class="users-table">
+        <thead><tr><th></th><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>เบอร์/อีเมล์</th><th>สิทธิ์</th><th>ผรม.</th><th>แก้ไขล่าสุด</th><th></th></tr></thead>
+        <tbody id="usersListBody"></tbody>
+      </table>
+    </div>
+
+    <div class="overview-section-title">ประวัติการเข้าใช้งาน/แก้ไข</div>
+    <div style="overflow-x:auto;">
+      <table class="audit-log-table">
+        <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>สิทธิ์</th><th>การกระทำ</th><th>เป้าหมาย</th><th>รายละเอียด</th></tr></thead>
+        <tbody id="auditLogBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="resetPasswordModal" class="modal-overlay">
+  <div class="modal-box" style="max-width:360px;">
+    <h3 style="margin-top:0;">ตั้งรหัสผ่านใหม่</h3>
+    <div class="sub" id="resetPasswordUserLabel" style="margin-bottom:10px;"></div>
+    <input type="password" id="resetPasswordInput" placeholder="รหัสผ่านใหม่" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:9px 10px;font-size:14px;">
+    <div class="login-error" id="resetPasswordError"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button id="resetPasswordSaveBtn">บันทึก</button>
+      <button class="secondary" id="resetPasswordCancelBtn" type="button">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 <div id="problemLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;">
   <img id="problemLightboxImg" src="" style="max-width:92vw;max-height:92vh;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,0.5);">
 </div>
@@ -1165,6 +1315,67 @@ var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || localStorage.getI
 // and is corrected to the real value in fetchData()'s success handler below.
 var CURRENT_SCOPE = 'admin';
 
+// Real per-account identity + roles (added 2026-09-19, Sure's request).
+// Separate from CURRENT_SCOPE above -- CURRENT_SCOPE only ever says "admin"
+// or "contractor" for JOB-DATA scoping (which rows doGet returns). A
+// ผู้ดูอย่างเดียว (viewer) account reuses the SAME admin key/scope as a real
+// admin so it sees the same data, but CAN_EDIT below is what every
+// write/edit/delete/upload button and function actually checks -- it's the
+// one true "is this account allowed to change anything" flag app-wide.
+var LOGIN_USER_STORAGE_NAME = 'solarLoginUser';
+var CURRENT_USER = (function() {
+  try { return JSON.parse(localStorage.getItem(LOGIN_USER_STORAGE_NAME) || 'null') || {}; }
+  catch (e) { return {}; }
+})();
+var CAN_EDIT = CURRENT_USER.role !== 'viewer' && CURRENT_USER.role !== 'contractor';
+// Shared guard called at the top of every write/edit/delete/upload function
+// app-wide (ratings, install/survey logs, checklist, CSAT, job docs,
+// cleaning log, problem cases) -- returns true (and alerts) if this account
+// isn't allowed to write, so the caller can just `if (blockIfViewOnly_())
+// return;`. The real enforcement is server-side (doPost's role gate in
+// Contractor_Ratings_Code_v2.gs.txt); this is the client-side half so a
+// ผู้ดูอย่างเดียว/ผรม. account gets an immediate, clear message instead of a
+// silent server rejection.
+function blockIfViewOnly_() {
+  if (CAN_EDIT) return false;
+  alert('บัญชีนี้เป็นแบบดูอย่างเดียว ไม่สามารถบันทึก/แก้ไข/ลบข้อมูลได้');
+  return true;
+}
+// 10 flat "hero badge" avatar presets (added 2026-09-19, Sure's fun request)
+// -- original colored badges + a generic emoji + the hero's name as a label,
+// not a reproduction of any character's actual artwork/likeness/logo, plus
+// a "custom photo" option that uploads through the admin Users tab.
+var AVATAR_PRESETS = [
+  { id: 'hero:ironman',      label: 'Iron Man',       bg: '#7c1d1d', emoji: '⚡' },
+  { id: 'hero:cap',          label: 'Captain America', bg: '#1d3a7c', emoji: '⭐' },
+  { id: 'hero:thor',         label: 'Thor',           bg: '#334155', emoji: '🔨' },
+  { id: 'hero:hulk',         label: 'Hulk',           bg: '#14532d', emoji: '👊' },
+  { id: 'hero:widow',        label: 'Black Widow',    bg: '#111827', emoji: '🕸️' },
+  { id: 'hero:spider',       label: 'Spider-Man',     bg: '#7c2d12', emoji: '🕷️' },
+  { id: 'hero:panther',      label: 'Black Panther',  bg: '#3b0764', emoji: '🐾' },
+  { id: 'hero:strange',      label: 'Doctor Strange', bg: '#78350f', emoji: '✨' },
+  { id: 'hero:marvel',       label: 'Captain Marvel', bg: '#1e40af', emoji: '🚀' },
+  { id: 'hero:starlord',     label: 'Star-Lord',      bg: '#0f766e', emoji: '🎧' }
+];
+function avatarPresetById_(id) {
+  for (var i = 0; i < AVATAR_PRESETS.length; i++) { if (AVATAR_PRESETS[i].id === id) return AVATAR_PRESETS[i]; }
+  return null;
+}
+// Renders one avatar (preset badge, custom photo URL, or a blank fallback)
+// as an .avatar-circle's innerHTML -- shared by the top-bar badge and the
+// admin Users tab's list/picker so they always look the same.
+function avatarHtml_(avatarValue, name) {
+  if (avatarValue && /^https?:\/\//.test(avatarValue)) {
+    return '<img src="' + avatarValue.replace(/"/g, '&quot;') + '" alt="">';
+  }
+  var preset = avatarValue ? avatarPresetById_(avatarValue) : null;
+  if (preset) {
+    return '<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:' + preset.bg + ';">' + preset.emoji + '</span>';
+  }
+  var initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  return '<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:#9ca3af;color:#fff;font-weight:600;">' + escHtml(initial) + '</span>';
+}
+
 var JOBS = [];
 var EVENTS = [];
 // "Project" tab (2026-08-07) was REPLACED by the "Problem" tab (2026-09-07,
@@ -1388,6 +1599,7 @@ function updateCleaningConditionText_() {
 
 var cleaningBaseMonthsUpdateBtnEl_ = document.getElementById('cleaningBaseMonthsUpdateBtn');
 if (cleaningBaseMonthsUpdateBtnEl_) cleaningBaseMonthsUpdateBtnEl_.onclick = function() {
+  if (blockIfViewOnly_()) return;
   var input = document.getElementById('cleaningBaseMonthsInput');
   var msgEl = document.getElementById('cleaningBaseMonthsMsg');
   var months = parseInt(input.value, 10);
@@ -2619,6 +2831,7 @@ function setDocUploadBtnLabel_(text, busy) {
 }
 
 function deleteJobDoc(row) {
+  if (blockIfViewOnly_()) return;
   if (!currentDocsJob) return;
   if (!row || row < 2) return;
   if (!confirm('ยืนยันลบเอกสารนี้หรือไม่? (จะลบไฟล์ออกจาก Google Drive ด้วย)')) return;
@@ -2705,6 +2918,7 @@ if (mCleaningPhotoListEl_) {
 }
 
 function submitCleaningLog_() {
+  if (blockIfViewOnly_()) return;
   var errEl = document.getElementById('mCleaningPhotoError');
   var loggedByEl = document.getElementById('mCleaningLoggedBy');
   var noteEl = document.getElementById('mCleaningNote');
@@ -2779,6 +2993,7 @@ var mCleaningPhotoSubmitBtnEl_ = document.getElementById('mCleaningPhotoSubmitBt
 if (mCleaningPhotoSubmitBtnEl_) mCleaningPhotoSubmitBtnEl_.onclick = function() { submitCleaningLog_(); };
 
 function deleteCleaningLog_(row) {
+  if (blockIfViewOnly_()) return;
   if (!currentCleaningJob || !row || row < 2) return;
   if (!confirm('ยืนยันลบบันทึกนี้หรือไม่? (จะลบรูปภาพออกจาก Google Drive ด้วย)')) return;
   var job = currentCleaningJob, idx = currentCleaningIndex;
@@ -2967,6 +3182,7 @@ function updateChecklistBar(items, state) {
 }
 
 function toggleChecklistItem(key, checked, cbEl) {
+  if (blockIfViewOnly_()) { if (cbEl) cbEl.checked = !checked; return; }
   if (!currentChecklistJob) return;
   var job = currentChecklistJob;
   var errEl = document.getElementById('checklistError');
@@ -3093,6 +3309,7 @@ function startEditInstallLog(row) {
 }
 
 function deleteInstallLog(row) {
+  if (blockIfViewOnly_()) return;
   if (!currentLogJob) return;
   if (!confirm('ยืนยันลบบันทึกนี้หรือไม่?')) return;
   var job = currentLogJob;
@@ -3122,6 +3339,7 @@ function deleteInstallLog(row) {
 }
 
 function submitInstallLog() {
+  if (blockIfViewOnly_()) return;
   if (!currentLogJob) return;
   var date = document.getElementById('mLogDate').value;
   var status = document.getElementById('mLogStatus').value;
@@ -3270,6 +3488,7 @@ function startEditSurveyLog(row) {
 }
 
 function deleteSurveyLogEntry(row) {
+  if (blockIfViewOnly_()) return;
   if (!currentSurveyLogJob) return;
   if (!confirm('ยืนยันลบบันทึกนี้หรือไม่?')) return;
   var job = currentSurveyLogJob;
@@ -3298,6 +3517,7 @@ function deleteSurveyLogEntry(row) {
 }
 
 function submitSurveyLog() {
+  if (blockIfViewOnly_()) return;
   if (!currentSurveyLogJob) return;
   var date = document.getElementById('mSurveyLogDate').value;
   var result = document.getElementById('mSurveyLogResult').value;
@@ -7059,6 +7279,7 @@ function fileToBase64_(blob) {
 }
 
 function submitProblemLog_(c) {
+  if (blockIfViewOnly_()) return;
   var errEl = document.getElementById('plError');
   var logDateEl = document.getElementById('plLogDate');
   var loggedByEl = document.getElementById('plLoggedBy');
@@ -7226,6 +7447,7 @@ function openProblemEditForm_(c) {
 }
 
 function submitProblemCase_() {
+  if (blockIfViewOnly_()) return;
   var errEl = document.getElementById('pcError');
   var tsApp = (document.getElementById('pcTsApp').value || '').trim();
   var problemTsJob = (document.getElementById('pcProblemTsJob').value || '').trim();
@@ -7332,6 +7554,7 @@ function submitProblemCase_() {
 }
 
 function deleteProblemCase_(row) {
+  if (blockIfViewOnly_()) return;
   var c = problemCaseByRow_(row);
   if (!c) return;
   if (!confirm('ยืนยันลบเคสนี้หรือไม่? (' + (c.site || c.customer || c.ts_app || '') + ')')) return;
@@ -7680,6 +7903,10 @@ function switchView(view) {
   // other way, a contractor-scoped session can never actually switch away
   // from the calendar.
   if (CURRENT_SCOPE !== 'admin' && view !== 'calendar') view = 'calendar';
+  // Users management is admin-role only -- a ผู้ดูอย่างเดียว/ผรม. account
+  // must never reach it even by calling switchView() directly (the tab
+  // button itself is already hidden for them, see renderUserBadge_()).
+  if (view === 'users' && CURRENT_USER.role !== 'admin') view = 'calendar';
   document.getElementById('tabCalendarBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('tabDocBtn').classList.toggle('active', view === 'doc');
   document.getElementById('tabOverviewBtn').classList.toggle('active', view === 'overview');
@@ -7688,6 +7915,7 @@ function switchView(view) {
   document.getElementById('tabAllocBtn').classList.toggle('active', view === 'alloc');
   document.getElementById('tabDashBtn').classList.toggle('active', view === 'dash');
   document.getElementById('tabProblemBtn').classList.toggle('active', view === 'problem');
+  document.getElementById('tabUsersBtn').classList.toggle('active', view === 'users');
   document.getElementById('calendarWrap').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('monthNavRow').style.display = (view === 'calendar') ? '' : 'none';
   document.getElementById('zoomControls').style.display = (view === 'calendar') ? '' : 'none';
@@ -7698,6 +7926,7 @@ function switchView(view) {
   document.getElementById('allocWrap').style.display = (view === 'alloc') ? '' : 'none';
   document.getElementById('dashWrap').style.display = (view === 'dash') ? '' : 'none';
   document.getElementById('problemWrap').style.display = (view === 'problem') ? '' : 'none';
+  document.getElementById('usersWrap').style.display = (view === 'users') ? '' : 'none';
   if (view === 'doc') { renderDocTable(); renderTacPipelineStats(); renderTacPipelineChart(); renderTacContractorChart(); renderTacContractorTable(); renderTacIntentStats(); }
   if (view === 'overview') { renderOverviewStats(); renderOverviewTable(); renderContractorStatusChart(); renderStalledContractorChart(); renderSurveyMonthlyChart(); renderMonthlyChart(); populateMonthPicker(); renderMonthPickerBreakdown(); }
   if (view === 'eval') { renderEvalTable(); }
@@ -7705,6 +7934,7 @@ function switchView(view) {
   if (view === 'alloc') { renderAllocTable(); }
   if (view === 'dash') { renderDashboard(); }
   if (view === 'problem') { renderProblemCaseList(); renderProblemTab(); }
+  if (view === 'users') { fetchUsersList_(); fetchAuditLog_(); }
 }
 
 function onFiltersChanged() {
@@ -7718,6 +7948,7 @@ function onFiltersChanged() {
 }
 
 document.getElementById('tabProblemBtn').onclick = function() { switchView('problem'); };
+document.getElementById('tabUsersBtn').onclick = function() { switchView('users'); };
 document.getElementById('tabCalendarBtn').onclick = function() { switchView('calendar'); };
 document.getElementById('tabDocBtn').onclick = function() { switchView('doc'); };
 document.getElementById('tabOverviewBtn').onclick = function() { switchView('overview'); };
@@ -7859,6 +8090,7 @@ document.getElementById('ratingModalOverlay').addEventListener('click', function
   }
 });
 document.getElementById('ratingModalSubmit').onclick = function() {
+  if (blockIfViewOnly_()) return;
   var errEl = document.getElementById('ratingModalError');
   var rater = document.getElementById('raterName').value.trim();
   if (!rater) {
@@ -7925,6 +8157,7 @@ document.getElementById('csatModalOverlay').addEventListener('click', function(e
 // both post to the same handleCsatSubmit_ backend endpoint, just with a
 // different outcome value (or none, for a real score submission).
 function submitCsatPayload_(outcomeOverride) {
+  if (blockIfViewOnly_()) return;
   var errEl = document.getElementById('csatModalError');
   var caller = document.getElementById('csatCallerName').value.trim();
   if (!caller) {
@@ -8005,6 +8238,7 @@ document.getElementById('surveyCsatModalOverlay').addEventListener('click', func
   }
 });
 function submitSurveyCsatPayload_(outcomeOverride) {
+  if (blockIfViewOnly_()) return;
   var errEl = document.getElementById('surveyCsatModalError');
   var caller = document.getElementById('surveyCsatCallerName').value.trim();
   if (!caller) {
@@ -8076,6 +8310,7 @@ document.getElementById('surveyCsatModalSubmit').onclick = function() { submitSu
 document.getElementById('surveyCsatCloseCaseBtn').onclick = function() { submitSurveyCsatPayload_(CSAT_OUTCOME_CLOSE_); };
 
 document.getElementById('mDocUploadBtn').onclick = function() {
+  if (blockIfViewOnly_()) return;
   var errEl = document.getElementById('mDocError');
   var fileEl = document.getElementById('mDocFile');
   var urlEl = document.getElementById('mDocUrl');
@@ -8382,6 +8617,36 @@ function hideLoginOverlay() {
   document.getElementById('loginOverlay').style.display = 'none';
 }
 
+// Renders the avatar+name+role badge under the scope badge, and shows/hides
+// the "จัดการผู้ใช้งาน" tab (admin only -- a ผู้ดูอย่างเดียว/ผรม. account
+// must never see or reach account management even though it otherwise sees
+// every tab like an admin does). Called right after login and again once
+// fetchData() resolves (so it survives the page's normal refresh cycle).
+function renderUserBadge_() {
+  var host = document.getElementById('userBadge');
+  if (!host) return;
+  if (!CURRENT_USER.username) { host.innerHTML = ''; return; }
+  var roleLabel = CURRENT_USER.role === 'admin' ? 'แอดมิน' : (CURRENT_USER.role === 'viewer' ? 'ผู้ดูอย่างเดียว' : 'ผรม.');
+  host.innerHTML =
+    '<div class="user-badge">' +
+      '<span class="avatar-circle">' + avatarHtml_(CURRENT_USER.avatar, CURRENT_USER.label) + '</span>' +
+      '<span><span class="user-badge-name">' + escHtml(CURRENT_USER.label || CURRENT_USER.username) + '</span>' +
+      ' <span class="role-pill ' + CURRENT_USER.role + '">' + roleLabel + '</span></span>' +
+    '</div>';
+  document.body.classList.toggle('view-only-role', !CAN_EDIT);
+  var usersTabBtn = document.getElementById('tabUsersBtn');
+  if (usersTabBtn) usersTabBtn.style.display = (CURRENT_USER.role === 'admin') ? '' : 'none';
+}
+
+function persistCurrentUser_(data, username) {
+  CURRENT_USER = {
+    username: data.username || username, role: data.role || '', label: data.label || username,
+    avatar: data.avatar || '', contractor: data.contractor || ''
+  };
+  CAN_EDIT = CURRENT_USER.role !== 'viewer' && CURRENT_USER.role !== 'contractor';
+  try { localStorage.setItem(LOGIN_USER_STORAGE_NAME, JSON.stringify(CURRENT_USER)); } catch (e) {}
+}
+
 function attemptLogin() {
   var username = (document.getElementById('loginUsername').value || '').trim();
   var password = document.getElementById('loginPassword').value || '';
@@ -8392,7 +8657,10 @@ function attemptLogin() {
   }
   btn.disabled = true;
   btn.textContent = 'กำลังตรวจสอบ...';
-  fetch(WEBAPP_URL, {
+  // 2026-09-19: login now happens against the ratings/accounts backend
+  // (real per-account Users sheet) instead of the old shared LOGIN_ACCOUNTS_JSON
+  // login on the data-fetch script -- see Contractor_Ratings_Code_v2.gs.txt.
+  fetch(RATINGS_WEBAPP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: 'login', username: username, password: password })
@@ -8405,6 +8673,8 @@ function attemptLogin() {
       }
       localStorage.setItem(LOGIN_KEY_STORAGE_NAME, data.key);
       ACCESS_KEY = data.key;
+      persistCurrentUser_(data, username);
+      renderUserBadge_();
       hideLoginOverlay();
       document.getElementById('loadingOverlay').style.display = '';
       document.getElementById('loadingOverlay').textContent = 'กำลังโหลดข้อมูลล่าสุด...';
@@ -8425,8 +8695,291 @@ document.getElementById('loginPassword').addEventListener('keydown', function(ev
 });
 document.getElementById('logoutBtn').onclick = function() {
   localStorage.removeItem(LOGIN_KEY_STORAGE_NAME);
+  localStorage.removeItem(LOGIN_USER_STORAGE_NAME);
   window.location.href = window.location.pathname;
 };
+
+// First-admin bootstrap (2026-09-19): only meaningful the very first time,
+// before the Users sheet has any rows -- see handleUserCreate_'s isBootstrap
+// check in Contractor_Ratings_Code_v2.gs.txt. Harmless to click any other
+// time -- the backend just answers "forbidden" since a real admin already
+// exists, and that's shown as a plain error message here.
+document.getElementById('bootstrapLinkBtn').onclick = function() {
+  var box = document.getElementById('bootstrapBox');
+  box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+};
+document.getElementById('bootstrapSubmitBtn').onclick = function() {
+  var userId = (document.getElementById('bsUserId').value || '').trim();
+  var name = (document.getElementById('bsName').value || '').trim();
+  var password = document.getElementById('bsPassword').value || '';
+  var errEl = document.getElementById('bootstrapError');
+  var btn = document.getElementById('bootstrapSubmitBtn');
+  errEl.style.display = 'none';
+  if (!userId || !password) {
+    errEl.textContent = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
+    errEl.style.display = '';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'กำลังสร้าง...';
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'user_create', user_id: userId, name: name || userId, password: password })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.success) {
+        errEl.textContent = (data && data.error) ? data.error : 'สร้างบัญชีไม่สำเร็จ ลองใหม่อีกครั้ง';
+        errEl.style.display = '';
+        return;
+      }
+      document.getElementById('loginUsername').value = userId;
+      document.getElementById('loginPassword').value = '';
+      document.getElementById('bootstrapBox').style.display = 'none';
+      showLoginOverlay('สร้างบัญชีแอดมินสำเร็จแล้ว กรุณากรอกรหัสผ่านแล้วเข้าสู่ระบบ');
+    })
+    .catch(function() {
+      errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง';
+      errEl.style.display = '';
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'สร้างบัญชีแอดมิน';
+    });
+};
+
+// ===== Admin "จัดการผู้ใช้งาน" tab (added 2026-09-19, Sure's request) =====
+var USERS_CACHE = [];
+var EDITING_USER_ID = null; // null while creating a new account
+
+function renderAvatarPicker_(selectedValue) {
+  var host = document.getElementById('ufAvatarPicker');
+  var html = AVATAR_PRESETS.map(function(p) {
+    var sel = (p.id === selectedValue) ? ' selected' : '';
+    return '<button type="button" class="avatar-pick-btn' + sel + '" data-avatar="' + p.id + '" style="background:' + p.bg + ';" title="' + escHtml(p.label) + '">' + p.emoji + '</button>';
+  }).join('');
+  var isCustom = selectedValue && /^https?:\/\//.test(selectedValue);
+  html += '<button type="button" class="avatar-pick-upload' + (isCustom ? ' selected' : '') + '" id="ufAvatarUploadBtn" title="อัปโหลดรูปเอง">' +
+    (isCustom ? '<img src="' + selectedValue.replace(/"/g,'&quot;') + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">' : '📷') + '</button>';
+  host.innerHTML = html;
+  host.querySelectorAll('.avatar-pick-btn').forEach(function(b) {
+    b.onclick = function() { selectAvatar_(b.getAttribute('data-avatar')); };
+  });
+  document.getElementById('ufAvatarUploadBtn').onclick = function() { document.getElementById('ufAvatarUpload').click(); };
+}
+
+function selectAvatar_(value) {
+  document.getElementById('ufAvatarValue').value = value;
+  renderAvatarPicker_(value);
+}
+
+document.getElementById('ufAvatarUpload').addEventListener('change', function(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    var base64 = String(reader.result || '').split(',')[1] || '';
+    fetch(RATINGS_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        key: RATINGS_ACCESS_KEY, type: 'avatar_upload', username: CURRENT_USER.username,
+        user_id: EDITING_USER_ID || '', fileData: base64, mimeType: file.type || 'image/jpeg'
+      })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.success && data.url) { selectAvatar_(data.url); }
+        else { alert('อัปโหลดรูปไม่สำเร็จ: ' + ((data && data.error) || 'ไม่ทราบสาเหตุ')); }
+      })
+      .catch(function() { alert('เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'); });
+  };
+  reader.readAsDataURL(file);
+  ev.target.value = '';
+});
+
+document.getElementById('ufRole').addEventListener('change', function() {
+  var role = this.value;
+  document.getElementById('ufContractorField').style.display = (role === 'contractor') ? '' : 'none';
+});
+
+function openUserForm_(user) {
+  EDITING_USER_ID = user ? user.user_id : null;
+  document.getElementById('userFormTitle').textContent = user ? ('แก้ไขบัญชี: ' + user.user_id) : 'สร้างบัญชีใหม่';
+  document.getElementById('userFormError').style.display = 'none';
+  document.getElementById('ufUserId').value = user ? user.user_id : '';
+  document.getElementById('ufUserId').disabled = !!user;
+  document.getElementById('ufPasswordLabel').textContent = user ? 'รหัสผ่าน (เว้นว่างไว้ถ้าไม่เปลี่ยน — ใช้ปุ่ม "ตั้งรหัสผ่านใหม่" ในตารางแทน)' : 'ตั้งรหัสผ่าน';
+  document.getElementById('ufPassword').value = '';
+  document.getElementById('ufPassword').style.display = user ? 'none' : '';
+  document.getElementById('ufName').value = user ? (user.name || '') : '';
+  document.getElementById('ufPhone').value = user ? (user.phone || '') : '';
+  document.getElementById('ufEmail').value = user ? (user.email || '') : '';
+  document.getElementById('ufRole').value = user ? (user.role || 'admin') : 'admin';
+  document.getElementById('ufContractorField').style.display = (user && user.role === 'contractor') ? '' : 'none';
+  document.getElementById('ufContractor').value = user ? (user.contractor || '') : '';
+  document.getElementById('ufAccessKey').value = '';
+  selectAvatar_(user ? (user.avatar || '') : '');
+  document.getElementById('userFormBox').style.display = '';
+  document.getElementById('userFormBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+document.getElementById('userNewBtn').onclick = function() { openUserForm_(null); };
+document.getElementById('userFormCancelBtn').onclick = function() { document.getElementById('userFormBox').style.display = 'none'; };
+
+document.getElementById('userFormSaveBtn').onclick = function() {
+  if (!CAN_EDIT) { alert('บัญชีนี้เป็นแบบดูอย่างเดียว ไม่สามารถบันทึกได้'); return; }
+  var errEl = document.getElementById('userFormError');
+  errEl.style.display = 'none';
+  var userId = (document.getElementById('ufUserId').value || '').trim();
+  var name = (document.getElementById('ufName').value || '').trim();
+  var role = document.getElementById('ufRole').value;
+  var payload = {
+    key: RATINGS_ACCESS_KEY, username: CURRENT_USER.username,
+    user_id: userId, name: name, phone: (document.getElementById('ufPhone').value || '').trim(),
+    email: (document.getElementById('ufEmail').value || '').trim(), role: role,
+    contractor: (document.getElementById('ufContractor').value || '').trim(),
+    access_key: (document.getElementById('ufAccessKey').value || '').trim(),
+    avatar: document.getElementById('ufAvatarValue').value || ''
+  };
+  if (!userId) { errEl.textContent = 'กรุณากรอกชื่อผู้ใช้'; errEl.style.display = ''; return; }
+  if (!EDITING_USER_ID) {
+    payload.type = 'user_create';
+    payload.password = document.getElementById('ufPassword').value || '';
+    if (!payload.password) { errEl.textContent = 'กรุณาตั้งรหัสผ่าน'; errEl.style.display = ''; return; }
+  } else {
+    payload.type = 'user_update';
+  }
+  var btn = document.getElementById('userFormSaveBtn');
+  btn.disabled = true;
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload)
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.success) {
+        errEl.textContent = (data && data.error) ? data.error : 'บันทึกไม่สำเร็จ';
+        errEl.style.display = '';
+        return;
+      }
+      document.getElementById('userFormBox').style.display = 'none';
+      fetchUsersList_();
+    })
+    .catch(function() { errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'; errEl.style.display = ''; })
+    .finally(function() { btn.disabled = false; });
+};
+
+function userRoleLabel_(role) {
+  return role === 'admin' ? 'แอดมิน' : (role === 'viewer' ? 'ผู้ดูอย่างเดียว' : 'ผรม.');
+}
+
+function renderUsersList_() {
+  var body = document.getElementById('usersListBody');
+  if (!USERS_CACHE.length) { body.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">ยังไม่มีบัญชีผู้ใช้งาน</td></tr>'; return; }
+  body.innerHTML = USERS_CACHE.map(function(u) {
+    return '<tr class="' + (u.disabled ? 'disabled-row' : '') + '">' +
+      '<td><span class="avatar-circle">' + avatarHtml_(u.avatar, u.name) + '</span></td>' +
+      '<td>' + escHtml(u.user_id) + '</td>' +
+      '<td>' + escHtml(u.name || '') + '</td>' +
+      '<td>' + escHtml(u.phone || '') + (u.email ? ('<br>' + escHtml(u.email)) : '') + '</td>' +
+      '<td><span class="role-pill ' + u.role + '">' + userRoleLabel_(u.role) + '</span></td>' +
+      '<td>' + escHtml(u.contractor || '-') + '</td>' +
+      '<td>' + escHtml(u.updated_at || u.created_at || '-') + '</td>' +
+      '<td><div class="user-row-actions">' +
+        '<button class="secondary" data-act="edit" data-id="' + escHtml(u.user_id) + '">แก้ไข</button>' +
+        '<button class="secondary" data-act="reset" data-id="' + escHtml(u.user_id) + '">ตั้งรหัสผ่านใหม่</button>' +
+        '<button class="secondary" data-act="toggle" data-id="' + escHtml(u.user_id) + '" data-disabled="' + (u.disabled ? '1' : '0') + '">' + (u.disabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน') + '</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+  body.querySelectorAll('button[data-act]').forEach(function(b) {
+    b.onclick = function() {
+      var act = b.getAttribute('data-act');
+      var id = b.getAttribute('data-id');
+      var u = USERS_CACHE.filter(function(x) { return x.user_id === id; })[0];
+      if (!u) return;
+      if (act === 'edit') openUserForm_(u);
+      else if (act === 'reset') openResetPasswordModal_(u);
+      else if (act === 'toggle') setUserDisabled_(id, b.getAttribute('data-disabled') !== '1');
+    };
+  });
+}
+
+function fetchUsersList_() {
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'user_list', username: CURRENT_USER.username })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.success) { USERS_CACHE = data.users || []; renderUsersList_(); }
+    })
+    .catch(function() {});
+}
+
+function setUserDisabled_(userId, disabled) {
+  if (!CAN_EDIT) { alert('บัญชีนี้เป็นแบบดูอย่างเดียว ไม่สามารถแก้ไขได้'); return; }
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'user_set_disabled', username: CURRENT_USER.username, user_id: userId, disabled: disabled })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.success) { alert((data && data.error) || 'ทำรายการไม่สำเร็จ'); return; }
+      fetchUsersList_();
+    })
+    .catch(function() { alert('เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'); });
+}
+
+var RESET_PASSWORD_TARGET = null;
+function openResetPasswordModal_(u) {
+  RESET_PASSWORD_TARGET = u.user_id;
+  document.getElementById('resetPasswordUserLabel').textContent = 'บัญชี: ' + u.user_id + (u.name ? (' (' + u.name + ')') : '');
+  document.getElementById('resetPasswordInput').value = '';
+  document.getElementById('resetPasswordError').style.display = 'none';
+  document.getElementById('resetPasswordModal').classList.add('open');
+}
+document.getElementById('resetPasswordCancelBtn').onclick = function() {
+  document.getElementById('resetPasswordModal').classList.remove('open');
+};
+document.getElementById('resetPasswordSaveBtn').onclick = function() {
+  if (!CAN_EDIT) { alert('บัญชีนี้เป็นแบบดูอย่างเดียว ไม่สามารถแก้ไขได้'); return; }
+  var errEl = document.getElementById('resetPasswordError');
+  var newPassword = document.getElementById('resetPasswordInput').value || '';
+  if (!newPassword) { errEl.textContent = 'กรุณากรอกรหัสผ่านใหม่'; errEl.style.display = ''; return; }
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'user_reset_password', username: CURRENT_USER.username, user_id: RESET_PASSWORD_TARGET, password: newPassword })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.success) { errEl.textContent = (data && data.error) || 'ทำรายการไม่สำเร็จ'; errEl.style.display = ''; return; }
+      document.getElementById('resetPasswordModal').classList.remove('open');
+    })
+    .catch(function() { errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'; errEl.style.display = ''; });
+};
+
+function fetchAuditLog_() {
+  fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'audit_log_list', username: CURRENT_USER.username, limit: 300 })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var body = document.getElementById('auditLogBody');
+      if (!data || !data.success || !data.logs || !data.logs.length) {
+        body.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">ยังไม่มีประวัติ</td></tr>';
+        return;
+      }
+      body.innerHTML = data.logs.map(function(l) {
+        return '<tr><td>' + escHtml(l.ts || '') + '</td><td>' + escHtml(l.name || l.user_id || '') + '</td>' +
+          '<td>' + (l.role ? ('<span class="role-pill ' + l.role + '">' + userRoleLabel_(l.role) + '</span>') : '') + '</td>' +
+          '<td>' + escHtml(l.action || '') + '</td><td>' + escHtml(l.target || '') + '</td><td>' + escHtml(l.detail || '') + '</td></tr>';
+      }).join('');
+    })
+    .catch(function() {});
+}
 
 // Transient-failure retry wrapper (Sure's request, 2026-08-04).
 // Google Apps Script occasionally answers a web-app request with ITS OWN HTML
@@ -8510,6 +9063,7 @@ function fetchData(isManualClick) {
         ' &middot; งานทั้งหมด ' + (data.total_jobs||0) + ' งาน &middot; การเปลี่ยนแปลงตั้งแต่รอบก่อน: ' + (data.changed_jobs||[]).length + ' รายการ';
       renderScopeBadge(data.scope, data.contractor);
       applyScopeRestriction(data.scope);
+      renderUserBadge_();
       renderServiceLegend();
       rebuildFilterOptions();
       renderBanner(data.changed_jobs, data.new_jobs);

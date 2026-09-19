@@ -327,6 +327,7 @@
   .user-badge-role { font-size:11px; color:var(--muted); }
   .role-pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; }
   .role-pill.admin { background:#eef2ff; color:#4338ca; }
+  .role-pill.staff { background:#e0f2fe; color:#0369a1; }
   .role-pill.viewer { background:#fef3c7; color:#92400e; }
   .role-pill.contractor { background:#ecfdf5; color:#047857; }
   /* Admin "จัดการผู้ใช้งาน" tab */
@@ -1005,7 +1006,8 @@
       <div class="field">
         <label for="ufRole">สิทธิ์การใช้งาน</label>
         <select id="ufRole">
-          <option value="admin">แอดมิน (แก้ไข/บันทึกได้ทุกอย่าง)</option>
+          <option value="admin">แอดมิน (แก้ไข/บันทึกได้ทุกอย่าง + จัดการผู้ใช้งานได้)</option>
+          <option value="staff">ทีมงาน (แก้ไข/บันทึกได้เหมือนแอดมิน แต่จัดการผู้ใช้งานไม่ได้)</option>
           <option value="viewer">ผู้ดูอย่างเดียว (เห็นทุกแท็บ ทุกผรม. แต่แก้ไขไม่ได้)</option>
           <option value="contractor">ผรม. (เห็นเฉพาะปฏิทินงานของตัวเอง)</option>
         </select>
@@ -8630,7 +8632,7 @@ function renderUserBadge_() {
   var host = document.getElementById('userBadge');
   if (!host) return;
   if (!CURRENT_USER.username) { host.innerHTML = ''; return; }
-  var roleLabel = CURRENT_USER.role === 'admin' ? 'แอดมิน' : (CURRENT_USER.role === 'viewer' ? 'ผู้ดูอย่างเดียว' : 'ผรม.');
+  var roleLabel = userRoleLabel_(CURRENT_USER.role);
   host.innerHTML =
     '<div class="user-badge">' +
       '<span class="avatar-circle">' + avatarHtml_(CURRENT_USER.avatar, CURRENT_USER.label) + '</span>' +
@@ -8835,7 +8837,7 @@ function rememberAdminAccessKey_(key) {
 function autofillUfAccessKey_() {
   var role = document.getElementById('ufRole').value;
   var el = document.getElementById('ufAccessKey');
-  if ((role === 'admin' || role === 'viewer') && !el.value) {
+  if ((role === 'admin' || role === 'staff' || role === 'viewer') && !el.value) {
     el.value = rememberedAdminAccessKey_();
   }
 }
@@ -8908,7 +8910,7 @@ document.getElementById('userFormSaveBtn').onclick = function() {
       // Remember this key in the browser so the field is pre-filled next
       // time an admin/ผู้ดูอย่างเดียว account is created (only for those two
       // roles -- a ผรม. key is specific to one contractor, never reused).
-      if ((role === 'admin' || role === 'viewer') && accessKeyTyped) rememberAdminAccessKey_(accessKeyTyped);
+      if ((role === 'admin' || role === 'staff' || role === 'viewer') && accessKeyTyped) rememberAdminAccessKey_(accessKeyTyped);
       document.getElementById('userFormBox').style.display = 'none';
       fetchUsersList_();
     })
@@ -8917,7 +8919,10 @@ document.getElementById('userFormSaveBtn').onclick = function() {
 };
 
 function userRoleLabel_(role) {
-  return role === 'admin' ? 'แอดมิน' : (role === 'viewer' ? 'ผู้ดูอย่างเดียว' : 'ผรม.');
+  if (role === 'admin') return 'แอดมิน';
+  if (role === 'staff') return 'ทีมงาน';
+  if (role === 'viewer') return 'ผู้ดูอย่างเดียว';
+  return 'ผรม.';
 }
 
 function renderUsersList_() {

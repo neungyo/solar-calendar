@@ -394,6 +394,10 @@
         <label for="bsPassword">ตั้งรหัสผ่าน</label>
         <input type="password" id="bsPassword" autocomplete="new-password">
       </div>
+      <div class="field">
+        <label for="bsAccessKey">กุญแจสิทธิ์ admin (access key) <span style="font-weight:400;">— คัดลอกจากกุญแจที่มี "scope": "admin" ใน ACCESS_KEYS_JSON (Script Property ของสคริปต์ข้อมูลปฏิทิน) เว้นว่างได้ถ้าตั้งค่า DEFAULT_ADMIN_ACCESS_KEY ไว้ในสคริปต์ Contracor_ratings แล้ว</span></label>
+        <input type="text" id="bsAccessKey" autocomplete="off">
+      </div>
       <div class="login-error" id="bootstrapError"></div>
       <button id="bootstrapSubmitBtn">สร้างบัญชีแอดมิน</button>
     </div>
@@ -8712,9 +8716,11 @@ document.getElementById('bootstrapSubmitBtn').onclick = function() {
   var userId = (document.getElementById('bsUserId').value || '').trim();
   var name = (document.getElementById('bsName').value || '').trim();
   var password = document.getElementById('bsPassword').value || '';
+  var accessKey = (document.getElementById('bsAccessKey').value || '').trim();
   var errEl = document.getElementById('bootstrapError');
   var btn = document.getElementById('bootstrapSubmitBtn');
   errEl.style.display = 'none';
+  errEl.style.color = '';
   if (!userId || !password) {
     errEl.textContent = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
     errEl.style.display = '';
@@ -8725,7 +8731,7 @@ document.getElementById('bootstrapSubmitBtn').onclick = function() {
   fetch(RATINGS_WEBAPP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'user_create', user_id: userId, name: name || userId, password: password })
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'user_create', user_id: userId, name: name || userId, password: password, access_key: accessKey })
   })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -8737,7 +8743,11 @@ document.getElementById('bootstrapSubmitBtn').onclick = function() {
       document.getElementById('loginUsername').value = userId;
       document.getElementById('loginPassword').value = '';
       document.getElementById('bootstrapBox').style.display = 'none';
-      showLoginOverlay('สร้างบัญชีแอดมินสำเร็จแล้ว กรุณากรอกรหัสผ่านแล้วเข้าสู่ระบบ');
+      // Success message reuses the same box as errors below but shown in
+      // green, not red -- otherwise "สร้างบัญชีสำเร็จ" looks like a failure.
+      errEl.style.color = 'var(--green, #16a34a)';
+      errEl.textContent = 'สร้างบัญชีแอดมินสำเร็จแล้ว กรุณากรอกรหัสผ่านแล้วกดเข้าสู่ระบบด้านบน';
+      errEl.style.display = '';
     })
     .catch(function() {
       errEl.textContent = 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง';

@@ -429,8 +429,15 @@
   /* #problemViewOverlay's own "+ เพิ่มบันทึก" submit button (id=plSubmitBtn)
      happens to also use the "secondary" class here (unlike every other
      modal's save button), so ":not(.secondary)" alone would have missed
-     it -- exclude only the real close button (#pvCloseBtn) by id instead. */
-  body.view-only-role #problemViewOverlay button:not(#pvCloseBtn),
+     it -- exclude the real close button (#pvCloseBtn) by id instead. Also
+     exclude #plReportBtn (2026-09-20): unlike every other write action in
+     this app, generating the customer PDF report is deliberately ALLOWED
+     for a viewer account (Sure's own management use it to present/export
+     cases), so it must stay clickable even though everything else in this
+     modal is greyed out for that role -- the server-side gate in
+     Contractor_Ratings_Code_v2.gs.txt separately still blocks contractor
+     accounts from this specific action. */
+  body.view-only-role #problemViewOverlay button:not(#pvCloseBtn):not(#plReportBtn),
   body.view-only-role #userFormBox button:not(.secondary),
   body.view-only-role #resetPasswordModal button:not(.secondary) {
     pointer-events:none; opacity:0.5; filter:grayscale(0.5); cursor:not-allowed;
@@ -7338,6 +7345,14 @@ function renderProblemDetail_(c) {
     '<div style="margin-top:6px;">วันที่กำหนดเข้าแก้ไข: ' + escHtml(c.onsite_start_date || '-') + escHtml(c.onsite_start_time ? (' ' + c.onsite_start_time + ' น.') : '') + ' &nbsp;·&nbsp; วันที่คาดว่าจะแล้วเสร็จ: ' + escHtml(c.onsite_end_date || '-') + '</div>' +
     '<div style="margin-top:4px;">วันที่เสร็จสิ้น: ' + escHtml(c.completed_date || '-') + '</div>' +
     '<div style="margin-top:6px;">สถานะ: ' + problemStatusBadgeHtml_(c) + '</div>' +
+    // เลขที่เอกสารที่เคยออกไปแล้ว (ถ้ามี) -- Sure's request 2026-09-20: เลข
+    // ต้องคงที่ตลอดไป โชว์ไว้ตรงนี้เพื่อให้ทีมงานเห็นว่าเคสนี้เคยออกรายงาน
+    // ประเภทไหนไปแล้วบ้าง โดยไม่ต้องกดออกใหม่ก็เห็นได้.
+    ((c.report_no_interim || c.report_no_final) ?
+      '<div style="margin-top:6px;font-size:12px;color:var(--muted);">' +
+        (c.report_no_interim ? ('เอกสารระหว่างดำเนินการล่าสุด: ' + escHtml(c.report_no_interim) + ' ') : '') +
+        (c.report_no_final ? ('· เอกสารฉบับสมบูรณ์: ' + escHtml(c.report_no_final)) : '') +
+      '</div>' : '') +
     '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">' +
       '<div style="font-weight:600;margin-bottom:6px;">บันทึกการแก้ไข</div>' +
       '<div id="problemLogList">' + logsHtml + '</div>' +
@@ -7351,11 +7366,16 @@ function renderProblemDetail_(c) {
       '<input type="file" id="plPhotoFile" accept="image/*" multiple style="margin-bottom:6px;">' +
       '<label style="display:block;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="plResolved"' + (c.resolved ? ' checked disabled' : '') + '> ทำเครื่องหมายว่าแก้ไขเสร็จสิ้นแล้ว (ปิดเคส) <span style="color:var(--muted);">— จะใช้วันที่ข้างบนเป็นวันที่เสร็จสิ้นของเคสนี้</span></label>' +
       '<div id="plError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:6px;"></div>' +
-      '<button type="button" class="secondary" id="plSubmitBtn">+ เพิ่มบันทึก</button>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button type="button" class="secondary" id="plSubmitBtn" style="flex:1;">+ เพิ่มบันทึก</button>' +
+        '<button type="button" id="plReportBtn" style="flex:1;background:#0f766e;" title="ออกรายงาน PDF สำหรับลูกค้า (ชื่อ Synnex เท่านั้น ไม่มีชื่อ ผรม.)">🖨 Report</button>' +
+      '</div>' +
     '</div>';
 
   var submitBtn = document.getElementById('plSubmitBtn');
   if (submitBtn) submitBtn.onclick = function() { submitProblemLog_(c); };
+  var reportBtn = document.getElementById('plReportBtn');
+  if (reportBtn) reportBtn.onclick = function() { generateProblemReport_(c); };
   var logListEl = document.getElementById('problemLogList');
   if (logListEl) {
     logListEl.addEventListener('click', function(ev) {
@@ -7443,6 +7463,251 @@ function submitProblemLog_(c) {
     errEl.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + err.message;
     errEl.style.display = '';
   });
+}
+
+// ===== Problem-case customer PDF report (Sure's request, 2026-09-20) =====
+// One "Report" button next to "+ เพิ่มบันทึก" that generates a formal,
+// print-ready service report and hands off to the browser's own print
+// dialog ("Save as PDF") -- the SAME technique dashExportPdf() already uses
+// for the Dashboard board, chosen again here on purpose: the browser renders
+// real Thai text with its own installed fonts, so there's no need to embed a
+// Thai font into a PDF library (jsPDF's built-in fonts can't draw Thai
+// glyphs at all), and the output stays small since it's real selectable
+// text, not a rasterized image. Re-clicking "Report" any time after editing
+// the case regenerates the same document with fresh data -- nothing here is
+// a frozen one-time export.
+//
+// Two variants, chosen automatically from c.resolved (Sure confirmed both
+// need a customer signature line):
+//   - interim (case still open):  doc no "SV-I-...", status banner "ระหว่าง
+//     ดำเนินการ".
+//   - final (case resolved):      doc no "SV-F-...", status banner "เสร็จสิ้น".
+// Document numbers are assigned ONCE per case per type by the backend
+// (handleProblemReportNumber_ in Contractor_Ratings_Code_v2.gs.txt) and
+// never change on re-print, per Sure's explicit requirement.
+//
+// The contractor's real name is NEVER shown anywhere in this document --
+// "ผู้เข้าดำเนินการ" is always hardcoded to "SYNNEX" below, regardless of
+// which ผรม. actually did the work (Sure: "ไม่ต้องให้เอกสารออกมาเห็นว่าเป็น
+// ผรม. เจ้าไหน เพราะว่าลูกค้าจะไม่รู้ต้องรู้ในนาม synnex เท่านั้น").
+function problemReportGate_() {
+  // Deliberately NOT blockIfViewOnly_() -- a viewer account is allowed to
+  // generate/print this specific report (Sure's own management use viewer
+  // accounts to present cases), the server enforces the real gate. Only a
+  // contractor account is blocked here, matching the backend.
+  if (CURRENT_USER.role === 'contractor') {
+    alert('บัญชีผู้รับเหมาไม่สามารถออกรายงานนี้ได้');
+    return true;
+  }
+  return false;
+}
+
+// Plain narrative built straight from the case's own fields, then tidied up
+// by problemReportCleanText_ below -- no AI call involved (Sure decided
+// against that: "ไม่ต้องใช้ ai ในการปรับแต่งข้อความได้ครับ ให้เรียบเรียงและ
+// แค่แก้คำผิดในรายงานก็พอ").
+function problemReportNarrativeRaw_(c) {
+  var parts = [];
+  if (c.symptom) parts.push('อาการที่แจ้ง: ' + c.symptom);
+  var logs = (c.logs || []).slice().sort(function(a, b) { return String(a.logDate || '').localeCompare(String(b.logDate || '')); });
+  logs.forEach(function(log) {
+    parts.push((log.logDate || '-') + ': ' + (log.detail || '-'));
+  });
+  return parts.join('\n');
+}
+
+// Local, non-AI text cleanup for the report's narrative paragraph
+// (2026-09-20, Sure's request: "เรียบเรียงและแค่แก้คำผิดในรายงานก็พอ"). This
+// is plain formatting hygiene, not a real spell-checker -- it collapses
+// stray whitespace/line breaks from typing on a phone in the field and joins
+// every entry into one readable paragraph with consistent punctuation. It
+// does NOT catch genuine Thai spelling mistakes (that reliably needs a real
+// dictionary or an AI call, which Sure decided isn't needed here); staff
+// should still proofread the resolution-log text itself when they type it.
+function problemReportCleanText_(rawText) {
+  var lines = String(rawText || '').split('\n')
+    .map(function(line) { return line.replace(/[ \t]+/g, ' ').trim(); })
+    .filter(Boolean);
+  var sentences = lines.map(function(line) {
+    return /[.!?ๆฯ]$/.test(line) ? line : (line + '.');
+  });
+  return sentences.join(' ');
+}
+
+function problemReportDmy_(iso) {
+  if (!iso || iso === '-') return '-';
+  var p = String(iso).split('-');
+  if (p.length !== 3) return iso;
+  return p[2] + '/' + p[1] + '/' + p[0];
+}
+
+function fetchProblemReportNumber_(c, reportType) {
+  return fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'problem_report_number', username: CURRENT_USER.username, row: c.row, report_type: reportType })
+  }).then(function(r) { return r.json(); });
+}
+
+function problemReportPhotosHtml_(c) {
+  var urls = [];
+  (c.logs || []).forEach(function(log) { (log.photos || []).forEach(function(u) { if (u) urls.push(u); }); });
+  if (!urls.length) return '';
+  // sz=500 thumbnail -- legible on an A4 print but nowhere near the full
+  // original upload resolution, keeping the printed/saved PDF small while
+  // "ยังให้คงความละเอียดไว้ทั้งหมดได้" for anything text-based (real text,
+  // not rasterized) as Sure asked.
+  return '<div class="pr-sec-title">ภาพประกอบ</div><div class="pr-photo-grid">' +
+    urls.map(function(u) {
+      return '<img src="' + escHtml(problemPhotoImgSrc_(u, 500)) + '" class="pr-photo">';
+    }).join('') + '</div>';
+}
+
+function generateProblemReport_(c) {
+  if (problemReportGate_()) return;
+  var mJob = problemMatchedJob_(c);
+  var tsApp = c.ts_app || '';
+  var problemTsJob = c.problem_ts_job || '';
+  // Sure's explicit requirement: "เมื่อกด report มา ต้องใส่เลข ts job ด้วย" --
+  // block generation until at least one of the two TS Job numbers is on the
+  // case (matches the same relaxed either/or rule the case form itself uses
+  // for Onsite (Support MK) cases with no matched install job).
+  if (!tsApp && !problemTsJob) {
+    alert('เคสนี้ยังไม่มีเลข TS Job (งานติดตั้ง หรือ งานแก้ปัญหา) เลยแม้แต่เลขเดียว กรุณากด "แก้ไข" เคสเพื่อใส่เลข TS Job ก่อนออกรายงาน');
+    return;
+  }
+  if (!ratingsConfigured()) { alert('ยังไม่ได้ตั้งค่าปลายทาง (RATINGS_WEBAPP_URL)'); return; }
+
+  var reportType = c.resolved ? 'final' : 'interim';
+  var btn = document.getElementById('plReportBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังสร้างรายงาน...'; }
+
+  fetchProblemReportNumber_(c, reportType).then(function(numRes) {
+    if (!numRes || !numRes.success) {
+      throw new Error((numRes && numRes.error) || 'ออกเลขที่เอกสารไม่สำเร็จ');
+    }
+    var reportNo = numRes.report_no;
+    var narrative = problemReportCleanText_(problemReportNarrativeRaw_(c));
+    renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative);
+    if (reportType === 'interim') c.report_no_interim = reportNo; else c.report_no_final = reportNo;
+    renderProblemDetail_(c);
+  }).catch(function(err) {
+    alert('สร้างรายงานไม่สำเร็จ: ' + (err && err.message ? err.message : err));
+  }).then(function() {
+    var btn2 = document.getElementById('plReportBtn');
+    if (btn2) { btn2.disabled = false; btn2.textContent = '🖨 Report'; }
+  });
+}
+
+function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative) {
+  var isFinal = reportType === 'final';
+  var title = isFinal ? 'รายงานสรุปผลการแก้ไขปัญหา' : 'รายงานการเข้าดำเนินการแก้ไขปัญหา';
+  var badge = isFinal
+    ? '<span class="pr-badge pr-badge-final">ฉบับสมบูรณ์</span>'
+    : '<span class="pr-badge pr-badge-interim">ระหว่างดำเนินการ</span>';
+  var sub = isFinal ? 'Service Visit Report (Final / Completed)' : 'Service Visit Report (Interim / In-Progress)';
+  var todayDmy = problemReportDmy_(TODAY_ISO);
+  var equipment = (mJob && mJob.equipment) || '-';
+  var address = c.site || (mJob && mJob.address) || '-';
+
+  var logs = (c.logs || []).slice().sort(function(a, b) { return String(a.logDate || '').localeCompare(String(b.logDate || '')); });
+  var logsHtml = logs.length ? logs.map(function(log) {
+    var photos = (log.photos || []).filter(Boolean);
+    var photoHtml = photos.length ? '<div class="pr-photo-grid" style="margin-top:6px;">' +
+      photos.map(function(u) { return '<img src="' + escHtml(problemPhotoImgSrc_(u, 500)) + '" class="pr-photo">'; }).join('') +
+      '</div>' : '';
+    return '<div class="pr-log"><div class="pr-log-d">' + escHtml(problemReportDmy_(log.logDate)) + '</div>' +
+      '<div class="pr-log-t">' + escHtml(log.detail || '-') + '</div>' + photoHtml + '</div>';
+  }).join('') : '<div class="pr-body-text" style="color:#9ca3af;">ยังไม่มีบันทึกการเข้าดำเนินการ</div>';
+
+  var statusHtml = isFinal
+    ? '<div class="pr-status pr-status-done">✅ สถานะ: ดำเนินการแก้ไขเสร็จสิ้นเรียบร้อยแล้ว' + (c.completed_date ? (' เมื่อวันที่ ' + escHtml(problemReportDmy_(c.completed_date))) : '') + '</div>'
+    : '<div class="pr-status pr-status-pending">⏳ สถานะปัจจุบัน: อยู่ระหว่างดำเนินการแก้ไข' + (c.onsite_end_date ? (' คาดว่าจะแล้วเสร็จภายใน ' + escHtml(problemReportDmy_(c.onsite_end_date))) : '') + '</div>';
+
+  var signBlock =
+    '<div class="pr-sec-title" style="margin-top:20px;">การรับทราบของลูกค้า</div>' +
+    '<div class="pr-body-text">ข้าพเจ้าได้รับทราบรายละเอียดการเข้าดำเนินการข้างต้น' + (isFinal ? 'แล้ว และยืนยันว่าระบบสามารถใช้งานได้เป็นปกติ' : ' ตามที่ทีมงาน Synnex ได้เข้าดำเนินการ') + '</div>' +
+    '<div class="pr-sign-grid">' +
+      '<div class="pr-sign-box"><div class="pr-sign-line"></div><div>ลงชื่อลูกค้า (....................................................)</div><div class="pr-sign-role">วันที่ลงนาม: __________________</div></div>' +
+      '<div class="pr-sign-box"><div class="pr-sign-line"></div><div>ลงชื่อผู้ดำเนินการ — SYNNEX</div><div class="pr-sign-role">วันที่: ' + escHtml(todayDmy) + '</div></div>' +
+    '</div>';
+
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escHtml(reportNo) + '</title><style>' +
+    '@page{size:A4;margin:14mm 16mm;}' +
+    '*{box-sizing:border-box;}' +
+    'body{font-family:"Sarabun","Tahoma","Segoe UI",sans-serif;color:#1f2430;margin:0;}' +
+    '.pr-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2563eb;padding-bottom:10px;margin-bottom:14px;}' +
+    '.pr-brand{font-size:22px;font-weight:800;color:#2563eb;letter-spacing:0.5px;}' +
+    '.pr-brand-sub{font-size:11px;color:#6b7280;margin-top:2px;}' +
+    '.pr-meta{text-align:right;font-size:12px;color:#374151;line-height:1.6;}' +
+    '.pr-meta .pr-docno{font-size:14px;font-weight:700;color:#1f2430;}' +
+    '.pr-title{text-align:center;font-size:17px;font-weight:700;margin:6px 0 2px;}' +
+    '.pr-badge{display:inline-block;margin-left:6px;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;vertical-align:middle;}' +
+    '.pr-badge-interim{background:#fef3c7;color:#92400e;}' +
+    '.pr-badge-final{background:#dcfce7;color:#166534;}' +
+    '.pr-sub{text-align:center;font-size:12px;color:#6b7280;margin-bottom:16px;}' +
+    '.pr-sec-title{font-size:13px;font-weight:700;color:#2563eb;background:#eff6ff;padding:5px 10px;border-radius:5px;margin:16px 0 8px;}' +
+    'table.pr-info{width:100%;border-collapse:collapse;font-size:12.5px;}' +
+    'table.pr-info td{padding:4px 6px;vertical-align:top;}' +
+    'table.pr-info td.k{color:#6b7280;width:150px;white-space:nowrap;}' +
+    'table.pr-info td.v{font-weight:600;}' +
+    '.pr-ts-box{display:flex;gap:10px;margin-top:4px;}' +
+    '.pr-ts-chip{flex:1;border:1px solid #e2e5ea;border-radius:8px;padding:8px 10px;}' +
+    '.pr-ts-chip .lbl{font-size:11px;color:#6b7280;}' +
+    '.pr-ts-chip .val{font-size:14px;font-weight:700;margin-top:2px;}' +
+    '.pr-body-text{font-size:12.5px;line-height:1.8;text-align:justify;}' +
+    '.pr-log{border-left:3px solid #2563eb;padding:4px 0 4px 10px;margin-bottom:10px;}' +
+    '.pr-log-d{font-size:11px;color:#6b7280;font-weight:600;}' +
+    '.pr-log-t{font-size:12.5px;margin-top:2px;line-height:1.7;}' +
+    '.pr-photo-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}' +
+    '.pr-photo{width:110px;height:82px;object-fit:cover;border-radius:6px;border:1px solid #e2e5ea;}' +
+    '.pr-status{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:13px;font-weight:600;}' +
+    '.pr-status-done{background:#dcfce7;color:#166534;}' +
+    '.pr-status-pending{background:#fef9c3;color:#854d0e;}' +
+    '.pr-sign-grid{display:flex;gap:24px;margin-top:30px;}' +
+    '.pr-sign-box{flex:1;text-align:center;font-size:12px;}' +
+    '.pr-sign-line{border-bottom:1px dashed #9ca3af;height:54px;margin-bottom:6px;}' +
+    '.pr-sign-role{color:#6b7280;font-size:11px;margin-top:2px;}' +
+    '.pr-footer{margin-top:24px;padding-top:6px;border-top:1px solid #e2e5ea;font-size:9.5px;color:#9ca3af;display:flex;justify-content:space-between;}' +
+    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
+    '</style></head><body>' +
+    '<div class="pr-head"><div><div class="pr-brand">SYNNEX</div><div class="pr-brand-sub">ฝ่ายบริการติดตั้งและบำรุงรักษา — Solar Cell / Digital Power</div></div>' +
+      '<div class="pr-meta"><div class="pr-docno">เลขที่เอกสาร: ' + escHtml(reportNo) + '</div><div>วันที่ออกเอกสาร: ' + escHtml(todayDmy) + '</div></div></div>' +
+    '<div class="pr-title">' + title + badge + '</div>' +
+    '<div class="pr-sub">' + sub + '</div>' +
+    '<div class="pr-sec-title">ข้อมูลลูกค้า</div>' +
+    '<table class="pr-info">' +
+      '<tr><td class="k">ชื่อลูกค้า</td><td class="v">' + escHtml(c.customer || '-') + '</td></tr>' +
+      '<tr><td class="k">สถานที่ติดตั้ง</td><td class="v">' + escHtml(address) + '</td></tr>' +
+      '<tr><td class="k">เบอร์ติดต่อ</td><td class="v">' + escHtml(c.phone || '-') + '</td></tr>' +
+      '<tr><td class="k">วันที่แจ้งปัญหา</td><td class="v">' + escHtml(problemReportDmy_(c.report_date)) + '</td></tr>' +
+      (isFinal ? ('<tr><td class="k">วันที่แก้ไขแล้วเสร็จ</td><td class="v">' + escHtml(problemReportDmy_(c.completed_date)) + '</td></tr>') : '') +
+    '</table>' +
+    '<div class="pr-sec-title">หมายเลขอ้างอิงงาน</div>' +
+    '<div class="pr-ts-box">' +
+      '<div class="pr-ts-chip"><div class="lbl">TS Job (งานติดตั้ง)</div><div class="val">' + escHtml(c.ts_app || '-') + '</div></div>' +
+      '<div class="pr-ts-chip"><div class="lbl">TS Job (งานแก้ปัญหา)</div><div class="val">' + escHtml(c.problem_ts_job || '-') + '</div></div>' +
+    '</div>' +
+    '<div class="pr-sec-title">อุปกรณ์ที่เกี่ยวข้อง</div>' +
+    '<div class="pr-body-text">' + escHtml(equipment) + '</div>' +
+    '<div class="pr-sec-title">ผู้เข้าดำเนินการ</div>' +
+    '<div class="pr-body-text"><b>SYNNEX</b> — ทีมบริการหลังการขาย</div>' +
+    '<div class="pr-sec-title">อาการที่พบ และการดำเนินการแก้ไข</div>' +
+    '<div class="pr-body-text" style="margin-bottom:8px;">' + escHtml(narrative) + '</div>' +
+    logsHtml +
+    statusHtml +
+    signBlock +
+    '<div class="pr-footer"><span>เอกสารฉบับนี้ออกในนามบริษัท ซินเน็คซ์ (ประเทศไทย) จำกัด (มหาชน)</span><span>' + escHtml(reportNo) + '</span></div>' +
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (!w) {
+    alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาต pop-up ของเว็บนี้ แล้วกดใหม่อีกครั้งครับ');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function() { try { w.focus(); w.print(); } catch (e) {} }, 600);
 }
 
 function openProblemLightbox_(url) {

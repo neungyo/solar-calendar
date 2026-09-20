@@ -7548,18 +7548,49 @@ function fetchProblemReportNumber_(c, reportType) {
   }).then(function(r) { return r.json(); });
 }
 
-function problemReportPhotosHtml_(c) {
+// Every distinct thumbnail URL (already sized to 500px, same as on-screen
+// display) across all of a case's resolution-log photos -- the exact list
+// we ask the backend to convert to base64 before rendering the report (see
+// generateProblemReport_), so the map keys line up with what
+// renderProblemReportWindow_ looks up.
+function problemReportAllThumbUrls_(c) {
   var urls = [];
-  (c.logs || []).forEach(function(log) { (log.photos || []).forEach(function(u) { if (u) urls.push(u); }); });
-  if (!urls.length) return '';
-  // sz=500 thumbnail -- legible on an A4 print but nowhere near the full
-  // original upload resolution, keeping the printed/saved PDF small while
-  // "ยังให้คงความละเอียดไว้ทั้งหมดได้" for anything text-based (real text,
-  // not rasterized) as Sure asked.
-  return '<div class="pr-sec-title">ภาพประกอบ</div><div class="pr-photo-grid">' +
-    urls.map(function(u) {
-      return '<img src="' + escHtml(problemPhotoImgSrc_(u, 500)) + '" class="pr-photo">';
-    }).join('') + '</div>';
+  (c.logs || []).forEach(function(log) {
+    (log.photos || []).forEach(function(u) {
+      if (u) urls.push(problemPhotoImgSrc_(u, 500));
+    });
+  });
+  return urls;
+}
+
+// 2026-09-20 (Sure's feedback after seeing the first version): fetches each
+// photo as base64 through our OWN backend instead of letting the report
+// window load them directly from drive.google.com. Two reasons: (1) the
+// export button below rasterizes the report to a canvas (html2canvas), and
+// canvas can't read pixel data from a cross-origin image unless that image
+// was served with permissive CORS headers -- Drive's public thumbnail
+// endpoint doesn't send them, so the canvas would be "tainted" and the
+// export would fail; (2) embedding the photos directly (data: URIs) also
+// makes the report fully self-contained, so nothing needs to load over the
+// network at export time. Falls back to the live thumbnail URL for any
+// photo the backend couldn't fetch, rather than blocking report generation.
+function fetchProblemReportPhotosB64_(urls) {
+  if (!urls.length) return Promise.resolve({});
+  return fetch(RATINGS_WEBAPP_URL, {
+    method: 'POST',
+    body: JSON.stringify({ key: RATINGS_ACCESS_KEY, type: 'problem_report_photos', username: CURRENT_USER.username, urls: urls })
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    var map = {};
+    ((res && res.photos) || []).forEach(function(p) {
+      if (p.ok) map[p.url] = 'data:' + p.mimeType + ';base64,' + p.base64;
+    });
+    return map;
+  }).catch(function() { return {}; });
+}
+
+function prPhotoSrc_(u, photoMap) {
+  var thumb = problemPhotoImgSrc_(u, 500);
+  return (photoMap && photoMap[thumb]) || thumb;
 }
 
 function generateProblemReport_(c) {
@@ -7587,9 +7618,11 @@ function generateProblemReport_(c) {
     }
     var reportNo = numRes.report_no;
     var narrative = problemReportCleanText_(problemReportNarrativeRaw_(c));
-    renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative);
-    if (reportType === 'interim') c.report_no_interim = reportNo; else c.report_no_final = reportNo;
-    renderProblemDetail_(c);
+    return fetchProblemReportPhotosB64_(problemReportAllThumbUrls_(c)).then(function(photoMap) {
+      renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, photoMap);
+      if (reportType === 'interim') c.report_no_interim = reportNo; else c.report_no_final = reportNo;
+      renderProblemDetail_(c);
+    });
   }).catch(function(err) {
     alert('สร้างรายงานไม่สำเร็จ: ' + (err && err.message ? err.message : err));
   }).then(function() {
@@ -7598,7 +7631,18 @@ function generateProblemReport_(c) {
   });
 }
 
-function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative) {
+// 2026-09-20 rewrite (Sure's feedback on the first version): the previous
+// flow opened a plain HTML window and called window.print(), leaving the
+// margins up to whatever the browser's OS-level print dialog last
+// remembered ("จะไม่ตรง" -- Sure saw the page nearly bleed to the edge
+// because his browser had "Minimum" margins selected from an earlier
+// print). Now the report window renders its content into a fixed-size
+// #prPage box with its OWN padding (so margins are always right regardless
+// of any print-dialog setting) and gets an explicit "⬇ Export PDF" button
+// that rasterizes #prPage with html2canvas and assembles a real multi-page
+// PDF with jsPDF, saved straight to the user's Downloads -- no OS print
+// dialog involved at all, matching "ไม่ต้องไปส่งพิมพ์" exactly.
+function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, photoMap) {
   var isFinal = reportType === 'final';
   var title = isFinal ? 'รายงานสรุปผลการแก้ไขปัญหา' : 'รายงานการเข้าดำเนินการแก้ไขปัญหา';
   var badge = isFinal
@@ -7613,7 +7657,7 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative) {
   var logsHtml = logs.length ? logs.map(function(log) {
     var photos = (log.photos || []).filter(Boolean);
     var photoHtml = photos.length ? '<div class="pr-photo-grid" style="margin-top:6px;">' +
-      photos.map(function(u) { return '<img src="' + escHtml(problemPhotoImgSrc_(u, 500)) + '" class="pr-photo">'; }).join('') +
+      photos.map(function(u) { return '<img src="' + escHtml(prPhotoSrc_(u, photoMap)) + '" class="pr-photo" crossorigin="anonymous">'; }).join('') +
       '</div>' : '';
     return '<div class="pr-log"><div class="pr-log-d">' + escHtml(problemReportDmy_(log.logDate)) + '</div>' +
       '<div class="pr-log-t">' + escHtml(log.detail || '-') + '</div>' + photoHtml + '</div>';
@@ -7631,10 +7675,47 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative) {
       '<div class="pr-sign-box"><div class="pr-sign-line"></div><div>ลงชื่อผู้ดำเนินการ — SYNNEX</div><div class="pr-sign-role">วันที่: ' + escHtml(todayDmy) + '</div></div>' +
     '</div>';
 
+  var pageContent =
+    '<div class="pr-head"><div><div class="pr-brand">SYNNEX</div><div class="pr-brand-sub">ฝ่ายบริการติดตั้งและบำรุงรักษา — Solar Cell / Digital Power</div></div>' +
+      '<div class="pr-meta"><div class="pr-docno">เลขที่เอกสาร: ' + escHtml(reportNo) + '</div><div>วันที่ออกเอกสาร: ' + escHtml(todayDmy) + '</div></div></div>' +
+    '<div class="pr-title">' + title + badge + '</div>' +
+    '<div class="pr-sub">' + sub + '</div>' +
+    '<div class="pr-sec-title">ข้อมูลลูกค้า</div>' +
+    '<table class="pr-info">' +
+      '<tr><td class="k">ชื่อลูกค้า</td><td class="v">' + escHtml(c.customer || '-') + '</td></tr>' +
+      '<tr><td class="k">สถานที่ติดตั้ง</td><td class="v">' + escHtml(address) + '</td></tr>' +
+      '<tr><td class="k">เบอร์ติดต่อ</td><td class="v">' + escHtml(c.phone || '-') + '</td></tr>' +
+      '<tr><td class="k">วันที่แจ้งปัญหา</td><td class="v">' + escHtml(problemReportDmy_(c.report_date)) + '</td></tr>' +
+      (isFinal ? ('<tr><td class="k">วันที่แก้ไขแล้วเสร็จ</td><td class="v">' + escHtml(problemReportDmy_(c.completed_date)) + '</td></tr>') : '') +
+    '</table>' +
+    '<div class="pr-sec-title">หมายเลขอ้างอิงงาน</div>' +
+    '<div class="pr-ts-box">' +
+      '<div class="pr-ts-chip"><div class="lbl">TS Job (งานติดตั้ง)</div><div class="val">' + escHtml(c.ts_app || '-') + '</div></div>' +
+      '<div class="pr-ts-chip"><div class="lbl">TS Job (งานแก้ปัญหา)</div><div class="val">' + escHtml(c.problem_ts_job || '-') + '</div></div>' +
+    '</div>' +
+    '<div class="pr-sec-title">อุปกรณ์ที่เกี่ยวข้อง</div>' +
+    '<div class="pr-body-text">' + escHtml(equipment) + '</div>' +
+    '<div class="pr-sec-title">ผู้เข้าดำเนินการ</div>' +
+    '<div class="pr-body-text"><b>SYNNEX</b> — ทีมบริการหลังการขาย</div>' +
+    '<div class="pr-sec-title">อาการที่พบ และการดำเนินการแก้ไข</div>' +
+    '<div class="pr-body-text" style="margin-bottom:8px;">' + escHtml(narrative) + '</div>' +
+    logsHtml +
+    statusHtml +
+    signBlock +
+    '<div class="pr-footer"><span>เอกสารฉบับนี้ออกในนามบริษัท ซินเน็คซ์ (ประเทศไทย) จำกัด (มหาชน)</span><span>' + escHtml(reportNo) + '</span></div>';
+
+  var closeScriptTag = '<' + '/script>';
   var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escHtml(reportNo) + '</title><style>' +
-    '@page{size:A4;margin:14mm 16mm;}' +
     '*{box-sizing:border-box;}' +
-    'body{font-family:"Sarabun","Tahoma","Segoe UI",sans-serif;color:#1f2430;margin:0;}' +
+    'html,body{margin:0;background:#e5e7eb;font-family:"Sarabun","Tahoma","Segoe UI",sans-serif;color:#1f2430;}' +
+    '.pr-toolbar{position:sticky;top:0;z-index:10;background:#111827;color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;}' +
+    '.pr-toolbar button{background:#0f766e;color:#fff;border:none;padding:9px 18px;border-radius:6px;font-size:13.5px;font-weight:600;cursor:pointer;}' +
+    '.pr-toolbar button:disabled{opacity:0.6;cursor:default;}' +
+    '.pr-toolbar .pr-status-note{font-size:12px;color:#d1d5db;}' +
+    // #prPage carries its OWN padding as the "margin" -- this is what
+    // actually controls whitespace now, independent of any print-dialog
+    // setting (see the big comment above renderProblemReportWindow_).
+    '.pr-page{width:210mm;min-height:297mm;background:#fff;margin:20px auto;padding:16mm 18mm;box-shadow:0 2px 10px rgba(0,0,0,0.15);}' +
     '.pr-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2563eb;padding-bottom:10px;margin-bottom:14px;}' +
     '.pr-brand{font-size:22px;font-weight:800;color:#2563eb;letter-spacing:0.5px;}' +
     '.pr-brand-sub{font-size:11px;color:#6b7280;margin-top:2px;}' +
@@ -7668,35 +7749,47 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative) {
     '.pr-sign-line{border-bottom:1px dashed #9ca3af;height:54px;margin-bottom:6px;}' +
     '.pr-sign-role{color:#6b7280;font-size:11px;margin-top:2px;}' +
     '.pr-footer{margin-top:24px;padding-top:6px;border-top:1px solid #e2e5ea;font-size:9.5px;color:#9ca3af;display:flex;justify-content:space-between;}' +
-    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
+    '@media print{.pr-toolbar{display:none;} .pr-page{box-shadow:none;margin:0;}}' +
     '</style></head><body>' +
-    '<div class="pr-head"><div><div class="pr-brand">SYNNEX</div><div class="pr-brand-sub">ฝ่ายบริการติดตั้งและบำรุงรักษา — Solar Cell / Digital Power</div></div>' +
-      '<div class="pr-meta"><div class="pr-docno">เลขที่เอกสาร: ' + escHtml(reportNo) + '</div><div>วันที่ออกเอกสาร: ' + escHtml(todayDmy) + '</div></div></div>' +
-    '<div class="pr-title">' + title + badge + '</div>' +
-    '<div class="pr-sub">' + sub + '</div>' +
-    '<div class="pr-sec-title">ข้อมูลลูกค้า</div>' +
-    '<table class="pr-info">' +
-      '<tr><td class="k">ชื่อลูกค้า</td><td class="v">' + escHtml(c.customer || '-') + '</td></tr>' +
-      '<tr><td class="k">สถานที่ติดตั้ง</td><td class="v">' + escHtml(address) + '</td></tr>' +
-      '<tr><td class="k">เบอร์ติดต่อ</td><td class="v">' + escHtml(c.phone || '-') + '</td></tr>' +
-      '<tr><td class="k">วันที่แจ้งปัญหา</td><td class="v">' + escHtml(problemReportDmy_(c.report_date)) + '</td></tr>' +
-      (isFinal ? ('<tr><td class="k">วันที่แก้ไขแล้วเสร็จ</td><td class="v">' + escHtml(problemReportDmy_(c.completed_date)) + '</td></tr>') : '') +
-    '</table>' +
-    '<div class="pr-sec-title">หมายเลขอ้างอิงงาน</div>' +
-    '<div class="pr-ts-box">' +
-      '<div class="pr-ts-chip"><div class="lbl">TS Job (งานติดตั้ง)</div><div class="val">' + escHtml(c.ts_app || '-') + '</div></div>' +
-      '<div class="pr-ts-chip"><div class="lbl">TS Job (งานแก้ปัญหา)</div><div class="val">' + escHtml(c.problem_ts_job || '-') + '</div></div>' +
+    '<div class="pr-toolbar">' +
+      '<span>' + escHtml(reportNo) + '</span>' +
+      '<span class="pr-status-note" id="prStatusNote">พร้อมออก PDF</span>' +
+      '<button type="button" id="prExportBtn">⬇ Export PDF</button>' +
     '</div>' +
-    '<div class="pr-sec-title">อุปกรณ์ที่เกี่ยวข้อง</div>' +
-    '<div class="pr-body-text">' + escHtml(equipment) + '</div>' +
-    '<div class="pr-sec-title">ผู้เข้าดำเนินการ</div>' +
-    '<div class="pr-body-text"><b>SYNNEX</b> — ทีมบริการหลังการขาย</div>' +
-    '<div class="pr-sec-title">อาการที่พบ และการดำเนินการแก้ไข</div>' +
-    '<div class="pr-body-text" style="margin-bottom:8px;">' + escHtml(narrative) + '</div>' +
-    logsHtml +
-    statusHtml +
-    signBlock +
-    '<div class="pr-footer"><span>เอกสารฉบับนี้ออกในนามบริษัท ซินเน็คซ์ (ประเทศไทย) จำกัด (มหาชน)</span><span>' + escHtml(reportNo) + '</span></div>' +
+    '<div class="pr-page" id="prPage">' + pageContent + '</div>' +
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">' + closeScriptTag +
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">' + closeScriptTag +
+    '<script>' +
+      'document.getElementById("prExportBtn").onclick = function() {' +
+        'var btn = this; var note = document.getElementById("prStatusNote");' +
+        'btn.disabled = true; btn.textContent = "กำลังสร้าง PDF...";' +
+        'if (note) note.textContent = "กำลังแปลงเป็น PDF อาจใช้เวลาสักครู่...";' +
+        'html2canvas(document.getElementById("prPage"), { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {' +
+          'var imgData = canvas.toDataURL("image/jpeg", 0.85);' +
+          'var jsPDF = window.jspdf.jsPDF;' +
+          'var pdf = new jsPDF("p", "mm", "a4");' +
+          'var pageWidth = 210, pageHeight = 297;' +
+          'var imgWidth = pageWidth;' +
+          'var imgHeight = canvas.height * imgWidth / canvas.width;' +
+          'var heightLeft = imgHeight, position = 0;' +
+          'pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);' +
+          'heightLeft -= pageHeight;' +
+          'while (heightLeft > 0) {' +
+            'position = heightLeft - imgHeight;' +
+            'pdf.addPage();' +
+            'pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);' +
+            'heightLeft -= pageHeight;' +
+          '}' +
+          'pdf.save("' + reportNo.replace(/"/g, '') + '.pdf");' +
+          'btn.disabled = false; btn.textContent = "⬇ Export PDF";' +
+          'if (note) note.textContent = "บันทึกไฟล์ PDF แล้ว";' +
+        '}).catch(function(err) {' +
+          'alert("สร้าง PDF ไม่สำเร็จ: " + (err && err.message ? err.message : err));' +
+          'btn.disabled = false; btn.textContent = "⬇ Export PDF";' +
+          'if (note) note.textContent = "พร้อมออก PDF";' +
+        '});' +
+      '};' +
+    closeScriptTag +
     '</body></html>';
 
   var w = window.open('', '_blank');
@@ -7707,7 +7800,6 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative) {
   w.document.open();
   w.document.write(html);
   w.document.close();
-  setTimeout(function() { try { w.focus(); w.print(); } catch (e) {} }, 600);
 }
 
 function openProblemLightbox_(url) {

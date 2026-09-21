@@ -7609,6 +7609,33 @@ function generateProblemReport_(c) {
   if (!ratingsConfigured()) { alert('ยังไม่ได้ตั้งค่าปลายทาง (RATINGS_WEBAPP_URL)'); return; }
 
   var reportType = c.resolved ? 'final' : 'interim';
+
+  // 2026-09-21 fix (Sure: "ระบบกด report มีปัญหาบ่อยครั้ง" -- the report tab
+  // kept getting silently blocked). window.open() is only reliably treated
+  // by the browser as "the user asked for this" when called SYNCHRONOUSLY
+  // inside the click handler. The old code fetched the report number and
+  // then the photos (two awaited network round-trips) and only called
+  // window.open() after BOTH finished -- by then the original click was
+  // long over, so most browsers (Chrome especially) quietly blocked it as
+  // an unrequested pop-up, with no error shown most of the time (only
+  // occasionally surfacing the "browser blocked" alert, which is the "บ่อย
+  // ครั้ง" -- inconsistent -- pattern Sure saw). Opening the window here,
+  // immediately, before any fetch, fixes that: the tab always opens right
+  // on click, showing a loading screen, and gets filled in once the data
+  // arrives.
+  var reportWindow = window.open('', '_blank');
+  if (!reportWindow) {
+    alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาต pop-up ของเว็บนี้ แล้วกดใหม่อีกครั้งครับ');
+    return;
+  }
+  reportWindow.document.open();
+  reportWindow.document.write(
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>กำลังสร้างรายงาน...</title>' +
+    '<style>body{font-family:"Sarabun","Tahoma","Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7f8fa;color:#374151;font-size:15px;}</style>' +
+    '</head><body><div>⏳ กำลังเตรียมรายงาน กรุณารอสักครู่...</div></body></html>'
+  );
+  reportWindow.document.close();
+
   var btn = document.getElementById('plReportBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'กำลังสร้างรายงาน...'; }
 
@@ -7619,12 +7646,24 @@ function generateProblemReport_(c) {
     var reportNo = numRes.report_no;
     var narrative = problemReportCleanText_(problemReportNarrativeRaw_(c));
     return fetchProblemReportPhotosB64_(problemReportAllThumbUrls_(c)).then(function(photoMap) {
-      renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, photoMap);
+      renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, photoMap, reportWindow);
       if (reportType === 'interim') c.report_no_interim = reportNo; else c.report_no_final = reportNo;
       renderProblemDetail_(c);
     });
   }).catch(function(err) {
-    alert('สร้างรายงานไม่สำเร็จ: ' + (err && err.message ? err.message : err));
+    var msg = 'สร้างรายงานไม่สำเร็จ: ' + (err && err.message ? err.message : err);
+    alert(msg);
+    try {
+      if (reportWindow && !reportWindow.closed) {
+        reportWindow.document.open();
+        reportWindow.document.write(
+          '<!DOCTYPE html><html><head><meta charset="utf-8"><title>เกิดข้อผิดพลาด</title>' +
+          '<style>body{font-family:"Sarabun","Tahoma","Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fef2f2;color:#991b1b;padding:20px;text-align:center;font-size:14px;}</style>' +
+          '</head><body><div>' + escHtml(msg) + '<br><br>ปิดหน้าต่างนี้แล้วลองกด Report ใหม่อีกครั้งครับ</div></body></html>'
+        );
+        reportWindow.document.close();
+      }
+    } catch (e) {}
   }).then(function() {
     var btn2 = document.getElementById('plReportBtn');
     if (btn2) { btn2.disabled = false; btn2.textContent = '🖨 Report'; }
@@ -7642,7 +7681,7 @@ function generateProblemReport_(c) {
 // that rasterizes #prPage with html2canvas and assembles a real multi-page
 // PDF with jsPDF, saved straight to the user's Downloads -- no OS print
 // dialog involved at all, matching "ไม่ต้องไปส่งพิมพ์" exactly.
-function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, photoMap) {
+function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, photoMap, w) {
   var isFinal = reportType === 'final';
   var title = isFinal ? 'รายงานสรุปผลการแก้ไขปัญหา' : 'รายงานการเข้าดำเนินการแก้ไขปัญหา';
   var badge = isFinal
@@ -7792,14 +7831,15 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, ph
     closeScriptTag +
     '</body></html>';
 
-  var w = window.open('', '_blank');
-  if (!w) {
-    alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาต pop-up ของเว็บนี้ แล้วกดใหม่อีกครั้งครับ');
-    return;
-  }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  // w was already opened synchronously back in generateProblemReport_ (see
+  // the comment there) -- just check it's still around and fill it in now.
+  try {
+    if (!w || w.closed) return;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+  } catch (e) {}
 }
 
 function openProblemLightbox_(url) {

@@ -1382,8 +1382,30 @@ var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwoZ7IebzEeXy9Jra-bHrR
 // this file, only checked remotely -- and only then hands back a real key,
 // which is cached in this browser's localStorage ("remember on this device").
 var LOGIN_KEY_STORAGE_NAME = 'solarLoginAccessKey';
+var LOGIN_USER_STORAGE_NAME = 'solarLoginUser';
 var urlParams = new URLSearchParams(window.location.search);
-var ACCESS_KEY = urlParams.get('k') || urlParams.get('key') || localStorage.getItem(LOGIN_KEY_STORAGE_NAME) || '';
+var URL_ACCESS_KEY_ = urlParams.get('k') || urlParams.get('key') || '';
+
+// 2026-09-21 (Sure: "ผมบางคนที่เคยเปิดอยู่ก่อนหน้านี้ ไม่ยอมขึ้นหน้าให้
+// login ... อยากให้ logout ออกทั้งหมดก่อน") -- a username/password login
+// caches its key + identity in localStorage (see the login form handler
+// further down), so a returning visitor skips straight past the login
+// screen. To force EVERY previously-logged-in account to log in again,
+// bump LOGIN_EPOCH below (and re-deploy) -- any cached login whose stored
+// epoch doesn't match the current one gets cleared right here, before
+// ACCESS_KEY/CURRENT_USER are even read, so the login overlay shows on
+// that person's next page load. Doesn't touch contractor magic links
+// (?k=/?key= URLs) -- those are never cached in localStorage at all, they
+// re-supply the key fresh from the URL every visit.
+var LOGIN_EPOCH_STORAGE_NAME = 'solarLoginEpoch';
+var LOGIN_EPOCH = 2;
+if (!URL_ACCESS_KEY_ && localStorage.getItem(LOGIN_EPOCH_STORAGE_NAME) !== String(LOGIN_EPOCH)) {
+  localStorage.removeItem(LOGIN_KEY_STORAGE_NAME);
+  localStorage.removeItem(LOGIN_USER_STORAGE_NAME);
+}
+try { localStorage.setItem(LOGIN_EPOCH_STORAGE_NAME, String(LOGIN_EPOCH)); } catch (e) {}
+
+var ACCESS_KEY = URL_ACCESS_KEY_ || localStorage.getItem(LOGIN_KEY_STORAGE_NAME) || '';
 // Contractor-scoped links should only ever show the ปฏิทิน tab -- Sure's
 // request, 2026-09-18: "ตอนนี้ เค้าสามารถดูได้ทุกแท็บที่ผมสร้างเลย...
 // อยากให้เค้าดูได้แค่หน้า ปฏิทิน เท่านั้น". Defaults optimistically to
@@ -1398,7 +1420,6 @@ var CURRENT_SCOPE = 'admin';
 // admin so it sees the same data, but CAN_EDIT below is what every
 // write/edit/delete/upload button and function actually checks -- it's the
 // one true "is this account allowed to change anything" flag app-wide.
-var LOGIN_USER_STORAGE_NAME = 'solarLoginUser';
 var CURRENT_USER = (function() {
   try { return JSON.parse(localStorage.getItem(LOGIN_USER_STORAGE_NAME) || 'null') || {}; }
   catch (e) { return {}; }

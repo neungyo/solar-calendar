@@ -7696,9 +7696,12 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, ph
   var logsHtml = logs.length ? logs.map(function(log) {
     var photos = (log.photos || []).filter(Boolean);
     var photoHtml = photos.length ? '<div class="pr-photo-grid" style="margin-top:6px;">' +
-      photos.map(function(u) { return '<img src="' + escHtml(prPhotoSrc_(u, photoMap)) + '" class="pr-photo" crossorigin="anonymous">'; }).join('') +
+      photos.map(function(u) { return '<img src="' + escHtml(prPhotoSrc_(u, photoMap)) + '" class="pr-photo" onerror="this.style.display=\'none\'">'; }).join('') +
       '</div>' : '';
-    return '<div class="pr-log"><div class="pr-log-d">' + escHtml(problemReportDmy_(log.logDate)) + '</div>' +
+    // pr-avoid-break: this whole log entry (date + text + its photo grid)
+    // must not be sliced across a PDF page boundary -- see the pagination
+    // logic in the Export PDF handler below.
+    return '<div class="pr-log pr-avoid-break"><div class="pr-log-d">' + escHtml(problemReportDmy_(log.logDate)) + '</div>' +
       '<div class="pr-log-t">' + escHtml(log.detail || '-') + '</div>' + photoHtml + '</div>';
   }).join('') : '<div class="pr-body-text" style="color:#9ca3af;">ยังไม่มีบันทึกการเข้าดำเนินการ</div>';
 
@@ -7709,18 +7712,18 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, ph
   var signBlock =
     '<div class="pr-sec-title" style="margin-top:20px;">การรับทราบของลูกค้า</div>' +
     '<div class="pr-body-text">ข้าพเจ้าได้รับทราบรายละเอียดการเข้าดำเนินการข้างต้น' + (isFinal ? 'แล้ว และยืนยันว่าระบบสามารถใช้งานได้เป็นปกติ' : ' ตามที่ทีมงาน Synnex ได้เข้าดำเนินการ') + '</div>' +
-    '<div class="pr-sign-grid">' +
+    '<div class="pr-sign-grid pr-avoid-break">' +
       '<div class="pr-sign-box"><div class="pr-sign-line"></div><div>ลงชื่อลูกค้า (....................................................)</div><div class="pr-sign-role">วันที่ลงนาม: __________________</div></div>' +
       '<div class="pr-sign-box"><div class="pr-sign-line"></div><div>ลงชื่อผู้ดำเนินการ — SYNNEX</div><div class="pr-sign-role">วันที่: ' + escHtml(todayDmy) + '</div></div>' +
     '</div>';
 
   var pageContent =
-    '<div class="pr-head"><div><div class="pr-brand">SYNNEX</div><div class="pr-brand-sub">ฝ่ายบริการติดตั้งและบำรุงรักษา — Solar Cell / Digital Power</div></div>' +
+    '<div class="pr-head"><div><div class="pr-brand">SYNNEX</div><div class="pr-brand-sub">ฝ่ายบริการติดตั้งและบำรุงรักษา-Installation Service and Maintenance (Technical Service)</div></div>' +
       '<div class="pr-meta"><div class="pr-docno">เลขที่เอกสาร: ' + escHtml(reportNo) + '</div><div>วันที่ออกเอกสาร: ' + escHtml(todayDmy) + '</div></div></div>' +
     '<div class="pr-title">' + title + badge + '</div>' +
     '<div class="pr-sub">' + sub + '</div>' +
     '<div class="pr-sec-title">ข้อมูลลูกค้า</div>' +
-    '<table class="pr-info">' +
+    '<table class="pr-info pr-avoid-break">' +
       '<tr><td class="k">ชื่อลูกค้า</td><td class="v">' + escHtml(c.customer || '-') + '</td></tr>' +
       '<tr><td class="k">สถานที่ติดตั้ง</td><td class="v">' + escHtml(address) + '</td></tr>' +
       '<tr><td class="k">เบอร์ติดต่อ</td><td class="v">' + escHtml(c.phone || '-') + '</td></tr>' +
@@ -7728,7 +7731,7 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, ph
       (isFinal ? ('<tr><td class="k">วันที่แก้ไขแล้วเสร็จ</td><td class="v">' + escHtml(problemReportDmy_(c.completed_date)) + '</td></tr>') : '') +
     '</table>' +
     '<div class="pr-sec-title">หมายเลขอ้างอิงงาน</div>' +
-    '<div class="pr-ts-box">' +
+    '<div class="pr-ts-box pr-avoid-break">' +
       '<div class="pr-ts-chip"><div class="lbl">TS Job (งานติดตั้ง)</div><div class="val">' + escHtml(c.ts_app || '-') + '</div></div>' +
       '<div class="pr-ts-chip"><div class="lbl">TS Job (งานแก้ปัญหา)</div><div class="val">' + escHtml(c.problem_ts_job || '-') + '</div></div>' +
     '</div>' +
@@ -7756,7 +7759,7 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, ph
     // setting (see the big comment above renderProblemReportWindow_).
     '.pr-page{width:210mm;min-height:297mm;background:#fff;margin:20px auto;padding:16mm 18mm;box-shadow:0 2px 10px rgba(0,0,0,0.15);}' +
     '.pr-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2563eb;padding-bottom:10px;margin-bottom:14px;}' +
-    '.pr-brand{font-size:22px;font-weight:800;color:#2563eb;letter-spacing:0.5px;}' +
+    '.pr-brand{font-size:22px;font-weight:800;color:#000000;letter-spacing:0.5px;}' +
     '.pr-brand-sub{font-size:11px;color:#6b7280;margin-top:2px;}' +
     '.pr-meta{text-align:right;font-size:12px;color:#374151;line-height:1.6;}' +
     '.pr-meta .pr-docno{font-size:14px;font-weight:700;color:#1f2430;}' +
@@ -7804,20 +7807,47 @@ function renderProblemReportWindow_(c, mJob, reportType, reportNo, narrative, ph
         'btn.disabled = true; btn.textContent = "กำลังสร้าง PDF...";' +
         'if (note) note.textContent = "กำลังแปลงเป็น PDF อาจใช้เวลาสักครู่...";' +
         'html2canvas(document.getElementById("prPage"), { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {' +
-          'var imgData = canvas.toDataURL("image/jpeg", 0.85);' +
+          'var imgData = canvas.toDataURL("image/jpeg", 0.92);' +
           'var jsPDF = window.jspdf.jsPDF;' +
           'var pdf = new jsPDF("p", "mm", "a4");' +
-          'var pageWidth = 210, pageHeight = 297;' +
-          'var imgWidth = pageWidth;' +
-          'var imgHeight = canvas.height * imgWidth / canvas.width;' +
-          'var heightLeft = imgHeight, position = 0;' +
-          'pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);' +
-          'heightLeft -= pageHeight;' +
-          'while (heightLeft > 0) {' +
-            'position = heightLeft - imgHeight;' +
-            'pdf.addPage();' +
-            'pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);' +
-            'heightLeft -= pageHeight;' +
+          'var pageWidthMm = 210, pageHeightMm = 297;' +
+          'var imgWidthMm = pageWidthMm;' +
+          'var mmPerPx = imgWidthMm / canvas.width;' +
+          'var pageHeightPx = pageHeightMm / mmPerPx;' +
+          // 2026-09-21 (Sure: "อยากให้ช่วยดูด้วยว่า ถ้าจำเป็นต้องขึ้นหน้าใหม่
+          // ก็ให้เลื่อนไปขึ้นหน้าใหม่ให้เหมาะสม") -- don't slice a log entry,
+          // signature block, or info table in half across a page boundary.
+          // Any element tagged .pr-avoid-break has its on-screen top/bottom
+          // measured here; if a naive page-height break would land inside
+          // one, the break is pulled back to that element's top instead, so
+          // the whole element moves to the next page (leaving a little
+          // blank space at the bottom of the previous page).
+          'var prPageEl = document.getElementById("prPage");' +
+          'var prRect = prPageEl.getBoundingClientRect();' +
+          'var factor = canvas.width / prRect.width;' +
+          'var avoidRanges = Array.prototype.slice.call(prPageEl.querySelectorAll(".pr-avoid-break")).map(function(el) {' +
+            'var r = el.getBoundingClientRect();' +
+            'return { top: (r.top - prRect.top) * factor, bottom: (r.bottom - prRect.top) * factor };' +
+          '});' +
+          'var breaksPx = [0], cursor = 0;' +
+          'while (cursor < canvas.height) {' +
+            'var next = cursor + pageHeightPx;' +
+            'if (next >= canvas.height) {' +
+              'next = canvas.height;' +
+            '} else {' +
+              'for (var i = 0; i < avoidRanges.length; i++) {' +
+                'var rg = avoidRanges[i];' +
+                'if (rg.top > cursor && rg.top < next && rg.bottom > next) { next = rg.top; break; }' +
+              '}' +
+              'if (next <= cursor) next = Math.min(cursor + pageHeightPx, canvas.height);' +
+            '}' +
+            'breaksPx.push(next);' +
+            'cursor = next;' +
+          '}' +
+          'var fullImgHeightMm = canvas.height * mmPerPx;' +
+          'for (var p = 0; p < breaksPx.length - 1; p++) {' +
+            'if (p > 0) pdf.addPage();' +
+            'pdf.addImage(imgData, "JPEG", 0, -(breaksPx[p] * mmPerPx), imgWidthMm, fullImgHeightMm);' +
           '}' +
           'pdf.save("' + reportNo.replace(/"/g, '') + '.pdf");' +
           'btn.disabled = false; btn.textContent = "⬇ Export PDF";' +

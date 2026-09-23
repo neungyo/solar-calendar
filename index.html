@@ -970,7 +970,28 @@
     <div id="problemLoadingBanner" class="csat-status-banner" style="display:none;margin-bottom:10px;">⏳ กำลังโหลดรายการเคสจากระบบ Contractor Ratings — บางครั้งอาจใช้เวลาถึง 15-20 วินาที (คนละระบบกับข้อมูลปฏิทินหลัก) ถ้ารอแล้วยังไม่ขึ้น ลองกด "อ่านข้อมูลล่าสุดอีกครั้ง" ด้านบน</div>
     <div class="doc-table-toolbar">บันทึกปัญหาหน้างานที่ติดตั้งไปแล้ว (มิเตอร์อ่านค่าไม่ได้ ค่า GND ไม่ได้ น้ำรั่วซึม ฯลฯ) ค้นหาเคสด้วยชื่อ Site / เบอร์โทรลูกค้า / เลข TS Job หรือสร้างเคสใหม่ทันทีที่มีการแจ้งปัญหาเข้ามา แล้วค่อยเข้ามาเพิ่มบันทึกการแก้ไขทีหลังได้</div>
 
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:10px 0 12px;">
+      <div class="month-summary" id="problemSummary"></div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="secondary" id="problemPrevMonth">‹ เดือนก่อน</button>
+        <strong id="problemMonthLabel"></strong>
+        <button class="secondary" id="problemNextMonth">เดือนถัดไป ›</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#2563eb;"></span>แก้ไขทางโทรศัพท์ (oncall)</span>
+      <span><span class="dot" style="background:#dc2626;"></span>ต้องเข้า Onsite</span>
+      <span style="border-left:1px solid var(--border);padding-left:14px;">✅ = แก้ไขเสร็จสิ้นแล้ว</span>
+    </div>
+    <div class="calendar-grid" id="problemDowRow"></div>
+    <div class="calendar-grid" id="problemCalGrid"></div>
+
+    <!-- 2026-09-23 (Sure: "ข้อมูลส่วนนี้อยากให้ไปอยู่ใต้ปฏิทินดีครับ เวลา
+    สร้างหรือค้นหาจะได้ดูด้านล่างได้เลย เป็นระเบียบกว่า") -- the search box +
+    "create new case" button + the new-case form itself moved down here,
+    below the calendar, so creating/searching happens right above the case
+    list instead of above the calendar. -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:20px 0 14px;">
       <input type="text" id="problemSearchInput" placeholder="ค้นหา: ชื่อ Site / เบอร์โทร / เลข TS Job" style="flex:1 1 260px;">
       <button class="secondary" id="problemNewCaseBtn">+ สร้างเคสใหม่</button>
     </div>
@@ -1016,22 +1037,6 @@
         <button class="secondary" id="pcCancelBtn">ยกเลิก</button>
       </div>
     </div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:10px 0 12px;">
-      <div class="month-summary" id="problemSummary"></div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <button class="secondary" id="problemPrevMonth">‹ เดือนก่อน</button>
-        <strong id="problemMonthLabel"></strong>
-        <button class="secondary" id="problemNextMonth">เดือนถัดไป ›</button>
-      </div>
-    </div>
-    <div class="legend">
-      <span><span class="dot" style="background:#2563eb;"></span>แก้ไขทางโทรศัพท์ (oncall)</span>
-      <span><span class="dot" style="background:#dc2626;"></span>ต้องเข้า Onsite</span>
-      <span style="border-left:1px solid var(--border);padding-left:14px;">✅ = แก้ไขเสร็จสิ้นแล้ว</span>
-    </div>
-    <div class="calendar-grid" id="problemDowRow"></div>
-    <div class="calendar-grid" id="problemCalGrid"></div>
 
     <div class="doc-table-toolbar" style="margin-top:20px;">รายการเคสทั้งหมด (<span id="problemCaseCount">0</span>)</div>
     <div style="overflow-x:auto;margin-bottom:20px;">

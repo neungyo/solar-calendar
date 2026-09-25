@@ -980,8 +980,9 @@
     </div>
     <div class="legend">
       <span><span class="dot" style="background:#2563eb;"></span>แก้ไขทางโทรศัพท์ (oncall)</span>
-      <span><span class="dot" style="background:#dc2626;"></span>ต้องเข้า Onsite</span>
-      <span style="border-left:1px solid var(--border);padding-left:14px;">✅ = แก้ไขเสร็จสิ้นแล้ว</span>
+      <span><span class="dot" style="background:#dc2626;"></span>Onsite (งานติดตั้ง)</span>
+      <span><span class="dot" style="background:#111827;"></span>Onsite (Support MK)</span>
+      <span style="border-left:1px solid var(--border);padding-left:14px;">✅ = แก้ไขเสร็จสิ้นแล้ว (สีจะจางลงแต่ยังแยกประเภทได้)</span>
     </div>
     <div class="calendar-grid" id="problemDowRow"></div>
     <div class="calendar-grid" id="problemCalGrid"></div>
@@ -991,9 +992,16 @@
     "create new case" button + the new-case form itself moved down here,
     below the calendar, so creating/searching happens right above the case
     list instead of above the calendar. -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:20px 0 14px;">
-      <input type="text" id="problemSearchInput" placeholder="ค้นหา: ชื่อ Site / เบอร์โทร / เลข TS Job" style="flex:1 1 260px;">
-      <button class="secondary" id="problemNewCaseBtn">+ สร้างเคสใหม่</button>
+    <div style="margin:20px 0 14px;">
+      <!-- 2026-09-23 (Sure: "ช่องค้นหาอยากให้ใส่หัวข้อ ให้เด่นชัดหน่อยครับ")
+      -- the search box used to rely on its placeholder text alone (which
+      -- disappears once you start typing), so add a real, visible label
+      -- above it. -->
+      <label for="problemSearchInput" style="display:block;font-weight:700;font-size:13px;color:#374151;margin-bottom:6px;">🔍 ค้นหาเคส</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="problemSearchInput" placeholder="ค้นหา: ชื่อ Site / เบอร์โทร / เลข TS Job" style="flex:1 1 260px;">
+        <button class="secondary" id="problemNewCaseBtn">+ สร้างเคสใหม่</button>
+      </div>
     </div>
 
     <div id="problemNewCaseForm" style="display:none;border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:18px;background:var(--bg);">
@@ -7184,7 +7192,21 @@ var problemCur = { y: TODAY.getFullYear(), m: TODAY.getMonth() + 1 };
 var currentProblemCase = null;
 
 function problemCases() {
-  return (RATINGS_SUMMARY && RATINGS_SUMMARY.problems) || [];
+  var all = (RATINGS_SUMMARY && RATINGS_SUMMARY.problems) || [];
+  // 2026-09-25 (Sure: "ให้ของหน้า login ผรม เห็นแค่ในส่วนของตัวเองเท่านั้น
+  // ไม่ให้เห็นของคนอื่นนะครับ") -- Problem Cases come from the Contractor
+  // Ratings backend through ONE shared read key (RATINGS_ACCESS_KEY, same
+  // value baked into this file for every account), so the raw fetch always
+  // returns every contractor's cases -- unlike JOBS, there's no server-side
+  // per-contractor scoping for this endpoint. Filtering here, in the single
+  // function every Problem-tab view (summary chips/calendar/case list/
+  // search) reads through, means a contractor-role login only ever sees its
+  // own company's cases anywhere in the UI.
+  if (CURRENT_USER.role === 'contractor' && CURRENT_USER.contractor) {
+    var mine = contractorDisplayName(CURRENT_USER.contractor);
+    all = all.filter(function(c) { return contractorDisplayName(c.contractor) === mine; });
+  }
+  return all;
 }
 
 function problemMatchesSearch_(c, q) {
@@ -8250,16 +8272,25 @@ if (problemJobSearchResultsEl) {
 }
 
 function renderProblemSummary_(monthEvents) {
-  var counts = { total: 0, phone: 0, onsite: 0, resolved: 0 };
+  // 2026-09-23 (Sure: "อยากให้แยกเรื่อง onsite ด้วยครับว่าเป็นส่วนใหนบ้าง
+  // งานติดตั้ง หรือ support MK") -- the single "Onsite" bucket used to lump
+  // regular install-onsite cases together with Onsite (Support MK) cases,
+  // so the count didn't say which kind. Split into two counters/chips,
+  // colored to match their calendar pills (red = install-onsite, dark =
+  // Support MK) so the split reads at a glance.
+  var counts = { total: 0, phone: 0, onsiteInstall: 0, onsiteMk: 0, resolved: 0 };
   monthEvents.forEach(function(e) {
     counts.total++;
-    if (problemIsOnsite_(e.c)) counts.onsite++; else counts.phone++;
+    if (problemIsMk_(e.c)) counts.onsiteMk++;
+    else if (problemIsOnsite_(e.c)) counts.onsiteInstall++;
+    else counts.phone++;
     if (e.c.resolved) counts.resolved++;
   });
   var defs = [
     { k: 'total', label: 'ทั้งหมด', cls: 'survey' },
     { k: 'phone', label: '📞 โทรศัพท์', cls: 'install' },
-    { k: 'onsite', label: '🚗 Onsite', style: 'border-color:#fca5a5;background:#fef2f2;color:#991b1b;' },
+    { k: 'onsiteInstall', label: '🚗 Onsite (งานติดตั้ง)', style: 'border-color:#fca5a5;background:#fef2f2;color:#991b1b;' },
+    { k: 'onsiteMk', label: '🔧 Onsite (Support MK)', style: 'border-color:#4b5563;background:#e5e7eb;color:#1f2937;' },
     { k: 'resolved', label: '✅ แก้ไขแล้ว', cls: 'completed' }
   ];
   var host = document.getElementById('problemSummary');
@@ -8388,9 +8419,24 @@ function renderProblemTab() {
       // Onsite (Support MK) gets its own dark/black pill (Sure's request,
       // 2026-09-18: "ให้เป็นแทบสีดำ...เพื่อให้ทีมงานเห็นชัดเจน") so it stands
       // out from the regular red install-onsite pill at a glance.
-      var bg = c.resolved ? '#f1f5f9' : (isMk ? '#1f2937' : (isOnsite ? '#fee2e2' : '#dbeafe'));
-      var fg = c.resolved ? '#94a3b8' : (isMk ? '#f9fafb' : (isOnsite ? '#991b1b' : '#1e40af'));
-      var dot = c.resolved ? '#94a3b8' : (isMk ? '#111827' : (isOnsite ? '#dc2626' : '#2563eb'));
+      //
+      // 2026-09-23 (Sure: "งานที่เสร็จสิ้นไปแล้ว อยากให้แยกสีให้ชัดด้วยครับ
+      // ว่าเป็น onsite งานติดตั้ง หรือ support MK") -- a resolved case used to
+      // collapse to one flat gray regardless of type, hiding the distinction
+      // right when someone's scanning for "which kind got fixed". Resolved
+      // cases now keep a lighter/muted version of their own type color
+      // instead (still visually "done" via the strikethrough + ✅ prefix
+      // below) so phone/onsite-install/onsite-MK stay tellable apart even
+      // once closed out.
+      var bg = !c.resolved
+        ? (isMk ? '#1f2937' : (isOnsite ? '#fee2e2' : '#dbeafe'))
+        : (isMk ? '#e5e7eb' : (isOnsite ? '#fef2f2' : '#eff6ff'));
+      var fg = !c.resolved
+        ? (isMk ? '#f9fafb' : (isOnsite ? '#991b1b' : '#1e40af'))
+        : (isMk ? '#374151' : (isOnsite ? '#b91c1c' : '#1d4ed8'));
+      var dot = !c.resolved
+        ? (isMk ? '#111827' : (isOnsite ? '#dc2626' : '#2563eb'))
+        : (isMk ? '#6b7280' : (isOnsite ? '#fca5a5' : '#93c5fd'));
       var pill = document.createElement('div');
       pill.style.cssText = 'border-radius:4px;padding:2px 4px;margin-bottom:2px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;background:' +
         bg + ';color:' + fg + ';' + (c.resolved ? 'text-decoration:line-through;' : '');
@@ -8429,12 +8475,23 @@ document.getElementById('problemNextMonth').onclick = function() {
   renderProblemTab();
 };
 
-// Hides every tab button except ปฏิทิน for a non-admin (contractor) scope,
-// and forces the view back to the calendar if it's somehow anywhere else
-// (stale click before the DOM updated, browser back/forward, etc.). Called
-// from fetchData()'s success handler once CURRENT_SCOPE is known; also
-// safe to call again on re-login. Admin scope restores every tab.
-var SCOPE_RESTRICTED_TAB_IDS = ['tabDocBtn', 'tabOverviewBtn', 'tabEvalBtn', 'tabSlaBtn', 'tabAllocBtn', 'tabDashBtn', 'tabProblemBtn'];
+// 2026-09-25 (Sure's request): ผรม. accounts used to be restricted to ONLY
+// the ปฏิทิน tab. Sure now wants ตารางเอกสารขนานไฟ (Doc), ภาพรวมสำรวจ/ติดตั้ง
+// (Overview), and Problem opened up for them too, while การประเมิน (Eval),
+// SLA ติดตั้ง (SLA), แนะนำ ผรม. งานใหม่ (Alloc) and Dashboard stay
+// admin/staff-only. Dashboard specifically stays hidden because it's a
+// company-wide board that names and compares every ผรม. side by side
+// (confirmed with Sure 2026-09-25) -- showing it to a contractor account
+// would leak other contractors' names/numbers, which he explicitly does not
+// want. Doc/Overview are safe to open because they're built entirely from
+// JOBS, which the backend (AppsScript_Code.gs.txt doGet) already scopes to
+// only that contractor's own jobs per their access key -- there's nothing
+// to leak. Problem is different: its data comes from a SEPARATE backend
+// (Contractor Ratings) via one shared read key with no server-side
+// per-contractor filtering at all, so problemCases() below now filters it
+// client-side to the logged-in contractor's own cases (see the comment
+// there) before a contractor account ever sees the Problem tab's content.
+var SCOPE_RESTRICTED_TAB_IDS = ['tabEvalBtn', 'tabSlaBtn', 'tabAllocBtn', 'tabDashBtn'];
 function applyScopeRestriction(scope) {
   CURRENT_SCOPE = scope || 'admin';
   // 2026-09-19 fix (Sure's request: viewer accounts saw an empty Problem

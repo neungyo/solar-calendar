@@ -8517,9 +8517,20 @@ function applyScopeRestriction(scope) {
 
 function switchView(view) {
   // Belt-and-suspenders: even if a hidden tab button's onclick fires some
-  // other way, a contractor-scoped session can never actually switch away
-  // from the calendar.
-  if (CURRENT_USER.role === 'contractor' && view !== 'calendar') view = 'calendar';
+  // other way, a contractor-scoped session can never reach a view that's
+  // still admin/staff-only.
+  //
+  // 2026-09-25 fix (Sure: "เหมือนว่ามีการแก้ไขแล้วนะครับแต่ว่า ปุ่มไม่
+  // สามารถกดได้") -- this used to hard-force EVERY non-calendar view back
+  // to 'calendar' for a contractor account, full stop. That was correct
+  // back when ปฏิทิน was the only tab a contractor could ever see, but it
+  // was never updated when Doc/Overview/Problem were opened up to them --
+  // so their tab buttons rendered and were clickable, but clicking any of
+  // them just silently snapped back to the calendar. This whitelist now
+  // matches SCOPE_RESTRICTED_TAB_IDS above: everything NOT in that
+  // admin/staff-only list is allowed through for a contractor.
+  var CONTRACTOR_ALLOWED_VIEWS_ = ['calendar', 'doc', 'overview', 'problem'];
+  if (CURRENT_USER.role === 'contractor' && CONTRACTOR_ALLOWED_VIEWS_.indexOf(view) === -1) view = 'calendar';
   // Users management is admin-role only -- a ผู้ดูอย่างเดียว/ผรม. account
   // must never reach it even by calling switchView() directly (the tab
   // button itself is already hidden for them, see renderUserBadge_()).
